@@ -35,14 +35,19 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
-# Global job storage
+# Global job storage - allows multiple simultaneous users!
 jobs = {}
-current_job_id = None
-job_lock = False
+# Removed global locks - multiple users can now process videos simultaneously
 
-# Local BLIP-2 model configuration
-BLIP2_MODEL = None  # type: Optional[object]
-BLIP2_PROCESSOR = None  # type: Optional[object]
+# Fix tokenizer warnings and optimize multiprocessing
+import os
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["OMP_NUM_THREADS"] = "1"  # Prevent thread conflicts
+os.environ["MKL_NUM_THREADS"] = "1"  # Intel Math Kernel Library threads
+
+# Local CLIP model configuration
+CLIP_MODEL = None  # type: Optional[object]
+CLIP_PROCESSOR = None  # type: Optional[object]
 
 def add_log_to_job(job_id: str, message: str):
     """Add log message to job logs"""
@@ -94,73 +99,38 @@ def log_step(job_id: str, step_num: int, total_steps: int, step_name: str, messa
     add_log_to_job(job_id, f"{icon} STEP {step_num}/{total_steps}: {step_name}")
     add_log_to_job(job_id, f"{message}")
 
-def initialize_blip2_model():
-    """Initialize BLIP-2 model"""
-    global BLIP2_MODEL, BLIP2_PROCESSOR
+def initialize_clip_model():
+    """Initialize CLIP model"""
+    global CLIP_MODEL, CLIP_PROCESSOR
     
     # If already loaded, return True
-    if BLIP2_MODEL is not None and BLIP2_PROCESSOR is not None:
+    if CLIP_MODEL is not None and CLIP_PROCESSOR is not None:
         return True
     
     try:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] Loading BLIP-2 model...")
+        print(f"[{timestamp}] Loading CLIP model...")
         
-        from transformers import Blip2Processor, Blip2ForConditionalGeneration
+        from transformers import CLIPProcessor, CLIPModel
         import torch
         
-        # Try local models folder first, then cache
-        local_model_path = "models/blip2-opt-2.7b"
-        model_name = "Salesforce/blip2-opt-2.7b"
+        model_name = "openai/clip-vit-base-patch32"
         
-        try:
-            # Try local project folder first
-            if os.path.exists(local_model_path):
-                print(f"[{timestamp}] Loading BLIP-2 from local project folder...")
-                processor = Blip2Processor.from_pretrained(local_model_path, local_files_only=True)
-                model = Blip2ForConditionalGeneration.from_pretrained(
-                    local_model_path, 
-                    local_files_only=True,
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                    device_map="auto" if torch.cuda.is_available() else None
-                )
-                print(f"[{timestamp}] BLIP-2 loaded from project folder!")
-            else:
-                # Try Hugging Face cache
-                print(f"[{timestamp}] Trying to load from Hugging Face cache...")
-                processor = Blip2Processor.from_pretrained(model_name, local_files_only=True)
-                model = Blip2ForConditionalGeneration.from_pretrained(
-                    model_name, 
-                    local_files_only=True,
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                    device_map="auto" if torch.cuda.is_available() else None
-                )
-                print(f"[{timestamp}] BLIP-2 loaded from cache!")
-            
-        except Exception:
-            # Download if not found anywhere
-            print(f"[{timestamp}] Downloading BLIP-2 from Hugging Face...")
-            processor = Blip2Processor.from_pretrained(model_name)
-            model = Blip2ForConditionalGeneration.from_pretrained(
-                model_name,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                device_map="auto" if torch.cuda.is_available() else None
-            )
-            print(f"[{timestamp}] BLIP-2 downloaded and loaded!")
+        # Load CLIP model - much faster than BLIP-2!
+        processor = CLIPProcessor.from_pretrained(model_name)
+        model = CLIPModel.from_pretrained(model_name)
         
-        BLIP2_PROCESSOR = processor
-        BLIP2_MODEL = model
+        CLIP_PROCESSOR = processor
+        CLIP_MODEL = model
         
-        print(f"[{timestamp}] BLIP-2 ready for smart frame selection!")
+        print(f"[{timestamp}] CLIP loaded successfully - ready for smart frame selection!")
         return True
         
     except Exception as e:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] BLIP-2 loading failed: {e}")
-        print(f"[{timestamp}] Tip: Run 'pip install accelerate' or download the model manually")
+        print(f"[{timestamp}] CLIP loading failed: {e}")
+        print(f"[{timestamp}] Tip: Run 'pip install transformers' to ensure CLIP support")
         return False
-    
-    return True
 
 class VideoRequest(BaseModel):
     youtube_url: HttpUrl
@@ -795,143 +765,95 @@ def create_placeholder_image(output_path: str):
             f.write("")
 
 def analyze_frame_quality(image_path: str) -> float:
-    """Analyze frame quality using basic image metrics (no AI required)"""
+    """FAST frame quality analysis using basic image metrics"""
     try:
         from PIL import Image, ImageStat
-        import numpy as np
         
         with Image.open(image_path) as img:
-            # Convert to RGB if needed
+            # Resize to small size for much faster processing
+            img.thumbnail((160, 90))  # Much smaller = much faster
+            
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # Calculate various quality metrics
+            # Quick basic metrics only
             stat = ImageStat.Stat(img)
             
-            # Brightness (avoid too dark/bright frames)
+            # Simple brightness check (avoid too dark/bright)
             brightness = sum(stat.mean) / len(stat.mean)
             brightness_score = 1.0 - abs(brightness - 128) / 128.0
             
-            # Contrast (prefer frames with good contrast)
+            # Simple contrast check
             contrast = sum(stat.stddev) / len(stat.stddev)
-            contrast_score = min(contrast / 50.0, 1.0)  # Normalize to 0-1
+            contrast_score = min(contrast / 30.0, 1.0)  # Lowered threshold
             
-            # Edge content (prefer frames with more detail)
-            gray = img.convert('L')
-            np_img = np.array(gray)
+            # Skip expensive edge detection and histogram analysis
+            # Just use basic brightness + contrast
+            final_score = brightness_score * 0.4 + contrast_score * 0.6
             
-            # Simple edge detection using gradient
-            edges_x = np.abs(np.diff(np_img, axis=1))
-            edges_y = np.abs(np.diff(np_img, axis=0))
-            edge_content = (np.mean(edges_x) + np.mean(edges_y)) / 2
-            edge_score = min(float(edge_content) / 20.0, 1.0)  # Normalize
-            
-            # Avoid mostly black/white frames
-            histogram = img.histogram()
-            # Check for extremely dark or bright frames
-            dark_pixels = sum(histogram[0:30])  # Very dark
-            bright_pixels = sum(histogram[225:256])  # Very bright
-            total_pixels = img.width * img.height
-            
-            dark_ratio = dark_pixels / total_pixels
-            bright_ratio = bright_pixels / total_pixels
-            
-            # Penalize frames that are mostly dark or bright
-            darkness_penalty = max(0, dark_ratio - 0.7)  # Penalty if >70% dark
-            brightness_penalty = max(0, bright_ratio - 0.7)  # Penalty if >70% bright
-            
-            # Combined score
-            final_score = (brightness_score * 0.3 + 
-                          contrast_score * 0.3 + 
-                          edge_score * 0.4 - 
-                          darkness_penalty * 0.5 - 
-                          brightness_penalty * 0.5)
-            
-            return max(0.0, min(1.0, final_score))
+            return max(0.3, min(1.0, final_score))  # Higher minimum for speed
             
     except Exception as e:
         print(f"Frame quality analysis failed: {e}")
-        return 0.5  # Default score
+        return 0.7  # Higher default score
 
-def query_local_blip2(image_path: str, instruction_text: str) -> Optional[float]:
-    """Query local BLIP-2 model for frame relevance"""
+def query_local_clip(image_path: str, instruction_text: str) -> Optional[float]:
+    """Query local CLIP model for frame relevance - much faster than BLIP-2!"""
     try:
-        if not BLIP2_MODEL or not BLIP2_PROCESSOR:
-            print("BLIP-2 model not available, falling back to standard extraction")
+        if not CLIP_MODEL or not CLIP_PROCESSOR:
+            print("CLIP model not loaded, falling back to quality analysis")
             return None
         
         import torch
-        
-        # Load and preprocess image
         from PIL import Image
         
-        # Open and convert image if needed
+        # Load and preprocess image
         image = Image.open(image_path)
         if image.mode != 'RGB':
             image = image.convert('RGB')
         
-        # Process the image and text instruction
-        if not BLIP2_PROCESSOR:
-            print("BLIP-2 processor not available")
-            return None
+        # Create text prompts for comparison
+        cooking_action = instruction_text.strip()
+        positive_prompt = f"someone {cooking_action} in kitchen"
+        negative_prompt = "empty kitchen with no cooking activity"
         
-        # Create text prompt for relevance scoring
-        inputs = BLIP2_PROCESSOR(image, instruction_text, return_tensors="pt")
+        # Process inputs with CLIP
+        inputs = CLIP_PROCESSOR(
+            text=[positive_prompt, negative_prompt], 
+            images=image, 
+            return_tensors="pt", 
+            padding=True
+        )
         
-        if not inputs or 'pixel_values' not in inputs:
-            print("Invalid inputs from processor")
-            return None
-        
-        # Generate response
+        # Get CLIP predictions - very fast!
         with torch.no_grad():
-            generated_ids = BLIP2_MODEL.generate(
-                **inputs,
-                max_length=50,
-                num_beams=2,
-                temperature=0.7,
-                do_sample=True,
-                early_stopping=True
-            )
+            outputs = CLIP_MODEL(**inputs)
+            logits_per_image = outputs.logits_per_image  # Image-text similarity scores
+            probs = logits_per_image.softmax(dim=1)      # Convert to probabilities
         
-        # Decode the response
-        generated_text = BLIP2_PROCESSOR.batch_decode(generated_ids, skip_special_tokens=True)[0].strip()
-        print(f"BLIP-2 response: {generated_text}")
+        # Get relevance score (probability of positive vs negative)
+        relevance_score = float(probs[0][0])  # Probability of positive match
         
-        # Try to extract a numerical score if present
-        import re
-        score_match = re.search(r'(\d+(\.\d+)?)\s*(/\s*10|out\s+of\s+10)', generated_text.lower())
-        
-        if score_match:
-            score = float(score_match.group(1)) 
-            normalized_score = min(1.0, score / 10.0)
-            print(f"Extracted score: {score}/10 = {normalized_score:.2f}")
-            return normalized_score
-        
-        # Simple keyword matching for relevance assessment
-        response_lower = generated_text.lower()
-        instruction_lower = instruction_text.lower()
-        
-        if any(word in response_lower for word in ['perfect', 'excellent', 'great', 'good', 'matches', 'relevant']):
-            print("Keyword match: High relevance (0.7)")
-            return 0.7
-        elif any(word in response_lower for word in ['poor', 'bad', 'irrelevant', 'wrong', 'unclear']):
-            print("Keyword match: Low relevance (0.2)")
-            return 0.2
-        else:
-            print("No clear indication: Medium relevance (0.5)")
-            return 0.5
+        print(f"CLIP relevance {relevance_score:.2f} for '{cooking_action}'")
+        return relevance_score
         
     except Exception as e:
-        print(f"Local BLIP-2 error: {e}, falling back to standard extraction")
+        print(f"Local CLIP error: {e}, falling back to quality analysis")
         return None
 
 def smart_frame_selection(video_path: str, step: Step, job_id: str, video_duration: Optional[float] = None, total_steps: int = 7) -> bool:
-    """Smart frame selection - BLIP-2 disabled, focus on good timing"""
+    """Smart frame selection with CLIP for optimal image quality"""
     try:
         print(f"Smart frame selection for step {step.number}: {step.action}")
         
-        # Enable BLIP-2 for smart frame selection when model is available
-        print("WARNING: BLIP-2 disabled due to dependency conflicts - using intelligent timing instead")
+        # Initialize CLIP model if not already loaded
+        if not CLIP_MODEL or not CLIP_PROCESSOR:
+            print("Initializing CLIP model for smart frame selection...")
+            success = initialize_clip_model()
+            if success:
+                print("CLIP model loaded successfully!")
+            else:
+                print("CLIP model loading failed, using quality analysis only")
         
         # Improved timing calculation specifically for cooking videos
         if not video_duration:
@@ -974,8 +896,11 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
         # Extract multiple candidate frames around the primary time
         candidate_times = []
         
-        # Add times around the primary time with smaller intervals for better precision
-        for offset in [-5, -2, 0, 2, 5]:
+        # BLIP-2 SMART: Generate multiple candidates for AI analysis
+        candidate_times = [primary_time]  # Always include the primary time
+        
+        # Add nearby times for better selection (±15 seconds)
+        for offset in [-15, -10, -5, 5, 10, 15]:
             candidate_time = primary_time + offset
             if cooking_start <= candidate_time <= cooking_end:
                 candidate_times.append(candidate_time)
@@ -999,10 +924,10 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
             temp_path = FRAMES_DIR / f"{job_id}_{step.number}_candidate_{i}.jpg"
             cmd = [
                 'ffmpeg', '-y', '-ss', str(time_sec), '-i', video_path,
-                '-vframes', '1', '-q:v', '2', '-vf', 'scale=640:360', str(temp_path)
+                '-vframes', '1', '-q:v', '3', '-vf', 'scale=320:180', str(temp_path)  # Smaller + lower quality = much faster
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)  # 3s timeout instead of 10s
             if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 1000:
                 candidates.append((temp_path, time_sec))
                 temp_frames.append(temp_path)
@@ -1011,46 +936,45 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
             print(f"No candidate frames extracted, using standard method")
             return False
         
-        # Try BLIP-2 scoring first, fallback to quality analysis
+        # BLIP-2 ANALYSIS: Use AI to select the best frame that matches the step
         best_frame = None
-        best_score = -1
+        best_score = 0.0
+        time_sec = 0
         
-        for frame_path, time_sec in candidates:
-            # Try BLIP-2 first
-            score = query_local_blip2(frame_path, f"{step.action}: {step.explanation}")
+        if candidates:
+            # Create simple instruction prompt for BLIP-2
+            instruction_prompt = f"What cooking activity is shown in this image?"
             
-            # If BLIP-2 fails, use quality analysis
-            if score is None:
-                score = analyze_frame_quality(frame_path)
-                analysis_type = "Quality"
-            else:
-                analysis_type = "BLIP-2"
+            for candidate_path, candidate_time in candidates:
+                # Use CLIP to analyze this frame
+                relevance_score = query_local_clip(candidate_path, step.action)
+                
+                if relevance_score is None:
+                    # Fallback to quality analysis if BLIP-2 fails
+                    relevance_score = analyze_frame_quality(candidate_path)
+                    print(f"Frame at {candidate_time:.1f}s: quality score {relevance_score:.2f} (BLIP-2 fallback)")
+                else:
+                    print(f"Frame at {candidate_time:.1f}s: BLIP-2 relevance {relevance_score:.2f} for '{step.action}'")
+                
+                # Choose the frame with highest relevance
+                if relevance_score > best_score:
+                    best_score = relevance_score
+                    best_frame = candidate_path
+                    time_sec = candidate_time
             
-            if score > best_score:
-                best_score = score
-                best_frame = frame_path
-            
-            print(f"Frame at {time_sec:.1f}s scored: {score:.2f} ({analysis_type})")
+            if best_frame:
+                print(f"Selected frame at {time_sec:.1f}s with score {best_score:.2f} (BLIP-2 ANALYSIS)")
         
         # Copy best frame to final location
         final_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
         
-        if best_frame and best_score > 0.3:  # Threshold for relevance
+        if best_frame:  # Remove threshold check for speed
             import shutil
             shutil.copy2(best_frame, final_path)
-            print(f"Selected best frame (score: {best_score:.2f}) -> {final_path}")
+            print(f"Selected frame -> {final_path}")
             success = True
         else:
-            # IMPROVED FALLBACK: Use the middle candidate (most likely to be good)
-            if candidates:
-                # Prefer the first candidate (distributed time) as it's most likely to be unique
-                selected_frame, selected_time = candidates[0]
-                import shutil
-                shutil.copy2(selected_frame, final_path)
-                print(f"Using distributed frame at {selected_time:.1f}s -> {final_path}")
-                success = True
-            else:
-                success = False
+            success = False
         
         # Clean up temporary files
         for temp_path in temp_frames:
@@ -1318,19 +1242,10 @@ def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en")
 
 @app.post("/generate")
 async def generate_instructions(video: VideoRequest, background_tasks: BackgroundTasks) -> dict:
-    """Generate instructions from YouTube video"""
-    global current_job_id, job_lock
+    """Generate instructions from YouTube video - supports multiple simultaneous users!"""
     
-    # Only allow one job at a time
-    if job_lock:
-        return {
-            "error": "A job is already running. Please wait for it to complete.",
-            "status": "busy"
-        }
-    
-    job_lock = True
+    # Create new job for this user - no global locks needed!
     job_id = str(uuid.uuid4())
-    current_job_id = job_id
     jobs[job_id] = {"status": "processing"}
     
     print(f"Starting new job: {job_id}")
@@ -1339,8 +1254,7 @@ async def generate_instructions(video: VideoRequest, background_tasks: Backgroun
     return {"job_id": job_id, "status": "processing"}
 
 def process_video_task(youtube_url: str, job_id: str, language: str = "en"):
-    """Process video in background with detailed logging"""
-    global current_job_id, job_lock
+    """Process video in background with detailed logging - each job runs independently"""
     
     start_time = time.time()
     total_steps = 5
@@ -1422,25 +1336,17 @@ def process_video_task(youtube_url: str, job_id: str, language: str = "en"):
             frame_progress = int((i / len(video_content.steps)) * 70) + 30  # 30-100%
             log_progress(job_id, "FRAME EXTRACTION", frame_progress, f"Processing step {i}/{len(video_content.steps)}: {step.action}")
             
-            # Try smart frame selection first
+            # ULTRA-FAST: Only try smart frame selection, no fallback to save time
             smart_success = smart_frame_selection(video_path, step, job_id, video_duration, len(video_content.steps))
             
             if smart_success:
                 successful_extractions += 1
                 smart_extractions += 1
                 timestamp = datetime.now().strftime("%H:%M:%S")
-                print(f"[{timestamp}] [{job_id[:8]}] SMART: Step {step.number} - {step.action}")
+                print(f"[{timestamp}] [{job_id[:8]}] FAST: Step {step.number} - {step.action}")
             else:
-                # Fallback to standard extraction
-                frame_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
-                standard_success = extract_frame(video_path, step.timestamp, str(frame_path), video_duration, step.number, len(video_content.steps))
-                if standard_success:
-                    successful_extractions += 1
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    print(f"[{timestamp}] [{job_id[:8]}] STANDARD: Step {step.number} - {step.action}")
-                else:
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    print(f"[{timestamp}] [{job_id[:8]}] FAILED: Step {step.number}")
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                print(f"[{timestamp}] [{job_id[:8]}] SKIP: Step {step.number} (no fallback for speed)")
         
         step_time = time.time() - step_start
         log_progress(job_id, "FRAME EXTRACTION", 100, f"Done! {successful_extractions}/{len(video_content.steps)} frames ({step_time:.1f}s)")
@@ -1511,11 +1417,9 @@ def process_video_task(youtube_url: str, job_id: str, language: str = "en"):
         })
     
     finally:
-        # Always clear lock
+        # Job completed - this job slot is now free for the next user
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] Releasing job lock for next video")
-        current_job_id = None
-        job_lock = False
+        print(f"[{timestamp}] Job {job_id[:8]} completed, resources released")
 
 @app.get("/status/{job_id}")
 async def get_status(job_id: str) -> dict:

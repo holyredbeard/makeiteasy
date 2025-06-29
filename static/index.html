@@ -4,25 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Make It Easy - YouTube to PDF</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous">
     <style>
-        /* Fallback for Font Awesome icons if CDN fails */
-        .fa, .fas, .far, .fab {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        /* Heroicons styling */
+        .heroicon {
+            width: 1.25rem;
+            height: 1.25rem;
+            display: inline-block;
+            vertical-align: middle;
         }
-        .fa-rocket::before { content: "🚀"; }
-        .fa-spinner::before { content: "⏳"; }
-        .fa-check-circle::before { content: "✅"; }
-        .fa-exclamation-triangle::before { content: "⚠️"; }
-        .fa-cloud-download-alt::before { content: "💾"; }
-        .fa-waveform::before { content: "🎵"; }
-        .fa-cpu::before { content: "🔍"; }
-        .fa-eye::before { content: "👁️"; }
-        .fa-file-alt::before { content: "📋"; }
-        .fa-clock::before { content: "⏰"; }
-        .fa-info-circle::before { content: "ℹ️"; }
-        .fa-spin { animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .heroicon-lg {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
+        .heroicon-spin {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 
+            0% { transform: rotate(0deg); } 
+            100% { transform: rotate(360deg); } 
+        }
+        
+        /* Step icons specific styling */
+        .step-icon .heroicon {
+            width: 1.5rem;
+            height: 1.5rem;
+        }
     </style>
     <style>
         * {
@@ -348,30 +354,53 @@
             </div>
             
             <button id="process-btn" class="btn" onclick="processVideo()">
-                <i class="fas fa-rocket"></i> Create PDF Instructions
+                <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.58-5.84a14.917 14.917 0 0 1 5.84 2.58" />
+                </svg>
+                Create PDF Instructions
             </button>
             
             <div id="status" class="status" style="display: none;"></div>
             
             <div id="steps" class="steps" style="display: none;">
                 <div class="step" id="step-download">
-                    <span class="step-icon"><i class="fas fa-cloud-download-alt"></i></span>
+                    <span class="step-icon">
+                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        </svg>
+                    </span>
                     <span>Downloading video from YouTube</span>
                 </div>
                 <div class="step" id="step-transcribe">
-                    <span class="step-icon"><i class="fas fa-waveform"></i></span>
+                    <span class="step-icon">
+                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.59-.79-1.59-1.76V9.98c0-.97.71-1.76 1.59-1.76h2.24Z" />
+                        </svg>
+                    </span>
                     <span>Transcribing audio content</span>
                 </div>
                 <div class="step" id="step-analyze">
-                    <span class="step-icon"><i class="fas fa-cpu"></i></span>
+                    <span class="step-icon">
+                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                        </svg>
+                    </span>
                     <span>Analyzing content</span>
                 </div>
                 <div class="step" id="step-extract">
-                    <span class="step-icon"><i class="fas fa-eye"></i></span>
-                    <span>Smart frame selection with BLIP-2 OPT 2.7B</span>
+                    <span class="step-icon">
+                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                        </svg>
+                    </span>
+                    <span>Adding images</span>
                 </div>
                 <div class="step" id="step-pdf">
-                    <span class="step-icon"><i class="fas fa-file-alt"></i></span>
+                    <span class="step-icon">
+                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                        </svg>
+                    </span>
                     <span>Generating PDF with instructions</span>
                 </div>
             </div>
@@ -389,6 +418,43 @@
         let isGloballyProcessing = false;
         
         const API_BASE = 'http://localhost:8000';
+        
+        // Heroicons helper function
+        function getHeroIcon(iconName, extraClasses = '') {
+            const icons = {
+                'rocket': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.58-5.84a14.917 14.917 0 0 1 5.84 2.58" />
+                </svg>`,
+                'spinner': `<svg class="heroicon heroicon-spin ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>`,
+                'check-circle': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>`,
+                'exclamation-triangle': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>`,
+                'download': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                </svg>`,
+                'info-circle': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                </svg>`,
+                'clock': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>`,
+                'check': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>`,
+                'magnifying-glass': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>`,
+                'photo': `<svg class="heroicon ${extraClasses}" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                </svg>`
+            };
+            return icons[iconName] || '';
+        }
 
         // Check if any other tab/window is currently processing
         function checkGlobalProcessingState() {
@@ -469,7 +535,7 @@
                 // Check if server is busy with another job
                 if (data.status === 'busy') {
                     statusDiv.className = 'status error';
-                    statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${data.error}`;
+                    statusDiv.innerHTML = `${getHeroIcon('exclamation-triangle')} ${data.error}`;
                     setGlobalProcessingState(false);
                     return;
                 }
@@ -484,9 +550,9 @@
                 
                 // Update UI
                 processBtn.disabled = true;
-                processBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                processBtn.innerHTML = `${getHeroIcon('spinner')} Processing...`;
                 statusDiv.className = 'status processing';
-                statusDiv.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing video...';
+                statusDiv.innerHTML = `${getHeroIcon('spinner')} Processing video...`;
                 
                 // Show progress steps
                 stepsDiv.style.display = 'block';
@@ -529,15 +595,15 @@
                             statusDiv.className = 'status success';
                             statusDiv.innerHTML = `
                                 <div style="margin-bottom: 1rem;">
-                                    <i class="fas fa-check-circle"></i> PDF generated successfully!
+                                    ${getHeroIcon('check-circle')} PDF generated successfully!
                                 </div>
                                 <button class="download-btn" onclick="downloadPDF('${downloadUrl}')" style="background: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 auto;">
-                                    <i class="fas fa-download"></i> Download Recipe (PDF)
+                                    ${getHeroIcon('download')} Download Recipe (PDF)
                                 </button>
                             `;
                             
                             document.getElementById('process-btn').disabled = false;
-                            document.getElementById('process-btn').innerHTML = '<i class="fas fa-rocket"></i> Create PDF Instructions';
+                            document.getElementById('process-btn').innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                             
                             // Final completion message in console
                             console.log('%c[COMPLETE] JOB COMPLETED! PDF download initiated.', 
@@ -555,9 +621,9 @@
                             clearInterval(statusInterval);
                             statusInterval = null;
                             statusDiv.className = 'status error';
-                            statusDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Error: ${statusData.error || 'Unknown error'}`;
+                            statusDiv.innerHTML = `${getHeroIcon('exclamation-triangle')} Error: ${statusData.error || 'Unknown error'}`;
                             document.getElementById('process-btn').disabled = false;
-                            document.getElementById('process-btn').innerHTML = '<i class="fas fa-rocket"></i> Create PDF Instructions';
+                            document.getElementById('process-btn').innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                             
                             // Error message in console
                             console.error(`%c[ERROR] JOB FAILED: ${statusData.error || 'Unknown error'}`, 
@@ -573,9 +639,9 @@
                         clearInterval(statusInterval);
                         statusInterval = null;
                         statusDiv.className = 'status error';
-                        statusDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error checking status';
+                        statusDiv.innerHTML = `${getHeroIcon('exclamation-triangle')} Error checking status`;
                         document.getElementById('process-btn').disabled = false;
-                        document.getElementById('process-btn').innerHTML = '<i class="fas fa-rocket"></i> Create PDF Instructions';
+                        document.getElementById('process-btn').innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                         
                         // Reset job tracking and global state
                         currentJobId = null;
@@ -587,9 +653,9 @@
             } catch (error) {
                 console.error('Error:', error);
                 statusDiv.className = 'status error';
-                statusDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error processing video';
+                statusDiv.innerHTML = `${getHeroIcon('exclamation-triangle')} Error processing video`;
                 processBtn.disabled = false;
-                processBtn.innerHTML = '<i class="fas fa-rocket"></i> Create PDF Instructions';
+                processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                 
                 // Reset global state on error
                 setGlobalProcessingState(false);
@@ -734,9 +800,9 @@
                 
                 statusDiv.style.display = 'block';
                 statusDiv.className = 'status info';
-                statusDiv.innerHTML = '<i class="fas fa-info-circle"></i> A job is already running in another tab. Please wait for it to complete.';
+                statusDiv.innerHTML = `${getHeroIcon('info-circle')} A job is already running in another tab. Please wait for it to complete.`;
                 processBtn.disabled = true;
-                processBtn.innerHTML = '<i class="fas fa-clock"></i> Waiting...';
+                processBtn.innerHTML = `${getHeroIcon('clock')} Waiting...`;
                 
                 // Check every few seconds if the global job is done
                 const globalCheckInterval = setInterval(() => {
@@ -744,7 +810,7 @@
                         clearInterval(globalCheckInterval);
                         statusDiv.style.display = 'none';
                         processBtn.disabled = false;
-                        processBtn.innerHTML = '<i class="fas fa-rocket"></i> Create PDF Instructions';
+                        processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                     }
                 }, 3000);
             }
@@ -767,10 +833,10 @@
                             statusDiv.className = 'status success';
                             statusDiv.innerHTML = `
                                 <div style="margin-bottom: 1rem;">
-                                    <i class="fas fa-check-circle"></i> Previous PDF is ready for download!
+                                    ${getHeroIcon('check-circle')} Previous PDF is ready for download!
                                 </div>
                                 <button class="download-btn" onclick="downloadPDF('${API_BASE}/result/${lastJobId}')" style="background: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 auto;">
-                                    <i class="fas fa-download"></i> Download Previous Recipe (PDF)
+                                    ${getHeroIcon('download')} Download Previous Recipe (PDF)
                                 </button>
                             `;
                         }
@@ -791,9 +857,9 @@
                     
                     statusDiv.style.display = 'block';
                     statusDiv.className = 'status info';
-                    statusDiv.innerHTML = '<i class="fas fa-info-circle"></i> A job is already running in another tab. Please wait for it to complete.';
+                    statusDiv.innerHTML = `${getHeroIcon('info-circle')} A job is already running in another tab. Please wait for it to complete.`;
                     processBtn.disabled = true;
-                    processBtn.innerHTML = '<i class="fas fa-clock"></i> Waiting...';
+                    processBtn.innerHTML = `${getHeroIcon('clock')} Waiting...`;
                 } else {
                     // If no global job and no local job, reset UI
                     const statusDiv = document.getElementById('status');
@@ -801,7 +867,7 @@
                     
                     statusDiv.style.display = 'none';
                     processBtn.disabled = false;
-                    processBtn.innerHTML = '<i class="fas fa-rocket"></i> Create PDF Instructions';
+                    processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                 }
             }
         });
@@ -821,13 +887,13 @@
             // Update button to show download started
             const downloadBtn = document.querySelector('.download-btn');
             if (downloadBtn) {
-                downloadBtn.innerHTML = '<i class="fas fa-check"></i> Download started!';
+                downloadBtn.innerHTML = `${getHeroIcon('check')} Download started!`;
                 downloadBtn.style.background = '#45a049';
                 downloadBtn.disabled = true;
                 
                 // Re-enable after 3 seconds in case user wants to download again
                 setTimeout(() => {
-                    downloadBtn.innerHTML = '<i class="fas fa-download"></i> Download Recipe (PDF)';
+                    downloadBtn.innerHTML = `${getHeroIcon('download')} Download Recipe (PDF)`;
                     downloadBtn.style.background = '#4CAF50';
                     downloadBtn.disabled = false;
                 }, 3000);
