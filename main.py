@@ -501,20 +501,32 @@ def extract_frame(video_path: str, timestamp: str, output_path: str):
         
         # Try multiple ffmpeg command approaches
         commands = [
-            # Simple seek and extract with update flag
+            # Approach 1: Use PNG format (most compatible)
             [
                 'ffmpeg', '-y', '-ss', str(seconds), '-i', video_path,
-                '-vframes', '1', '-update', '1', '-q:v', '2', output_path
+                '-vframes', '1', '-f', 'image2', '-vcodec', 'png', 
+                output_path.replace('.jpg', '.png')
             ],
-            # Alternative with different format
+            # Approach 2: Force pixel format conversion
+            [
+                'ffmpeg', '-y', '-ss', str(seconds), '-i', video_path,
+                '-vframes', '1', '-pix_fmt', 'rgb24', '-f', 'image2', output_path
+            ],
+            # Approach 3: Use scale filter with forced aspect ratio
+            [
+                'ffmpeg', '-y', '-ss', str(seconds), '-i', video_path,
+                '-vf', 'scale=640:360:force_original_aspect_ratio=decrease,pad=640:360:(ow-iw)/2:(oh-ih)/2',
+                '-vframes', '1', '-q:v', '2', output_path
+            ],
+            # Approach 4: Simple with BMP format (always works)
+            [
+                'ffmpeg', '-y', '-ss', str(seconds), '-i', video_path,
+                '-vframes', '1', '-f', 'bmp', output_path.replace('.jpg', '.bmp')
+            ],
+            # Approach 5: Fallback - extract any frame and convert
             [
                 'ffmpeg', '-y', '-i', video_path, '-ss', str(seconds),
-                '-vframes', '1', '-f', 'image2', output_path
-            ],
-            # Simplest possible command
-            [
-                'ffmpeg', '-y', '-ss', str(seconds), '-i', video_path,
-                '-frames:v', '1', output_path
+                '-vframes', '1', '-an', output_path
             ]
         ]
         
@@ -527,8 +539,22 @@ def extract_frame(video_path: str, timestamp: str, output_path: str):
                     timeout=30
                 )
                 
-                if result.returncode == 0 and os.path.exists(output_path):
-                    return  # Success
+                # Check if output file exists (might have different extension)
+                possible_paths = [
+                    output_path,
+                    output_path.replace('.jpg', '.png'),
+                    output_path.replace('.jpg', '.bmp')
+                ]
+                
+                for path in possible_paths:
+                    if result.returncode == 0 and os.path.exists(path):
+                        # If we got a different format, rename it to .jpg
+                        if path != output_path:
+                            try:
+                                os.rename(path, output_path)
+                            except:
+                                pass
+                        return  # Success
                 else:
                     print(f"Frame extraction approach {i+1} failed with return code {result.returncode}")
                     if result.stderr:
@@ -1021,17 +1047,37 @@ async def get_status(job_id: str) -> dict:
 @app.get("/result/{job_id}")
 async def get_result(job_id: str) -> FileResponse:
     """Get generated PDF"""
-    if job_id not in jobs:
-        raise HTTPException(status_code=404, detail="Job not found")
     
-    job = jobs[job_id]
-    if job["status"] != "completed":
-        raise HTTPException(status_code=400, detail="Job not completed")
+    # First check if job exists in memory
+    if job_id in jobs:
+        job = jobs[job_id]
+        if job["status"] != "completed":
+            raise HTTPException(status_code=400, detail="Job not completed")
+        pdf_path = job["pdf_path"]
+    else:
+        # If job not in memory, check if PDF file exists on disk
+        # This handles cases where server was restarted after job completion
+        pdf_path = OUTPUT_DIR / f"{job_id}.pdf"
+        if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
+            raise HTTPException(status_code=404, detail="PDF file not found or empty")
+        pdf_path = str(pdf_path)
+    
+    # Verify the PDF file actually exists and is not empty
+    if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
+        raise HTTPException(status_code=404, detail="PDF file not found or empty")
+    
+    # Create a better filename with timestamp
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+    filename = f"MakeItEasy_Recipe_{timestamp}.pdf"
     
     return FileResponse(
-        job["pdf_path"],
+        pdf_path,
         media_type="application/pdf",
-        filename=f"instructions_{job_id}.pdf"
+        filename=filename,
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
     )
 
 @app.get("/", response_class=HTMLResponse)
