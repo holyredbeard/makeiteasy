@@ -15,6 +15,7 @@ import logging
 import base64
 import time
 from datetime import datetime
+import yt_dlp
 
 # Create necessary directories
 DOWNLOADS_DIR = Path("downloads")
@@ -148,6 +149,20 @@ class VideoContent(BaseModel):
     title: str
     materials_or_ingredients: List[str]
     steps: List[Step]
+
+class YouTubeSearchRequest(BaseModel):
+    query: str
+    language: str = "en"
+
+class YouTubeVideo(BaseModel):
+    video_id: str
+    title: str
+    channel_title: str
+    thumbnail_url: str
+    duration: str
+    view_count: str
+    published_at: str
+    description: str
 
 def clean_text_for_pdf(text: str) -> str:
     """Clean text to remove problematic characters while preserving Swedish characters"""
@@ -458,76 +473,39 @@ def analyze_video_content(text: str, language: str = "en") -> VideoContent:
             ]
         )
     
-    # Create language-specific prompt
-    language_prompts = {
-        "en": f"""
-        Analyze this video transcription and extract step-by-step instructions in English.
-        
-        IMPORTANT for ingredients/materials:
-        - ALWAYS include measurements and quantities (e.g. "2 cups flour", "3 apples", "1 tbsp salt")
-        - If measurements aren't mentioned, use reasonable amounts based on recipe type
-        - Capitalize ingredient names
-        - Use standard measurements (cups, tbsp, tsp, lbs, oz, pieces)
-        - NEVER use bullet points (•, ●, ◦) or special characters in ingredient list
-        - Write plain text without formatting
-        
-        IMPORTANT for steps:
-        - Write clear instructions without special characters
-        - Use only plain text, no bullet points or Unicode symbols
-        
-        Return the result as JSON with this structure:
-        {{
-            "video_type": "recipe/building/tutorial/other",
-            "title": "Video title",
-            "materials_or_ingredients": ["2 cups Flour", "3 Apples", "1 tbsp Salt"],
-            "steps": [
-                {{
-                    "number": 1,
-                    "action": "Brief step description",
-                    "timestamp": "0:30",
-                    "explanation": "Detailed explanation of what to do"
-                }}
-            ]
-        }}
-        
-        Transcription: {text}
-        """,
-        "sv": f"""
-        Analyze this video transcription and extract step-by-step instructions in English.
-        
-        IMPORTANT for ingredients/materials:
-        - ALWAYS include measurements and quantities (e.g. "2 cups flour", "3 apples", "1 tbsp salt")
-        - If measurements aren't mentioned, use reasonable amounts based on recipe type
-        - Capitalize ingredient names
-        - Use standard measurements (cups, tbsp, tsp, lbs, oz, pieces)
-        - NEVER use bullet points (•, ●, ◦) or special characters in ingredient list
-        - Write plain text without formatting
-        
-        IMPORTANT for steps:
-        - Write clear instructions without special characters
-        - Use only plain text, no bullet points or Unicode symbols
-        
-        Return the result as JSON with this structure:
-        {{
-            "video_type": "recipe/building/tutorial/other",
-            "title": "Video title",
-            "materials_or_ingredients": ["2 cups Flour", "3 Apples", "1 tbsp Salt"],
-            "steps": [
-                {{
-                    "number": 1,
-                    "action": "Brief step description",
-                    "timestamp": "0:30",
-                    "explanation": "Detailed explanation of what to do"
-                }}
-            ]
-        }}
-        
-        Transcription: {text}
-        """
-    }
-    
-    # Use the appropriate prompt for the detected language
-    prompt = language_prompts.get(target_language, language_prompts["en"])
+    # New, improved universal prompt
+    prompt = "You have two tasks.\n" + \
+        f"First, analyze the original video transcription, which is in {detected_language}, to understand its content.\n" + \
+        f"Second, generate a step-by-step guide based on that analysis, but write the final output entirely in {target_language.upper()}.\n\n" + \
+        "The final output MUST be a single JSON object and nothing else.\n\n" + \
+        "IMPORTANT for ingredients/materials:\n" + \
+        "- List all materials, tools, or ingredients mentioned.\n" + \
+        "- If none are mentioned, the list should be empty.\n\n" + \
+        "IMPORTANT for steps:\n" + \
+        "- Extract key actions as steps.\n" + \
+        f"- Provide a detailed explanation for each step in {target_language}.\n" + \
+        f"- Create a logical timestamp for each step. For a {str(len(text)/5)} second video, timestamps should be reasonable.\n\n" + \
+        "JSON structure:\n" + \
+        "{\n" + \
+        '    "video_type": "recipe" or "diy" or "instructional" or "other",\n' + \
+        f'    "title": "A concise, descriptive title in {target_language}",\n' + \
+        '    "materials_or_ingredients": [\n' + \
+        f'        "Material 1 in {target_language}",\n' + \
+        f'        "Material 2 in {target_language}"\n' + \
+        "    ],\n" + \
+        '    "steps": [\n' + \
+        "        {\n" + \
+        '            "number": 1,\n' + \
+        f'            "action": "Short action description in {target_language}",\n' + \
+        '            "timestamp": "HH:MM:SS",\n' + \
+        f'            "explanation": "Detailed explanation in {target_language}"\n' + \
+        "        }\n" + \
+        "    ]\n" + \
+        "}\n\n" + \
+        "Original video transcription:\n" + \
+        "---\n" + \
+        f"{text}\n" + \
+        "---"
     
     try:
         response = call_deepseek_api(prompt)
@@ -1239,6 +1217,87 @@ def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en")
                 with open(output_path, 'wb') as f:
                     f.write(b'%PDF-1.4\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n2 0 obj\n<</Type/Pages/Kids[3 0 R]/Count 1>>\nendobj\n3 0 obj\n<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<</Size 4/Root 1 0 R>>\nstartxref\n174\n%%EOF')
                 return str(output_path)
+
+def search_youtube_videos(query: str, max_results: int = 10) -> List[YouTubeVideo]:
+    """Search YouTube videos using official API"""
+    try:
+        # Use yt-dlp to search YouTube
+        ydl_opts = {
+            'quiet': True,
+            'extract_flat': True,
+            'force_generic_extractor': True,
+            'no_warnings': True,
+            'default_search': 'ytsearch'
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # Construct search query
+            search_query = f"ytsearch{max_results}:{query}"
+            results = ydl.extract_info(search_query, download=False)
+            
+            if not results or 'entries' not in results:
+                return []
+            
+            videos = []
+            for entry in results['entries']:
+                if not entry:
+                    continue
+                    
+                # Extract duration in seconds
+                duration_str = "Unknown"
+                if 'duration' in entry:
+                    duration = int(entry['duration'])
+                    minutes = duration // 60
+                    seconds = duration % 60
+                    duration_str = f"{minutes}:{seconds:02d}"
+                
+                # Format view count
+                view_count_str = "Unknown"
+                if 'view_count' in entry:
+                    count = int(entry['view_count'])
+                    if count >= 1000000:
+                        view_count_str = f"{count/1000000:.1f}M views"
+                    elif count >= 1000:
+                        view_count_str = f"{count/1000:.1f}K views"
+                    else:
+                        view_count_str = f"{count} views"
+                
+                # Format publish date
+                published_str = "Unknown"
+                if 'upload_date' in entry:
+                    date = entry['upload_date']
+                    if len(date) == 8:  # YYYYMMDD format
+                        year = date[:4]
+                        month = date[4:6]
+                        day = date[6:]
+                        published_str = f"{year}-{month}-{day}"
+                
+                video = YouTubeVideo(
+                    video_id=entry['id'],
+                    title=entry['title'],
+                    channel_title=entry.get('uploader', 'Unknown channel'),
+                    thumbnail_url=entry.get('thumbnail', ''),
+                    duration=duration_str,
+                    view_count=view_count_str,
+                    published_at=published_str,
+                    description=entry.get('description', '')[:200] + '...' if entry.get('description') else ''
+                )
+                videos.append(video)
+            
+            return videos
+            
+    except Exception as e:
+        print(f"YouTube search error: {e}")
+        return []
+
+@app.post("/search")
+async def search_youtube(request: YouTubeSearchRequest) -> dict:
+    """Search YouTube videos"""
+    try:
+        videos = search_youtube_videos(request.query)
+        return {"videos": videos}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 @app.post("/generate")
 async def generate_instructions(video: VideoRequest, background_tasks: BackgroundTasks) -> dict:
