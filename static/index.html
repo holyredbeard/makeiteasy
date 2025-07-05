@@ -334,13 +334,13 @@
             cursor: pointer;
             font-size: 1rem;
             font-weight: 600;
-            color: #666;
+            color: #444;
             transition: all 0.3s;
             position: relative;
         }
 
         .tab-btn:hover {
-            background: rgba(102, 126, 234, 0.1);
+            background: rgba(102, 126, 234, 0.15);
             color: #667eea;
         }
 
@@ -1178,9 +1178,15 @@
             const lastJobId = localStorage.getItem('makeiteasy_last_job_id');
             if (lastJobId) {
                 // Check if this job is still available for download
-                fetch(`${API_BASE}/result/${lastJobId}`, { method: 'HEAD' })
+                fetch(`${API_BASE}/status/${lastJobId}`)
                     .then(response => {
                         if (response.ok) {
+                            return response.json();
+                        }
+                        throw new Error('Job not found');
+                    })
+                    .then(statusData => {
+                        if (statusData.status === 'completed') {
                             // Show download button for recent completed job
                             const statusDiv = document.getElementById('status');
                             statusDiv.style.display = 'block';

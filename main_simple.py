@@ -16,6 +16,7 @@ import base64
 import time
 from datetime import datetime
 import yt_dlp
+import traceback
 
 # Create necessary directories
 DOWNLOADS_DIR = Path("downloads")
@@ -106,31 +107,51 @@ def initialize_clip_model():
     
     # If already loaded, return True
     if CLIP_MODEL is not None and CLIP_PROCESSOR is not None:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[CLIP {timestamp}] Model already loaded and ready")
         return True
     
     try:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] Loading CLIP model...")
+        print(f"\n[CLIP {timestamp}] Starting CLIP initialization...")
+        print(f"[CLIP {timestamp}] Importing required modules...")
         
-        from transformers import CLIPProcessor, CLIPModel
-        import torch
+        try:
+            from transformers import CLIPProcessor, CLIPModel
+            import torch
+        except ImportError as e:
+            print(f"[CLIP {timestamp}] ERROR: Could not import required modules: {e}")
+            print(f"[CLIP {timestamp}] Trying to install transformers and torch...")
+            subprocess.run(["pip", "install", "transformers", "torch"], check=True)
+            from transformers import CLIPProcessor, CLIPModel
+            import torch
+            print(f"[CLIP {timestamp}] Successfully installed and imported modules")
         
         model_name = "openai/clip-vit-base-patch32"
+        print(f"[CLIP {timestamp}] Loading model: {model_name}")
         
         # Load CLIP model - much faster than BLIP-2!
+        print(f"[CLIP {timestamp}] Initializing processor...")
         processor = CLIPProcessor.from_pretrained(model_name)
+        print(f"[CLIP {timestamp}] Processor initialized successfully")
+        print(f"[CLIP {timestamp}] Initializing model...")
         model = CLIPModel.from_pretrained(model_name)
+        print(f"[CLIP {timestamp}] Model initialized successfully")
         
         CLIP_PROCESSOR = processor
         CLIP_MODEL = model
         
-        print(f"[{timestamp}] CLIP loaded successfully - ready for smart frame selection!")
+        print(f"[CLIP {timestamp}] CLIP loaded successfully!")
+        print(f"[CLIP {timestamp}] Model type: {type(model)}")
+        print(f"[CLIP {timestamp}] Ready for smart frame selection!\n")
         return True
         
     except Exception as e:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] CLIP loading failed: {e}")
-        print(f"[{timestamp}] Tip: Run 'pip install transformers' to ensure CLIP support")
+        print(f"\n[CLIP {timestamp}] ERROR: CLIP initialization failed!")
+        print(f"[CLIP {timestamp}] Error details: {str(e)}")
+        print(f"[CLIP {timestamp}] Traceback: {traceback.format_exc()}")
+        print(f"[CLIP {timestamp}] Tip: Run 'pip install transformers torch' to ensure CLIP support\n")
         return False
 
 class VideoRequest(BaseModel):
@@ -226,6 +247,22 @@ def download_video(youtube_url: str, job_id: str) -> str:
     print(f"[{timestamp}] Preparing yt-dlp for download...")
     print(f"[{timestamp}] Target format: MP4 (format 18 - optimal quality/size)")
     
+    # Validate and fix URL
+    if "youtube.com" in youtube_url or "youtu.be" in youtube_url:
+        # Fix common URL errors
+        if "wwhttps" in youtube_url:
+            youtube_url = youtube_url.replace("wwhttps", "https")
+        if "wwhttp" in youtube_url:
+            youtube_url = youtube_url.replace("wwhttp", "http")
+        if "//www.youtube.com" in youtube_url and not youtube_url.startswith("http"):
+            youtube_url = "https:" + youtube_url
+        if "//youtu.be" in youtube_url and not youtube_url.startswith("http"):
+            youtube_url = "https:" + youtube_url
+            
+        print(f"[{timestamp}] Using URL: {youtube_url}")
+    else:
+        raise Exception(f"Invalid YouTube URL: {youtube_url}")
+    
     cmd = [
         "yt-dlp",
         "-f", "18",  # MP4 format
@@ -255,132 +292,144 @@ def transcribe_audio(video_path: str, job_id: Optional[str] = None) -> str:
     """Transcribe audio using Whisper with progress logging and timeout"""
     try:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] Loading Whisper tiny model (fast and reliable)...")
+        print(f"\n[WHISPER {timestamp}] Starting audio transcription...")
+        print(f"[WHISPER {timestamp}] Loading Whisper tiny model...")
+        print(f"[WHISPER {timestamp}] Video path: {video_path}")
         
-        import whisper
-        import concurrent.futures
-        import threading
-        
-        # Use tiny model for faster, more reliable processing
-        model = whisper.load_model("tiny")
-        
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] Processing audio track from video...")
-        
-        # Use ThreadPoolExecutor with timeout for reliable processing
-        def transcribe_with_model():
-            return model.transcribe(video_path, language=None)
-        
+        # Use subprocess to run whisper in the correct environment
         try:
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(transcribe_with_model)
-                # 90 second timeout for transcription
-                result = future.result(timeout=90)
-        except concurrent.futures.TimeoutError:
+            # Create a temporary script to run with whisper_env
+            temp_script = "temp_whisper_script.py"
+            with open(temp_script, "w") as f:
+                f.write("""
+import whisper
+import sys
+import json
+
+# Get video path from command line argument
+video_path = sys.argv[1]
+
+# Load model and transcribe
+model = whisper.load_model("tiny")
+result = model.transcribe(video_path)
+
+# Output result as JSON to stdout
+print(json.dumps(result))
+""")
+            
+            # Run the script with whisper_env
+            cmd = f"source whisper_env/bin/activate && python {temp_script} {video_path}"
             timestamp = datetime.now().strftime("%H:%M:%S")
-            print(f"[{timestamp}] TIMEOUT: Whisper transcription took too long (>90s)")
-            return "INVALID TRANSCRIPTION: Audio processing timed out. Try with a shorter video."
+            print(f"[WHISPER {timestamp}] Running whisper in dedicated environment...")
+            
+            # Execute with timeout
+            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            try:
+                stdout, stderr = process.communicate(timeout=90)
+                
+                if process.returncode != 0:
+                    print(f"[WHISPER {timestamp}] ERROR: Process failed with code {process.returncode}")
+                    print(f"[WHISPER {timestamp}] Error output: {stderr.decode('utf-8')}")
+                    return "INVALID TRANSCRIPTION: Whisper process failed"
+                
+                # Parse the JSON output
+                result = json.loads(stdout.decode('utf-8'))
+                
+                # Clean up the temporary script
+                os.remove(temp_script)
+                
+                # Get detected language
+                detected_language = result.get("language", "unknown")
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                print(f"[WHISPER {timestamp}] Detected language: {detected_language}")
+                print(f"[WHISPER {timestamp}] Transcription length: {len(result['text'])} characters")
+                if job_id:
+                    add_log_to_job(job_id, f"Detected language: {detected_language}")
+                
+                # Handle both string and list results from Whisper
+                if isinstance(result["text"], list):
+                    text = " ".join(result["text"]).strip()
+                else:
+                    text = result["text"].strip()
+                
+                print(f"[WHISPER {timestamp}] Transcription completed successfully!\n")
+                
+                # Store detected language in the text for later use
+                text = f"[DETECTED_LANGUAGE:{detected_language}] {text}"
+                
+                return text
+                
+            except subprocess.TimeoutExpired:
+                process.kill()
+                timestamp = datetime.now().strftime("%H:%M:%S")
+                print(f"[WHISPER {timestamp}] ERROR: Transcription timed out (>90s)")
+                return "INVALID TRANSCRIPTION: Audio processing timed out. Try with a shorter video."
+            
         except Exception as e:
             timestamp = datetime.now().strftime("%H:%M:%S")
-            print(f"[{timestamp}] Whisper error: {e}")
-            return "INVALID TRANSCRIPTION: Whisper could not process the audio."
+            print(f"[WHISPER {timestamp}] ERROR: Subprocess failed!")
+            print(f"[WHISPER {timestamp}] Error details: {str(e)}")
+            return "INVALID TRANSCRIPTION: Whisper subprocess failed."
         
-        # Get detected language
-        detected_language = result.get("language", "unknown")
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] Detected language: {detected_language}")
-        if job_id:
-            add_log_to_job(job_id, f"Detected language: {detected_language}")
-        
-        # Handle both string and list results from Whisper
-        if isinstance(result["text"], list):
-            text = " ".join(result["text"]).strip()
-        else:
-            text = result["text"].strip()
-        
-        # Store detected language in the text for later use
-        text = f"[DETECTED_LANGUAGE:{detected_language}] {text}"
-        
-        # Check if we got meaningful text
-        if not text or len(text) < 10:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            print(f"[{timestamp}] WARNING: Very short or no text found")
-            return "No clear audio text found in the video. Try with a video with clear speech."
-        
-        # IMPROVED garbage detection
-        emoji_count = sum(1 for char in text if ord(char) > 127 and not char.isalpha())
-        word_count = len(text.split())
-        
-        # Check for too many emojis or special characters  
-        if emoji_count > word_count * 0.2:  # More than 20% non-standard characters
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            print(f"[{timestamp}] GARBAGE TRANSCRIPTION: {emoji_count} emojis/special chars out of {word_count} words")
-            print(f"[{timestamp}] Example: {text[:100]}...")
-            return "INVALID TRANSCRIPTION: Too many emojis and special characters. The video likely has poor audio quality or wrong language."
-        
-        # Check for repetitive patterns (common in bad transcriptions)
-        if len(set(text.split())) < len(text.split()) * 0.2:  # Less than 20% unique words
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            print(f"[{timestamp}] REPETITIVE TRANSCRIPTION: Only {len(set(text.split()))} unique words out of {word_count}")
-            return "INVALID TRANSCRIPTION: Text is too repetitive. Whisper could not interpret the audio correctly."
-        
-        # Check for nonsensical character combinations
-        nonsense_patterns = ['🥺', '😍', 'уб간', 'ím', 'Mus', 'drainingím']
-        nonsense_count = sum(1 for pattern in nonsense_patterns if pattern in text)
-        if nonsense_count > 2:
-            timestamp = datetime.now().strftime("%H:%M:%S")
-            print(f"[{timestamp}] NONSENSE TRANSCRIPTION: Found {nonsense_count} garbage patterns")
-            return "INVALID TRANSCRIPTION: Text contains nonsense. Try with a video with clearer speech."
-        
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        words = len(text.split())
-        print(f"[{timestamp}] Transcription complete: {len(text)} characters, ~{words} words")
-        if job_id:
-            add_log_to_job(job_id, f"Transcription complete: {len(text)} characters, ~{words} words")
-        
-        return text
     except Exception as e:
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] Whisper transcription error: {e}")
-        return "Transcription failed due to technical error. Please try again or use a different video."
+        print(f"\n[WHISPER {timestamp}] CRITICAL ERROR: {str(e)}")
+        print(f"[WHISPER {timestamp}] Failed to initialize Whisper\n")
+        return f"TRANSCRIPTION ERROR: {str(e)}"
 
 def call_deepseek_api(prompt: str) -> dict:
-    """Call Deepseek API with progress logging"""
-    url = "https://api.deepseek.com/v1/chat/completions"
-    headers = {
-        "Authorization": "Bearer sk-add35bac795a45528576d6ae8ee2b5dc",
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "model": "deepseek-chat",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ]
-    }
-    
+    """Call DeepSeek API with detailed logging"""
     timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] Sending request to Deepseek AI...")
-    print(f"[{timestamp}] Prompt size: {len(prompt)} characters")
+    print(f"\n[DEEPSEEK {timestamp}] Preparing API call...")
+    print(f"[DEEPSEEK {timestamp}] Prompt length: {len(prompt)} characters")
     
-    response = requests.post(url, headers=headers, json=data)
-    if response.status_code == 200:
-        result = response.json()
-        timestamp = datetime.now().strftime("%H:%M:%S")
+    try:
+        # Prepare the API request
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": "Bearer sk-add35bac795a45528576d6ae8ee2b5dc",
+            "Content-Type": "application/json"
+        }
         
-        # Try to get token usage info if available
-        if 'usage' in result:
-            usage = result['usage']
-            print(f"[{timestamp}] Deepseek response received!")
-            print(f"[{timestamp}] Tokens: {usage.get('prompt_tokens', '?')} in + {usage.get('completion_tokens', '?')} out")
+        data = {
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ]
+        }
+        
+        # Log the request details
+        print(f"[DEEPSEEK {timestamp}] Endpoint: {url}")
+        print(f"[DEEPSEEK {timestamp}] Sending request...")
+        
+        # Make the actual API call
+        response = requests.post(url, headers=headers, json=data)
+        
+        if response.status_code == 200:
+            result = response.json()
+            
+            # Try to get token usage info if available
+            if 'usage' in result:
+                usage = result['usage']
+                print(f"[DEEPSEEK {timestamp}] Response received!")
+                print(f"[DEEPSEEK {timestamp}] Tokens: {usage.get('prompt_tokens', '?')} in + {usage.get('completion_tokens', '?')} out")
+            else:
+                print(f"[DEEPSEEK {timestamp}] Response received!")
+                
+            print(f"[DEEPSEEK {timestamp}] Response length: {len(result['choices'][0]['message']['content'])} characters")
+            print(f"[DEEPSEEK {timestamp}] Processing completed successfully!\n")
+            
+            return result
         else:
-            print(f"[{timestamp}] Deepseek response received!")
+            error_msg = f"API call failed: {response.status_code}"
+            print(f"[DEEPSEEK {timestamp}] ERROR: {error_msg}")
+            print(f"[DEEPSEEK {timestamp}] Response: {response.text}\n")
+            return {"error": error_msg, "choices": [{"message": {"content": error_msg}}]}
         
-        return result
-    else:
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] Deepseek API error: {response.status_code}")
-        raise Exception(f"API call failed: {response.status_code}")
+    except Exception as e:
+        print(f"[DEEPSEEK {timestamp}] ERROR: API call failed!")
+        print(f"[DEEPSEEK {timestamp}] Error details: {str(e)}\n")
+        return {"error": str(e), "choices": [{"message": {"content": f"API error: {str(e)}"}}]}
 
 def analyze_video_content(text: str, language: str = "en") -> VideoContent:
     """Analyze video content using Deepseek"""
@@ -778,63 +827,92 @@ def analyze_frame_quality(image_path: str) -> float:
 def query_local_clip(image_path: str, instruction_text: str) -> Optional[float]:
     """Query local CLIP model for frame relevance - much faster than BLIP-2!"""
     try:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        
         if not CLIP_MODEL or not CLIP_PROCESSOR:
-            print("CLIP model not loaded, falling back to quality analysis")
-            return None
+            print(f"[CLIP {timestamp}] Model not loaded, initializing...")
+            success = initialize_clip_model()
+            if not success:
+                print(f"[CLIP {timestamp}] Failed to initialize model, falling back to quality analysis")
+                return None
         
         import torch
         from PIL import Image
         
+        print(f"[CLIP {timestamp}] Analyzing image: {image_path}")
+        print(f"[CLIP {timestamp}] Action to match: '{instruction_text}'")
+        
+        # Check if image exists and is valid
+        if not os.path.exists(image_path) or os.path.getsize(image_path) < 1000:
+            print(f"[CLIP {timestamp}] Image does not exist or is too small: {image_path}")
+            return None
+        
         # Load and preprocess image
-        image = Image.open(image_path)
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
+        try:
+            image = Image.open(image_path)
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+        except Exception as e:
+            print(f"[CLIP {timestamp}] Failed to open image: {e}")
+            return None
         
         # Create text prompts for comparison
         cooking_action = instruction_text.strip()
         positive_prompt = f"someone {cooking_action} in kitchen"
         negative_prompt = "empty kitchen with no cooking activity"
         
+        print(f"[CLIP {timestamp}] Positive prompt: '{positive_prompt}'")
+        print(f"[CLIP {timestamp}] Negative prompt: '{negative_prompt}'")
+        
         # Process inputs with CLIP
-        inputs = CLIP_PROCESSOR(
-            text=[positive_prompt, negative_prompt], 
-            images=image, 
-            return_tensors="pt", 
-            padding=True
-        )
-        
-        # Get CLIP predictions - very fast!
-        with torch.no_grad():
-            outputs = CLIP_MODEL(**inputs)
-            logits_per_image = outputs.logits_per_image  # Image-text similarity scores
-            probs = logits_per_image.softmax(dim=1)      # Convert to probabilities
-        
-        # Get relevance score (probability of positive vs negative)
-        relevance_score = float(probs[0][0])  # Probability of positive match
-        
-        print(f"CLIP relevance {relevance_score:.2f} for '{cooking_action}'")
-        return relevance_score
+        try:
+            inputs = CLIP_PROCESSOR(
+                text=[positive_prompt, negative_prompt], 
+                images=image, 
+                return_tensors="pt", 
+                padding=True
+            )
+            
+            # Get CLIP predictions - very fast!
+            with torch.no_grad():
+                outputs = CLIP_MODEL(**inputs)
+                logits_per_image = outputs.logits_per_image  # Image-text similarity scores
+                probs = logits_per_image.softmax(dim=1)      # Convert to probabilities
+            
+            # Get relevance score (probability of positive vs negative)
+            relevance_score = float(probs[0][0])  # Probability of positive match
+            
+            print(f"[CLIP {timestamp}] Analysis successful! Relevance score: {relevance_score:.2f} for '{cooking_action}'")
+            return relevance_score
+        except Exception as e:
+            print(f"[CLIP {timestamp}] Error during CLIP processing: {e}")
+            print(f"[CLIP {timestamp}] Traceback: {traceback.format_exc()}")
+            return None
         
     except Exception as e:
-        print(f"Local CLIP error: {e}, falling back to quality analysis")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[CLIP {timestamp}] Error: {e}")
+        print(f"[CLIP {timestamp}] Traceback: {traceback.format_exc()}")
         return None
 
 def smart_frame_selection(video_path: str, step: Step, job_id: str, video_duration: Optional[float] = None, total_steps: int = 7) -> bool:
     """Smart frame selection with CLIP for optimal image quality"""
     try:
-        print(f"Smart frame selection for step {step.number}: {step.action}")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"\n[FRAME {timestamp}] Smart frame selection for step {step.number}: {step.action}")
         
         # Initialize CLIP model if not already loaded
         if not CLIP_MODEL or not CLIP_PROCESSOR:
-            print("Initializing CLIP model for smart frame selection...")
+            print(f"[FRAME {timestamp}] CLIP model not loaded, initializing now...")
             success = initialize_clip_model()
             if success:
-                print("CLIP model loaded successfully!")
+                print(f"[FRAME {timestamp}] CLIP model loaded successfully!")
             else:
-                print("CLIP model loading failed, using quality analysis only")
+                print(f"[FRAME {timestamp}] CLIP model loading failed, using quality analysis only")
         
         # Improved timing calculation specifically for cooking videos
         if not video_duration:
+            print(f"[FRAME {timestamp}] ERROR: Video duration is missing, cannot select frames")
             return False
             
         # Define cooking zone (skip intro/outro)
@@ -843,6 +921,7 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
         cooking_duration = cooking_end - cooking_start
         
         if cooking_duration <= 0:
+            print(f"[FRAME {timestamp}] ERROR: Invalid cooking duration: {cooking_duration}")
             return False
         
         # Get base time from AI (convert timestamp to seconds)
@@ -863,18 +942,18 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
         if ai_time_reasonable:
             # Use AI time as primary candidate
             primary_time = base_time
-            print(f"Step {step.number}: Using AI time {base_time}s (within cooking zone)")
+            print(f"[FRAME {timestamp}] Step {step.number}: Using AI time {base_time}s (within cooking zone)")
         else:
             # Calculate distributed time for this step
             step_interval = cooking_duration / total_steps
             distributed_time = cooking_start + (step.number - 1) * step_interval + (step_interval / 2)
             primary_time = distributed_time
-            print(f"Step {step.number}: AI time {base_time}s outside cooking zone, using distributed time {distributed_time:.1f}s")
+            print(f"[FRAME {timestamp}] Step {step.number}: AI time {base_time}s outside cooking zone, using distributed time {distributed_time:.1f}s")
         
         # Extract multiple candidate frames around the primary time
         candidate_times = []
         
-        # BLIP-2 SMART: Generate multiple candidates for AI analysis
+        # Generate multiple candidates for AI analysis
         candidate_times = [primary_time]  # Always include the primary time
         
         # Add nearby times for better selection (±15 seconds)
@@ -892,7 +971,7 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
             # Fallback: just use the primary time
             candidate_times = [primary_time]
         
-        print(f"Candidate times for step {step.number}: {[f'{t:.1f}s' for t in candidate_times]}")
+        print(f"[FRAME {timestamp}] Candidate times for step {step.number}: {[f'{t:.1f}s' for t in candidate_times]}")
         
         # Extract candidate frames
         candidates = []
@@ -902,37 +981,46 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
             temp_path = FRAMES_DIR / f"{job_id}_{step.number}_candidate_{i}.jpg"
             cmd = [
                 'ffmpeg', '-y', '-ss', str(time_sec), '-i', video_path,
-                '-vframes', '1', '-q:v', '3', '-vf', 'scale=320:180', str(temp_path)  # Smaller + lower quality = much faster
+                '-vframes', '1', '-q:v', '3', '-vf', 'scale=640:360', str(temp_path)  # Higher resolution for better quality
             ]
             
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)  # 3s timeout instead of 10s
-            if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 1000:
-                candidates.append((temp_path, time_sec))
-                temp_frames.append(temp_path)
+            print(f"[FRAME {timestamp}] Extracting frame at {time_sec:.1f}s to {temp_path}")
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)  # 5s timeout
+                if result.returncode == 0 and os.path.exists(temp_path) and os.path.getsize(temp_path) > 1000:
+                    candidates.append((temp_path, time_sec))
+                    temp_frames.append(temp_path)
+                    print(f"[FRAME {timestamp}] Successfully extracted frame at {time_sec:.1f}s ({os.path.getsize(temp_path)/1024:.1f} KB)")
+                else:
+                    print(f"[FRAME {timestamp}] Failed to extract frame at {time_sec:.1f}s: {result.stderr}")
+            except subprocess.TimeoutExpired:
+                print(f"[FRAME {timestamp}] Timeout while extracting frame at {time_sec:.1f}s")
         
         if not candidates:
-            print(f"No candidate frames extracted, using standard method")
-            return False
+            print(f"[FRAME {timestamp}] No candidate frames extracted, creating placeholder image")
+            final_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
+            create_placeholder_image(final_path)
+            step.image_path = str(final_path)
+            return True
         
-        # BLIP-2 ANALYSIS: Use AI to select the best frame that matches the step
+        # Use AI to select the best frame that matches the step
         best_frame = None
         best_score = 0.0
         time_sec = 0
         
         if candidates:
-            # Create simple instruction prompt for BLIP-2
-            instruction_prompt = f"What cooking activity is shown in this image?"
+            print(f"[FRAME {timestamp}] Analyzing {len(candidates)} candidate frames with CLIP")
             
             for candidate_path, candidate_time in candidates:
                 # Use CLIP to analyze this frame
                 relevance_score = query_local_clip(candidate_path, step.action)
                 
                 if relevance_score is None:
-                    # Fallback to quality analysis if BLIP-2 fails
+                    # Fallback to quality analysis if CLIP fails
                     relevance_score = analyze_frame_quality(candidate_path)
-                    print(f"Frame at {candidate_time:.1f}s: quality score {relevance_score:.2f} (BLIP-2 fallback)")
+                    print(f"[FRAME {timestamp}] Frame at {candidate_time:.1f}s: quality score {relevance_score:.2f} (CLIP fallback)")
                 else:
-                    print(f"Frame at {candidate_time:.1f}s: BLIP-2 relevance {relevance_score:.2f} for '{step.action}'")
+                    print(f"[FRAME {timestamp}] Frame at {candidate_time:.1f}s: CLIP relevance {relevance_score:.2f} for '{step.action}'")
                 
                 # Choose the frame with highest relevance
                 if relevance_score > best_score:
@@ -941,37 +1029,55 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
                     time_sec = candidate_time
             
             if best_frame:
-                print(f"Selected frame at {time_sec:.1f}s with score {best_score:.2f} (BLIP-2 ANALYSIS)")
+                print(f"[FRAME {timestamp}] Selected frame at {time_sec:.1f}s with score {best_score:.2f}")
         
         # Copy best frame to final location
         final_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
         
-        if best_frame:  # Remove threshold check for speed
+        if best_frame:
             import shutil
             shutil.copy2(best_frame, final_path)
-            print(f"Selected frame -> {final_path}")
+            print(f"[FRAME {timestamp}] Selected frame saved to {final_path}")
+            # Set the image path in the step object so it can be used in the PDF
+            step.image_path = str(final_path)
             success = True
         else:
-            success = False
+            print(f"[FRAME {timestamp}] No suitable frame found, creating placeholder image")
+            create_placeholder_image(final_path)
+            step.image_path = str(final_path)
+            success = True
         
         # Clean up temporary files
         for temp_path in temp_frames:
             try:
                 os.remove(temp_path)
-            except:
-                pass
+            except Exception as e:
+                print(f"[FRAME {timestamp}] Failed to clean up temporary file {temp_path}: {e}")
         
         return success
         
     except Exception as e:
-        print(f"Smart frame selection failed: {e}")
-        return False
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[FRAME {timestamp}] Smart frame selection failed: {e}")
+        print(f"[FRAME {timestamp}] Traceback: {traceback.format_exc()}")
+        
+        # Create placeholder image as fallback
+        try:
+            final_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
+            create_placeholder_image(final_path)
+            step.image_path = str(final_path)
+            return True
+        except:
+            return False
 
 def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en") -> str:
     """Generate PDF with professional layout matching the reference design"""
     output_path = OUTPUT_DIR / f"{job_id}.pdf"
     
     try:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"\n[PDF {timestamp}] Starting PDF generation...")
+        
         # Create PDF with custom margins
         pdf = FPDF(orientation='P', unit='mm', format='A4')
         pdf.set_auto_page_break(auto=True, margin=20)
@@ -1104,10 +1210,19 @@ def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en")
             explanation = clean_text_for_pdf(step.explanation)
             
             # Check if we have an image for this step
-            step_image_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
-            has_image = os.path.exists(step_image_path) and os.path.getsize(step_image_path) > 1000
+            # First check if step.image_path is set (from smart_frame_selection)
+            if step.image_path and os.path.exists(step.image_path) and os.path.getsize(step.image_path) > 1000:
+                step_image_path = step.image_path
+                has_image = True
+                print(f"[PDF] Using image path from step object: {step_image_path}")
+            else:
+                # Fall back to conventional path
+                step_image_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
+                has_image = os.path.exists(step_image_path) and os.path.getsize(step_image_path) > 1000
+                print(f"[PDF] Using fallback image path: {step_image_path}, exists: {os.path.exists(step_image_path)}")
             
             if has_image:
+                print(f"[PDF] Adding image for step {step.number}: {step_image_path}")
                 # Text with image layout
                 y_start = pdf.get_y()
                 
@@ -1134,6 +1249,7 @@ def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en")
                     img_width = 60  # mm
                     
                     pdf.image(str(step_image_path), x=img_x, y=img_y, w=img_width)
+                    print(f"[PDF] Successfully added image for step {step.number}")
                     
                     # Ensure we move past the image
                     text_height = pdf.get_y() - y_start
@@ -1144,9 +1260,11 @@ def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en")
                     
                 except Exception as e:
                     timestamp = datetime.now().strftime("%H:%M:%S")
-                    print(f"[{timestamp}] Could not add image for step {step.number}: {e}")
+                    print(f"[PDF {timestamp}] Could not add image for step {step.number}: {e}")
+                    print(f"[PDF {timestamp}] Traceback: {traceback.format_exc()}")
                     
             else:
+                print(f"[PDF] No image available for step {step.number}, using text-only layout")
                 # Full-width text (no image)
                 words = explanation.split()
                 line = ""
@@ -1178,11 +1296,14 @@ def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en")
         pdf.output(str(output_path))
         
         timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[{timestamp}] PDF created with professional layout: {output_path}")
+        print(f"[PDF {timestamp}] PDF created with professional layout: {output_path}")
         return str(output_path)
         
     except Exception as e:
-        print(f"PDF generation error: {e}")
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[PDF {timestamp}] PDF generation error: {e}")
+        print(f"[PDF {timestamp}] Traceback: {traceback.format_exc()}")
+        
         # Create simple fallback PDF - ENSURE we create a valid PDF file
         try:
             pdf = FPDF()
@@ -1199,11 +1320,11 @@ def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en")
             
             # Ensure the fallback PDF is saved
             pdf.output(str(output_path))
-            print(f"Fallback PDF created: {output_path}")
+            print(f"[PDF {timestamp}] Fallback PDF created: {output_path}")
             return str(output_path)
             
         except Exception as fallback_error:
-            print(f"Even fallback PDF creation failed: {fallback_error}")
+            print(f"[PDF {timestamp}] Even fallback PDF creation failed: {fallback_error}")
             # Last resort: create a minimal PDF with basic text
             try:
                 pdf = FPDF()
@@ -1468,7 +1589,6 @@ def process_video_task(youtube_url: str, job_id: str, language: str = "en"):
         print(f"[{timestamp}] ERROR MESSAGE: {e}")
         print("=" * 80)
         
-        import traceback
         traceback.print_exc()
         jobs[job_id].update({
             "status": "failed",
