@@ -12,4 +12,7 @@ Pillow>=10.0.0
 requests>=2.25.0
 transformers>=4.35.0
 torch>=2.0.0
-torchvision>=0.15.0 
+torchvision>=0.15.0
+loguru
+torchaudio
+--extra-index-url https://download.pytorch.org/whl/cu121 
