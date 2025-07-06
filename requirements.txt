@@ -15,4 +15,7 @@ torch>=2.0.0
 torchvision>=0.15.0
 loguru
 torchaudio
+openai-whisper>=20231117
+langchain-deepseek>=0.0.3
+langchain-core>=0.1.0
 --extra-index-url https://download.pytorch.org/whl/cu121 
