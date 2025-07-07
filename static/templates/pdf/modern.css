@@ -1,0 +1,125 @@
+/* Modern PDF Template */
+
+@page {
+    margin: 2.5cm;
+    size: A4;
+}
+
+.title {
+    font-family: DejaVu;
+    font-size: 28pt;
+    font-weight: bold;
+    text-align: center;
+    margin-bottom: 25pt;
+    text-transform: uppercase;
+    color: #2c3e50;
+}
+
+.recipe-title {
+    font-family: DejaVu;
+    font-size: 22pt;
+    text-align: left;
+    margin-bottom: 20pt;
+    color: #2c3e50;
+}
+
+/* Recipe image and description layout - Fixed for PDF generation */
+.recipe-header {
+    margin-bottom: 40pt;
+}
+
+.recipe-image {
+    width: 45%;
+    margin-bottom: 15pt;
+}
+
+.recipe-description {
+    width: 45%;
+    margin-top: 10pt;
+}
+
+.description {
+    font-family: DejaVu;
+    font-size: 13pt;
+    text-align: left;
+    margin-bottom: 15pt;
+    color: #34495e;
+    line-height: 1.4;
+}
+
+.metadata {
+    font-family: DejaVu;
+    font-size: 11pt;
+    margin-bottom: 10pt;
+    color: #7f8c8d;
+    text-align: left;
+}
+
+.section-header {
+    font-family: DejaVu;
+    font-size: 18pt;
+    font-weight: bold;
+    margin-top: 20pt;
+    margin-bottom: 15pt;
+    color: #2c3e50;
+    text-align: left;
+}
+
+.ingredients {
+    columns: 2;
+    column-gap: 25pt;
+    margin-bottom: 25pt;
+}
+
+.ingredient-item {
+    font-family: DejaVu;
+    font-size: 12pt;
+    margin-bottom: 6pt;
+    color: #34495e;
+    text-align: left;
+}
+
+.step {
+    margin-bottom: 20pt;
+}
+
+.step-header {
+    font-family: DejaVu;
+    font-size: 15pt;
+    font-weight: bold;
+    margin-bottom: 8pt;
+    color: #2c3e50;
+    text-align: left;
+}
+
+.step-row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: 100%;
+    gap: 24pt;
+}
+
+.step-content {
+    flex: 1 1 55%;
+}
+
+.step-image {
+    flex: 0 0 40%;
+    max-width: 40%;
+    margin-bottom: 0;
+}
+
+.step-separator {
+    margin: 20pt 0;
+}
+
+.footer {
+    font-family: DejaVu;
+    font-size: 9pt;
+    font-style: italic;
+    text-align: center;
+    color: #95a5a6;
+    margin-top: 25pt;
+} 

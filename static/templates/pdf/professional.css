@@ -1,0 +1,119 @@
+/* Professional Recipe PDF Template */
+
+@page {
+    margin: 2cm;
+    size: A4;
+}
+
+/* Main category title (e.g., "MEALS WITH CHICKEN") */
+.title {
+    font-family: DejaVu;
+    font-size: 28pt;
+    font-weight: bold;
+    text-align: left;
+    margin-bottom: 20pt;
+    text-transform: uppercase;
+    color: #000000;
+}
+
+/* Recipe title (e.g., "CHICKEN BREAST WITH VEGETABLES") */
+.recipe-title {
+    font-family: DejaVu;
+    font-size: 18pt;
+    text-align: left;
+    margin-bottom: 25pt;
+    color: #333333;
+}
+
+/* Recipe header section for image and description */
+.recipe-header {
+    margin-bottom: 30pt;
+}
+
+/* Description text styling */
+.description {
+    font-family: DejaVu;
+    font-size: 12pt;
+    text-align: left;
+    line-height: 1.6;
+    margin-bottom: 15pt;
+    color: #444444;
+}
+
+/* Metadata (Serves, Prep Time, Cook Time) */
+.metadata {
+    font-family: DejaVu;
+    font-size: 12pt;
+    font-weight: normal;
+    margin-bottom: 8pt;
+    color: #000000;
+}
+
+/* Section headers (e.g., "Ingredients", "Instructions") */
+.section-header {
+    font-family: DejaVu;
+    font-size: 20pt;
+    font-weight: bold;
+    margin-top: 25pt;
+    margin-bottom: 15pt;
+    color: #000000;
+    text-align: left;
+}
+
+/* Ingredients list layout */
+.ingredients {
+    columns: 2;
+    column-gap: 30pt;
+    margin-bottom: 25pt;
+}
+
+/* Individual ingredient item */
+.ingredient-item {
+    font-family: DejaVu;
+    font-size: 12pt;
+    margin-bottom: 7pt;
+    color: #333333;
+    list-style-type: disc; /* For bullet points */
+}
+
+/* Instructions section styling */
+.step {
+    margin-bottom: 15pt;
+}
+
+.step-header {
+    font-family: DejaVu;
+    font-size: 14pt;
+    font-weight: bold;
+    margin-bottom: 8pt;
+    color: #000000;
+}
+
+.step-row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    width: 100%;
+    gap: 24pt;
+}
+
+.step-content {
+    flex: 1 1 55%;
+}
+
+.step-image {
+    flex: 0 0 40%;
+    max-width: 40%;
+    margin-bottom: 0;
+}
+
+/* Footer styling */
+.footer {
+    font-family: DejaVu;
+    font-size: 9pt;
+    font-style: italic;
+    text-align: center;
+    color: #888888;
+    margin-top: 30pt;
+} 

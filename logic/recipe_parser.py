@@ -6,7 +6,7 @@ import traceback
 import logging
 from langchain_deepseek import ChatDeepSeek
 from langchain_core.messages import HumanMessage, SystemMessage
-from models.types import VideoContent, Step
+from models.types import Step, Recipe
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,15 +35,15 @@ def get_llm_instance():
 
 def validate_step(step_data: dict) -> Tuple[bool, str]:
     """Validate a single step data."""
-    required_fields = ['number', 'action', 'timestamp', 'explanation']
+    required_fields = ['step_number', 'description', 'timestamp']
     for field in required_fields:
         if field not in step_data:
             return False, f"Missing required field: {field}"
-        if not step_data[field]:  # Check if field is empty
+        if not step_data[field] and field != 'timestamp':  # Allow empty timestamp
             return False, f"Empty required field: {field}"
     
     # Validate step number is integer
-    if not isinstance(step_data['number'], int):
+    if not isinstance(step_data['step_number'], int):
         return False, "Step number must be an integer"
     
     return True, ""
@@ -54,7 +54,7 @@ def validate_response(response_data: dict) -> Tuple[bool, str]:
         return False, "Response is not a dictionary"
     
     # Check required fields
-    required_fields = ['video_type', 'title', 'materials_or_ingredients', 'steps']
+    required_fields = ['title', 'description', 'servings', 'prep_time', 'cook_time', 'materials_or_ingredients', 'steps']
     for field in required_fields:
         if field not in response_data:
             return False, f"Missing required field: {field}"
@@ -109,29 +109,29 @@ def call_deepseek_api(prompt: str) -> dict:
         logger.error(traceback.format_exc())
         return {}
 
-def analyze_video_content(text: str, language: str = "en") -> Optional[VideoContent]:
+def analyze_video_content(text: str, language: str = "en") -> Optional[Recipe]:
     """Analyze video transcript to extract structured data."""
     prompts = {
-        "en": ("You are an expert at analyzing video transcripts. "
-               "Your task is to determine the video's type (e.g., 'cooking', 'DIY', 'tutorial'), "
-               "extract its title, a list of materials or ingredients, and a step-by-step guide. "
-               "The user will provide the transcript of a video. "
-               "Format your response as a JSON object with the keys: "
-               "'video_type', 'title', 'materials_or_ingredients' (as an array of strings), and 'steps' "
-               "(as an array of objects, each with 'step_number', 'action', 'timestamp', and 'explanation'). "
-               "Ensure the instructions are clear, concise, and easy to follow. "
-               "Focus only on the main steps and filter out any irrelevant chatter. "
-               "IMPORTANT: 'step_number' MUST be an integer, starting from 1."),
-        "sv": ("Du är en expert på att analysera videotranskriptioner. "
-               "Din uppgift är att bestämma videotypen (t.ex. 'matlagning', 'DIY', 'handledning'), "
-               "extrahera dess titel, en lista över material eller ingredienser, och en steg-för-steg-guide. "
-               "Användaren kommer att ge dig transkriptionen av en video. "
-               "Formatera ditt svar som ett JSON-objekt med nycklarna: "
-               "'video_type', 'title', 'materials_or_ingredients' (som en lista med strängar), och 'steps' "
-               "(som en lista med objekt, var och en med 'step_number', 'action', 'timestamp' och 'explanation'). "
-               "Se till att instruktionerna är tydliga, koncisa och lätta att följa. "
-               "Fokusera endast på de huvudsakliga stegen och filtrera bort allt irrelevant prat. "
-               "VIKTIGT: 'step_number' MÅSTE vara ett heltal, med start från 1.")
+        "en": ("You are an expert at analyzing video transcripts. Your task is to extract structured recipe data. "
+               "Format your response as a JSON object with the following keys: 'title', 'description', "
+               "'servings', 'prep_time', 'cook_time', 'materials_or_ingredients', and 'steps'.\n\n"
+               "Follow these specific instructions:\n"
+               "1. 'title': The full, official name of the recipe.\n"
+               "2. 'description': A brief, engaging summary of the dish. If not mentioned, create a suitable one.\n"
+               "3. 'servings', 'prep_time', 'cook_time': Extract these values. If they are not mentioned, YOU MUST ESTIMATE them based on the ingredients and cooking process. Provide them as strings (e.g., '2-3 people', '15 minutes').\n"
+               "4. 'materials_or_ingredients': A list of all ingredients as an array of strings.\n"
+               "5. 'steps': A step-by-step guide as an array of objects, each with 'step_number' (integer), 'description' (string), and 'timestamp' (string, 'MM:SS').\n\n"
+               "Ensure your entire response is a single, valid JSON object."),
+        "sv": ("Du är en expert på att analysera videotranskriptioner. Din uppgift är att extrahera strukturerad receptdata. "
+               "Formatera ditt svar som ett JSON-objekt med följande nycklar: 'title', 'description', "
+               "'servings', 'prep_time', 'cook_time', 'materials_or_ingredients', och 'steps'.\n\n"
+               "Följ dessa specifika instruktioner:\n"
+               "1. 'title': Det fullständiga, officiella namnet på receptet.\n"
+               "2. 'description': En kort, engagerande sammanfattning av rätten. Om den inte nämns, skapa en passande.\n"
+               "3. 'servings', 'prep_time', 'cook_time': Extrahera dessa värden. Om de inte nämns, MÅSTE DU UPPSKATTA dem baserat på ingredienserna och tillagningsprocessen. Ange dem som strängar (t.ex. '2-3 personer', '15 minuter').\n"
+               "4. 'materials_or_ingredients': En lista över alla ingredienser som en array av strängar.\n"
+               "5. 'steps': En steg-för-steg-guide som en array av objekt, var och en med 'step_number' (heltal), 'description' (sträng), och 'timestamp' (sträng, 'MM:SS').\n\n"
+               "Se till att hela ditt svar är ett enda, giltigt JSON-objekt.")
     }
     
     prompt = prompts.get(language, prompts["en"]) + f"\n\nTranscript:\n{text}"
@@ -145,24 +145,25 @@ def analyze_video_content(text: str, language: str = "en") -> Optional[VideoCont
         if not is_valid:
             logger.error(f"Invalid AI response: {error_msg}")
             logger.error(f"Response data: {json.dumps(response_data, indent=2)}")
-            return None
+            raise ValueError(f"Invalid AI response: {error_msg}")
 
-        logger.info("Creating VideoContent object")
-        video_content = VideoContent(
-            video_type=response_data["video_type"],
+        logger.info("Creating Recipe object")
+        recipe = Recipe(
             title=response_data["title"],
-            materials_or_ingredients=response_data["materials_or_ingredients"],
+            description=response_data.get("description"),
+            servings=response_data.get("servings", "N/A"),
+            prep_time=response_data.get("prep_time", "N/A"),
+            cook_time=response_data.get("cook_time", "N/A"),
+            ingredients=response_data["materials_or_ingredients"],
             steps=[Step(**step) for step in response_data["steps"]]
         )
         
-        logger.info("Successfully created VideoContent object")
-        return video_content
+        logger.info("Successfully created Recipe object")
+        return recipe
         
-    except (json.JSONDecodeError, ValueError) as e:
+    except ValueError as e:
         logger.error(f"Error processing AI response: {e}")
-        logger.error(traceback.format_exc())
         return None
     except Exception as e:
-        logger.error(f"An unexpected error occurred in analyze_video_content: {e}")
-        logger.error(traceback.format_exc())
+        logger.error(f"An unexpected error occurred in analyze_video_content: {e}", exc_info=True)
         return None 

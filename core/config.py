@@ -157,7 +157,7 @@ def update_status(job_id: str, step: str, status: str, message: str, pdf_path: O
             jobs[job_id]["pdf_path"] = pdf_path
             
         # If job is completed or failed, clean up temporary files
-        if status in ["completed", "failed"]:
+        if status.upper() in ["COMPLETED", "FAILED"]:
             cleanup_job_files(job_id)
     else:
         # Update specific step status

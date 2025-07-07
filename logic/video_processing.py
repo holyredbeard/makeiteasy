@@ -32,14 +32,12 @@ FRAMES_DIR = Path("frames")
 DOWNLOADS_DIR.mkdir(exist_ok=True)
 FRAMES_DIR.mkdir(exist_ok=True)
 
-def log_video_step(step: str, message: str, error: bool = False):
-    """Helper function for consistent video processing logging"""
-    timestamp = datetime.now().strftime("%H:%M:%S")
-    log_message = f"[VIDEO {timestamp}] [{step}] {message}"
+def log_video_step(step_name: str, message: str, error: bool = False):
+    """Unified logger for video processing steps."""
     if error:
-        logger.error(log_message)
+        logger.error(f"[{step_name}] {message}")
     else:
-        logger.info(log_message)
+        logger.info(f"[{step_name}] {message}")
 
 class ModelManager:
     _instance = None
@@ -116,7 +114,17 @@ def transcribe_audio(video_path: str, job_id: Optional[str] = None) -> str:
     try:
         model_manager = ModelManager()
         whisper_model = model_manager.get_whisper_model()
-        result = whisper_model.transcribe(video_path)
+        
+        # Try with different configurations to handle tensor size issues
+        try:
+            result = whisper_model.transcribe(video_path, fp16=False)
+        except Exception as e1:
+            log_video_step("TRANSCRIBE", f"First attempt failed: {e1}, trying with different settings")
+            try:
+                result = whisper_model.transcribe(video_path, fp16=False, language="en")
+            except Exception as e2:
+                log_video_step("TRANSCRIBE", f"Second attempt failed: {e2}, trying with minimal settings")
+                result = whisper_model.transcribe(video_path, fp16=False, language="en", task="transcribe")
         
         if result and 'text' in result:
             log_video_step("TRANSCRIBE", "Successfully transcribed audio")
@@ -129,18 +137,23 @@ def transcribe_audio(video_path: str, job_id: Optional[str] = None) -> str:
         raise
 
 def get_video_duration(video_path: str) -> Optional[float]:
-    """Get video duration using ffprobe."""
+    """Get the duration of a video file using OpenCV."""
     try:
-        result = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of",
-             "default=noprint_wrappers=1:nokey=1", video_path],
-            capture_output=True, text=True, check=True
-        )
-        duration = float(result.stdout)
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            log_video_step("DURATION", f"Cannot open video file: {video_path}", error=True)
+            return None
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        if fps == 0:
+            log_video_step("DURATION", "FPS is zero, cannot calculate duration.", error=True)
+            return None
+        frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        duration = frame_count / fps
+        cap.release()
         log_video_step("DURATION", f"Video duration: {duration:.2f} seconds")
         return duration
     except Exception as e:
-        log_video_step("DURATION", f"Error getting video duration: {e}", error=True)
+        log_video_step("DURATION", f"Failed to get video duration with OpenCV: {e}", error=True)
         return None
 
 def create_placeholder_image(output_path: str, step_number: int, error_message: str = "Image not available"):
@@ -234,95 +247,141 @@ def enhance_image(image_path: str) -> bool:
         log_video_step("ENHANCE", f"Error enhancing image: {e}", error=True)
         return False
 
-def extract_frame(video_path: str, timestamp: float, output_path: str) -> bool:
-    """Extract a single frame with multiple attempts."""
+def extract_frame(video_path: str, time_in_seconds: float, output_path: str) -> bool:
+    """Extract a single frame from a video at a specific time using OpenCV."""
     try:
-        # First attempt - exact timestamp
-        cmd = ['ffmpeg', '-y', '-ss', str(timestamp), '-i', video_path, '-vframes', '1', '-q:v', '2', str(output_path)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            log_video_step("FRAME_EXTRACT", f"Cannot open video file: {video_path}", error=True)
+            return False
+
+        # Ensure time is within video bounds
+        duration = get_video_duration(video_path)
+        if duration and time_in_seconds > duration:
+            time_in_seconds = duration - 0.1 # Get a frame just before the end
+        if time_in_seconds < 0:
+            time_in_seconds = 0
         
-        if output_path.exists() and output_path.stat().st_size > 1000:
-            quality = analyze_frame_quality(str(output_path))
-            if quality > 0.5:  # Good quality threshold
-                enhance_image(str(output_path))
+        cap.set(cv2.CAP_PROP_POS_MSEC, time_in_seconds * 1000)
+        success, image = cap.read()
+        cap.release()
+        
+        if success:
+            log_video_step("FRAME_EXTRACT", f"Extracting frame at {time_in_seconds:.2f}s to {output_path}")
+            cv2.imwrite(output_path, image)
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 1000:
+                log_video_step("FRAME_EXTRACT", "Frame extracted successfully.")
                 return True
-        
-        # Second attempt - try 0.5 seconds before
-        cmd = ['ffmpeg', '-y', '-ss', str(max(0, timestamp - 0.5)), '-i', video_path, '-vframes', '1', '-q:v', '2', str(output_path)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if output_path.exists() and output_path.stat().st_size > 1000:
-            quality = analyze_frame_quality(str(output_path))
-            if quality > 0.4:  # Lower threshold for second attempt
-                enhance_image(str(output_path))
-                return True
-        
-        # Third attempt - try 0.5 seconds after
-        cmd = ['ffmpeg', '-y', '-ss', str(timestamp + 0.5), '-i', video_path, '-vframes', '1', '-q:v', '2', str(output_path)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        
-        if output_path.exists() and output_path.stat().st_size > 1000:
-            quality = analyze_frame_quality(str(output_path))
-            if quality > 0.3:  # Even lower threshold for third attempt
-                enhance_image(str(output_path))
-                return True
-        
-        return False
-        
+            else:
+                log_video_step("FRAME_EXTRACT", "Frame extraction failed (file is empty or invalid).", error=True)
+                return False
+        else:
+            log_video_step("FRAME_EXTRACT", f"Failed to get frame at {time_in_seconds:.2f}s.", error=True)
+            return False
     except Exception as e:
-        log_video_step("EXTRACT", f"Error extracting frame: {e}", error=True)
+        log_video_step("FRAME_EXTRACT", f"Error during frame extraction with OpenCV: {e}", error=True)
         return False
+
+def extract_thumbnail(video_path: str, job_id: str) -> Optional[str]:
+    """
+    Extracts a representative thumbnail from the video, preferably from the end.
+    """
+    output_path = str(FRAMES_DIR / f"{job_id}_thumbnail.jpg")
+    duration = get_video_duration(video_path)
+    
+    if not duration:
+        log_video_step("THUMBNAIL", "Could not get video duration, cannot extract thumbnail.", error=True)
+        return None
+        
+    # Try to get a frame from 95% of the way through the video
+    extraction_time = duration * 0.95
+    log_video_step("THUMBNAIL", f"Attempting to extract thumbnail at {extraction_time:.2f}s (95% mark).")
+    
+    if extract_frame(video_path, extraction_time, output_path):
+        return output_path
+    
+    # Fallback: try the 85% mark
+    extraction_time = duration * 0.85
+    log_video_step("THUMBNAIL", f"Fallback: Attempting to extract thumbnail at {extraction_time:.2f}s (85% mark).")
+    if extract_frame(video_path, extraction_time, output_path):
+        return output_path
+        
+    log_video_step("THUMBNAIL", "Failed to extract a thumbnail after multiple attempts.", error=True)
+    return None
 
 def smart_frame_selection(video_path: str, step: Step, job_id: str, video_duration: Optional[float] = None, total_steps: int = 7) -> bool:
-    """Smart frame selection with multiple fallback strategies."""
-    log_video_step("FRAME", f"Starting frame selection for step {step.number}")
+    """
+    Selects the best frame for a step using CLIP for relevance and quality metrics.
+    """
+    output_path = FRAMES_DIR / f"{job_id}_step_{step.step_number}.jpg"
     
-    final_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
-    step.image_path = str(final_path)
-
-    try:
-        if not video_duration:
-            video_duration = get_video_duration(video_path) or 600
-
-        cooking_start = video_duration * 0.1
-        cooking_end = video_duration * 0.9
-        
-        # Strategy 1: Use AI-provided timestamp
-        try:
-            time_parts = list(map(int, step.timestamp.split(':')))
-            ai_time = sum(p * 60**i for i, p in enumerate(reversed(time_parts)))
-            if cooking_start <= ai_time <= cooking_end:
-                log_video_step("FRAME", f"Trying AI timestamp: {ai_time}")
-                if extract_frame(video_path, ai_time, final_path):
-                    return True
-        except (ValueError, AttributeError):
-            pass
-
-        # Strategy 2: Calculate based on step number
-        step_interval = (cooking_end - cooking_start) / total_steps
-        calculated_time = cooking_start + (step.number - 1) * step_interval
-        log_video_step("FRAME", f"Trying calculated timestamp: {calculated_time}")
-        if extract_frame(video_path, calculated_time, final_path):
-            return True
-
-        # Strategy 3: Try multiple points in the video
-        test_points = [
-            video_duration * 0.25,
-            video_duration * 0.5,
-            video_duration * 0.75
-        ]
-        
-        for time in test_points:
-            log_video_step("FRAME", f"Trying fallback timestamp: {time}")
-            if extract_frame(video_path, time, final_path):
-                return True
-
-        # If all strategies fail, create an informative placeholder
-        log_video_step("FRAME", "All frame extraction strategies failed, creating placeholder")
-        create_placeholder_image(str(final_path), step.number, "Could not extract suitable frame")
+    if not video_duration:
+        video_duration = get_video_duration(video_path)
+    
+    if not video_duration:
+        log_video_step("SMART_SELECT", f"Cannot determine video duration for step {step.step_number}", error=True)
+        create_placeholder_image(str(output_path), step.step_number, "Video duration unknown")
+        step.image_path = str(output_path)
         return False
+        
+    try:
+        model_manager = ModelManager()
+        clip_model, clip_processor = model_manager.get_clip_models()
+
+        # Generate candidate frames
+        num_frames_to_sample = 20  # Sample 20 frames from the relevant video segment
+        search_start_time = video_duration * (step.step_number - 1) / total_steps
+        search_end_time = video_duration * step.step_number / total_steps
+        
+        candidate_times = np.linspace(search_start_time, search_end_time, num_frames_to_sample)
+        
+        best_frame_time = None
+        highest_similarity = -1.0
+
+        # Prepare text input for CLIP
+        text_input = clip_processor(text=[step.description], return_tensors="pt", padding=True)
+
+        log_video_step("SMART_SELECT", f"Finding best frame for: '{step.description}'")
+
+        for time_in_seconds in candidate_times:
+            temp_frame_path = FRAMES_DIR / f"temp_clip_{time_in_seconds}.jpg"
+            if extract_frame(video_path, time_in_seconds, str(temp_frame_path)):
+                try:
+                    image = Image.open(temp_frame_path)
+                    image_input = clip_processor(images=image, return_tensors="pt")
+                    
+                    with torch.no_grad():
+                        outputs = clip_model(**text_input, **image_input)
+                        similarity = outputs.logits_per_image.item()
+
+                    if similarity > highest_similarity:
+                        highest_similarity = similarity
+                        best_frame_time = time_in_seconds
+
+                finally:
+                    if temp_frame_path.exists():
+                        temp_frame_path.unlink()
+
+        if best_frame_time is not None:
+            log_video_step("SMART_SELECT", f"Best frame found at {best_frame_time:.2f}s with similarity {highest_similarity:.2f}")
+            if extract_frame(video_path, best_frame_time, str(output_path)):
+                # Final quality check and enhancement
+                quality = analyze_frame_quality(str(output_path))
+                if quality < 0.3:
+                    log_video_step("SMART_SELECT", "Best frame has low quality, enhancing...", error=False)
+                    enhance_image(str(output_path))
+                
+                step.image_path = str(output_path)
+                return True
+        else:
+            log_video_step("SMART_SELECT", "CLIP analysis did not yield a best frame.", error=True)
 
     except Exception as e:
-        log_video_step("FRAME", f"Error in frame selection: {e}", error=True)
-        create_placeholder_image(str(final_path), step.number, f"Error: {str(e)}")
-        return False 
+        log_video_step("SMART_SELECT", f"Error in smart frame selection for step {step.step_number}: {e}", error=True)
+        log_video_step("SMART_SELECT", f"Traceback: {traceback.format_exc()}", error=True)
+    
+    # Fallback if CLIP fails or no good frame is found
+    log_video_step("SMART_SELECT", "Falling back to placeholder image.", error=False)
+    create_placeholder_image(str(output_path), step.step_number, "Could not find relevant frame")
+    step.image_path = str(output_path)
+    return False 
