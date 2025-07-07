@@ -4,447 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Make It Easy - YouTube to PDF</title>
-    <style>
-        /* Heroicons styling */
-        .heroicon {
-            width: 1.25rem;
-            height: 1.25rem;
-            display: inline-block;
-            vertical-align: middle;
-        }
-        .heroicon-lg {
-            width: 1.5rem;
-            height: 1.5rem;
-        }
-        .heroicon-spin {
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
-        }
-        
-        /* Step icons specific styling */
-        .step-icon .heroicon {
-            width: 1.5rem;
-            height: 1.5rem;
-        }
-    </style>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            color: #333;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 3rem;
-            color: white;
-        }
-        
-        .header h1 {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-        
-        .header p {
-            font-size: 1.2rem;
-            opacity: 0.9;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 20px;
-            padding: 2.5rem;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-        
-        .input-group {
-            margin-bottom: 2rem;
-        }
-        
-        .input-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            font-weight: 600;
-            color: #555;
-        }
-        
-        .input-group input,
-        .input-group select {
-            width: 100%;
-            padding: 1rem;
-            border: 2px solid #e1e5e9;
-            border-radius: 10px;
-            font-size: 1rem;
-            transition: border-color 0.3s;
-            background: white;
-        }
-        
-        .input-group input:focus,
-        .input-group select:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .language-select {
-            cursor: pointer;
-        }
-        
-        .language-select option {
-            padding: 0.5rem;
-        }
-        
-        .btn {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 1rem 2rem;
-            border-radius: 10px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            width: 100%;
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-        }
-        
-        .btn:disabled {
-            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-        
-        .btn:disabled:hover {
-            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
-            transform: none;
-        }
-        
-        .status {
-            margin-top: 2rem;
-            padding: 1rem;
-            border-radius: 10px;
-            text-align: center;
-            font-weight: 600;
-        }
-        
-        .status.processing {
-            background: #e3f2fd;
-            color: #1976d2;
-            border: 2px solid #bbdefb;
-        }
-        
-        .status.completed {
-            background: #e8f5e8;
-            color: #2e7d32;
-            border: 2px solid #c8e6c9;
-        }
-        
-        .status.error {
-            background: linear-gradient(135deg, #ff6b6b, #ee5a52);
-            border-left: 5px solid #e74c3c;
-        }
-        
-        .status.info {
-            background: linear-gradient(135deg, #74b9ff, #0984e3);
-            border-left: 5px solid #3498db;
-            color: white;
-        }
-        
-        .status.success {
-            background: #e8f5e8;
-            color: #2e7d32;
-            border: 2px solid #c8e6c9;
-        }
-        
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #e1e5e9;
-            border-radius: 4px;
-            overflow: hidden;
-            margin: 1rem 0;
-        }
-        
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-            border-radius: 4px;
-            transition: width 0.3s;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-        
-        .download-btn {
-            background: #4caf50;
-            margin-top: 1rem;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .download-btn:hover {
-            background: #45a049;
-        }
-        
-        .steps {
-            margin-top: 2rem;
-        }
-        
-        .step {
-            display: flex;
-            align-items: center;
-            padding: 1rem;
-            margin-bottom: 1rem;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border-left: 4px solid #e1e5e9;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .step::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            width: var(--progress-width, 0%);
-            background: linear-gradient(90deg, #2d5016, #4caf50);
-            transition: width 0.2s ease-out;
-            z-index: 1;
-            opacity: 0.1;
-        }
-        
-        .step.active {
-            border-left-color: #667eea;
-            background: #f3f4ff;
-        }
-        
-        .step.active::before {
-            background: linear-gradient(90deg, #1a237e, #667eea);
-            opacity: 0.15;
-        }
-        
-        .step.completed {
-            border-left-color: #4caf50;
-            background: #f1f8e9;
-        }
-        
-        .step.completed::before {
-            width: 100% !important;
-            background: linear-gradient(90deg, #2d5016, #4caf50);
-            opacity: 0.2;
-        }
-        
-
-        
-        .step-icon {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 48px;
-            height: 48px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 12px;
-            margin-right: 1.5rem;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-            font-size: 1.4rem;
-            color: white;
-            position: relative;
-            z-index: 2;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        
-        .step-icon:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
-        }
-        
-        .step.completed .step-icon {
-            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
-            box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
-        }
-        
-        .step.completed .step-icon:hover {
-            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
-        }
-        
-        .btn i {
-            margin-right: 0.5rem;
-        }
-        
-        .status i {
-            margin-right: 0.5rem;
-        }
-        
-        .step span {
-            position: relative;
-            z-index: 2;
-        }
-        
-        .footer {
-            text-align: center;
-            color: white;
-            opacity: 0.8;
-            margin-top: 3rem;
-        }
-
-        /* Tab Styles */
-        .tabs {
-            margin-bottom: 2rem;
-        }
-
-        .tab-buttons {
-            display: flex;
-            background: #f8f9fa;
-            border-radius: 10px;
-            overflow: hidden;
-            margin-bottom: 2rem;
-        }
-
-        .tab-btn {
-            flex: 1;
-            padding: 1rem 2rem;
-            border: none;
-            background: transparent;
-            cursor: pointer;
-            font-size: 1rem;
-            font-weight: 600;
-            color: #444;
-            transition: all 0.3s;
-            position: relative;
-        }
-
-        .tab-btn:hover {
-            background: rgba(102, 126, 234, 0.15);
-            color: #667eea;
-        }
-
-        .tab-btn.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        /* Search Styles */
-        .search-section {
-            margin-bottom: 2rem;
-        }
-
-        .search-input-group {
-            display: flex;
-            gap: 1rem;
-            align-items: stretch;
-        }
-
-        .search-input-group input {
-            flex: 1;
-            margin-bottom: 0;
-        }
-
-        .search-btn {
-            padding: 1rem 2rem;
-            white-space: nowrap;
-            width: auto;
-            min-width: 120px;
-        }
-
-        .search-results {
-            max-height: 500px;
-            overflow-y: auto;
-            border: 1px solid #e1e5e9;
-            border-radius: 10px;
-            background: #fafbfc;
-        }
-
-        .video-item {
-            display: flex;
-            align-items: center;
-            padding: 1rem;
-            border-bottom: 1px solid #e1e5e9;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .video-item:hover {
-            background: #f0f3f7;
-        }
-
-        .video-item:last-child {
-            border-bottom: none;
-        }
-
-        .video-item.selected {
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
-            border-left: 4px solid #667eea;
-        }
-
-        .video-thumbnail {
-            width: 120px;
-            height: 68px;
-            border-radius: 8px;
-            object-fit: cover;
-            margin-right: 1rem;
-            flex-shrink: 0;
-        }
-
-        .video-info h3 {
-            margin: 0 0 0.5rem 0;
-            font-size: 1rem;
-            font-weight: 600;
-            color: #333;
-            line-height: 1.3;
-        }
-
-        .video-info .channel {
-            margin: 0 0 0.25rem 0;
-            font-size: 0.9rem;
-            color: #666;
-        }
-
-        .video-info .views {
-            margin: 0;
-            font-size: 0.8rem;
-            color: #999;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎬 Make It Easy</h1>
+            <img src="static/images/logo.png" alt="Make It Easy logo">
             <p>Transform YouTube how-to videos into step-by-step PDF instructions</p>
         </div>
         
@@ -487,7 +52,7 @@
 
                 <div id="search-results" class="search-results">
                     <div class="search-placeholder">
-                        <p style="text-align: center; color: #666; padding: 2rem;">
+                        <p>
                             🔍 Search for cooking videos above to see results here
                         </p>
                     </div>
@@ -514,57 +79,16 @@
                     <option value="ko">🇰🇷 한국어</option>
                 </select>
             </div>
-            
             <button id="process-btn" class="btn" onclick="processVideo()">
                 <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 0 1-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 0 0 6.16-12.12A14.98 14.98 0 0 0 9.631 8.41m5.96 5.96a14.926 14.926 0 0 1-5.841 2.58m-.119-8.54a6 6 0 0 0-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 0 0-2.58 5.84m2.58-5.84a14.917 14.917 0 0 1 5.84 2.58" />
                 </svg>
                 Create PDF Instructions
             </button>
-            
-            <div id="status" class="status" style="display: none;"></div>
-            
-            <div id="steps" class="steps" style="display: none;">
-                <div class="step" id="step-download">
-                    <span class="step-icon">
-                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-                        </svg>
-                    </span>
-                    <span>Downloading video from YouTube</span>
-                </div>
-                <div class="step" id="step-transcribe">
-                    <span class="step-icon">
-                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.59-.79-1.59-1.76V9.98c0-.97.71-1.76 1.59-1.76h2.24Z" />
-                        </svg>
-                    </span>
-                    <span>Transcribing audio content</span>
-                </div>
-                <div class="step" id="step-analyze">
-                    <span class="step-icon">
-                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-                        </svg>
-                    </span>
-                    <span>Analyzing content</span>
-                </div>
-                <div class="step" id="step-extract">
-                    <span class="step-icon">
-                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-                        </svg>
-                    </span>
-                    <span>Adding images</span>
-                </div>
-                <div class="step" id="step-pdf">
-                    <span class="step-icon">
-                        <svg class="heroicon" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                        </svg>
-                    </span>
-                    <span>Generating PDF with instructions</span>
-                </div>
+            <!-- Main progress status bar -->
+            <div id="main-status-box">
+                <span id="main-status-text">Status</span>
+                <div id="main-status-progress-fill"></div>
             </div>
         </div>
         
@@ -619,164 +143,137 @@
             return icons[iconName] || '';
         }
 
-        // Check if any other tab/window is currently processing
-        function checkGlobalProcessingState() {
-            const globalState = localStorage.getItem('makeiteasy_processing');
-            if (globalState) {
-                const state = JSON.parse(globalState);
-                // Check if the stored state is recent (within last 30 seconds)
-                if (Date.now() - state.timestamp < 30000) {
-                    return state.isProcessing;
-                } else {
-                    // Clear old state
-                    localStorage.removeItem('makeiteasy_processing');
-                }
+        // --- SINGLE PROGRESS BAR LOGIK ---
+        
+        const stepLabels = [
+            'Downloading video from YouTube',
+            'Transcribing audio content', 
+            'Analyzing content with AI',
+            'Extracting key frames',
+            'Generating PDF instructions'
+        ];
+        
+        // Calculate overall progress based on step
+        function getProgressForStep(stepIndex, stepProgress = 50) {
+            const stepWeights = [20, 30, 20, 15, 15]; // Each step's percentage of total
+            let totalProgress = 0;
+            
+            // Add completed steps
+            for (let i = 0; i < stepIndex; i++) {
+                totalProgress += stepWeights[i];
             }
-            return false;
-        }
-        
-        // Set global processing state
-        function setGlobalProcessingState(isProcessing) {
-            if (isProcessing) {
-                localStorage.setItem('makeiteasy_processing', JSON.stringify({
-                    isProcessing: true,
-                    timestamp: Date.now(),
-                    tabId: Date.now() + Math.random() // Unique tab identifier
-                }));
-            } else {
-                localStorage.removeItem('makeiteasy_processing');
+            
+            // Add current step progress
+            if (stepIndex < stepWeights.length) {
+                totalProgress += (stepWeights[stepIndex] * stepProgress / 100);
             }
-            isGloballyProcessing = isProcessing;
+            
+            return Math.min(Math.round(totalProgress), 100);
         }
         
-        // Alias for backward compatibility
-        function markGlobalProcessingState(isProcessing) {
-            setGlobalProcessingState(isProcessing);
+        function updateMainProgress(stepIndex, stepProgress = 50) {
+            const totalProgress = getProgressForStep(stepIndex, stepProgress);
+            const stepNum = stepIndex + 1;
+            const message = `STEP ${stepNum}/5: ${stepLabels[stepIndex]}`;
+            showMainStatusBox(message, totalProgress);
         }
+        // Global progress tracking
+        let globalProgress = 0;
+        let targetProgress = 0;
+        let currentStep = 0;
         
-        // Old processVideo function removed - using new tab-aware version below
-        
-        let currentActiveStep = null;
-        let stepStartTime = null;
-        
-        let lastStatus = '';
-        
+        // Update progress based on backend status
         function updateStepsBasedOnStatus(status) {
-            // Don't reset if we're getting the same status
-            if (status === lastStatus) return;
+            const statusUpper = status.toUpperCase();
             
-            const steps = ['step-download', 'step-transcribe', 'step-analyze', 'step-extract', 'step-pdf'];
+            // Don't restart if we're already processing this status
+            if (statusUpper === window.lastStatus) return;
+            window.lastStatus = statusUpper;
             
-            // Only reset steps that haven't been completed yet
-            steps.forEach(stepId => {
-                const step = document.getElementById(stepId);
-                if (!step.classList.contains('completed')) {
-                    step.classList.remove('active');
-                    if (status === 'processing') {
-                        step.style.setProperty('--progress-width', '0%');
-                    }
+            // Set target progress based on status
+            switch(statusUpper) {
+                case 'PROCESSING':
+                    currentStep = 0;
+                    targetProgress = 20; // Download step target
+                    // Show immediately to avoid any gray state
+                    showMainStatusBox('STEP 1/5: Downloading video from YouTube', 5);
+                    break;
+                case 'TRANSCRIBING':
+                    currentStep = 1;
+                    targetProgress = 50; // Transcribe step target (20+30)
+                    break;
+                case 'ANALYZING':
+                    currentStep = 2;
+                    targetProgress = 70; // Analyze step target (50+20)
+                    break;
+                case 'EXTRACTING_FRAMES':
+                    currentStep = 3;
+                    targetProgress = 85; // Extract step target (70+15)
+                    break;
+                case 'GENERATING_PDF':
+                    currentStep = 4;
+                    targetProgress = 100; // Final step target
+                    break;
+                case 'COMPLETED':
+                    stopContinuousProgress();
+                    showMainStatusBox('COMPLETED: PDF generated successfully!', 100);
+                    return;
+                case 'FAILED':
+                    stopContinuousProgress();
+                    showMainStatusBox('FAILED: Processing failed', 0);
+                    return;
+            }
+            
+            // Start continuous progress if not already running
+            if (!window.progressInterval) {
+                startContinuousProgress();
+            }
+        }
+        
+        // Continuous smooth progress animation
+        function startContinuousProgress() {
+            // If no interval is running, start one
+            if (window.progressInterval) return;
+            
+            window.progressInterval = setInterval(() => {
+                // Move towards target progress smoothly
+                if (globalProgress < targetProgress) {
+                    const diff = targetProgress - globalProgress;
+                    const increment = Math.max(0.1, diff * 0.02); // Slower approach as we get closer
+                    globalProgress = Math.min(globalProgress + increment, targetProgress);
+                } else if (globalProgress < 100 && targetProgress < 100) {
+                    // Add slight movement even when waiting for next status
+                    globalProgress = Math.min(globalProgress + 0.05, targetProgress + 5);
                 }
-            });
-            
-            lastStatus = status;
-            
-            switch(status) {
-                case 'processing':
-                    startStepProgress('step-download');
-                    break;
-                case 'transcribing':
-                    document.getElementById('step-download').classList.add('completed');
-                    startStepProgress('step-transcribe');
-                    break;
-                case 'analyzing':
-                    document.getElementById('step-download').classList.add('completed');
-                    document.getElementById('step-transcribe').classList.add('completed');
-                    startStepProgress('step-analyze');
-                    break;
-                case 'extracting_frames':
-                    document.getElementById('step-download').classList.add('completed');
-                    document.getElementById('step-transcribe').classList.add('completed');
-                    document.getElementById('step-analyze').classList.add('completed');
-                    startStepProgress('step-extract');
-                    break;
-                case 'generating_pdf':
-                    steps.slice(0, 4).forEach(stepId => {
-                        document.getElementById(stepId).classList.add('completed');
-                    });
-                    startStepProgress('step-pdf');
-                    break;
-                case 'completed':
-                    steps.forEach(stepId => {
-                        document.getElementById(stepId).classList.add('completed');
-                    });
-                    if (currentActiveStep) {
-                        clearInterval(currentActiveStep);
-                        currentActiveStep = null;
-                    }
-                    break;
-            }
-        }
-        
-        function startStepProgress(stepId) {
-            const step = document.getElementById(stepId);
-            
-            // Don't start progress if this step is already active
-            if (step.classList.contains('active')) {
-                return;
-            }
-            
-            // Stop any previous step progress
-            if (currentActiveStep) {
-                clearInterval(currentActiveStep);
-            }
-            
-            step.classList.add('active');
-            
-            // Start from 0% only if not already in progress
-            step.style.setProperty('--progress-width', '0%');
-            
-            stepStartTime = Date.now();
-            let progress = 0;
-            
-            // Different durations for different steps (in seconds) - REALISTIC TIMING
-            const stepDurations = {
-                'step-download': 25,      // Download takes ~25 seconds
-                'step-transcribe': 120,   // Transcription takes ~2 minutes (realistic with tiny model)  
-                'step-analyze': 45,       // AI analysis takes ~45 seconds
-                'step-extract': 8,        // Smart frame selection takes ~8 seconds
-                'step-pdf': 3             // PDF generation takes ~3 seconds
-            };
-            
-            const duration = stepDurations[stepId] || 20;
-            const increment = 100 / (duration * 10); // Update every 100ms
-            
-            currentActiveStep = setInterval(() => {
-                progress += increment;
-                if (progress > 100) progress = 100;
                 
-                step.style.setProperty('--progress-width', `${progress}%`);
+                // Update the UI
+                const stepNum = currentStep + 1;
+                const message = `STEP ${stepNum}/5: ${stepLabels[currentStep]}`;
+                showMainStatusBox(message, Math.round(globalProgress));
                 
-                if (progress >= 100) {
-                    clearInterval(currentActiveStep);
-                    currentActiveStep = null;
+                // Stop if we've reached 100%
+                if (globalProgress >= 100) {
+                    stopContinuousProgress();
                 }
-            }, 100);
+            }, 50); // Update every 50ms for smooth animation
         }
         
-        function animateStep(stepId, className) {
-            const step = document.getElementById(stepId);
-            // Add a small delay to make the animation more visible
-            setTimeout(() => {
-                step.classList.add(className);
-            }, 100);
+        function stopContinuousProgress() {
+            if (window.progressInterval) {
+                clearInterval(window.progressInterval);
+                window.progressInterval = null;
+            }
         }
-        
+
+        // Reset progress bar
         function resetSteps() {
-            const steps = ['step-download', 'step-transcribe', 'step-analyze', 'step-extract', 'step-pdf'];
-            steps.forEach(stepId => {
-                const step = document.getElementById(stepId);
-                step.classList.remove('active', 'completed');
-            });
+            stopContinuousProgress();
+            globalProgress = 0;
+            targetProgress = 0;
+            currentStep = 0;
+            hideMainStatusBox();
+            window.lastStatus = null;
+            console.log('Progress reset');
         }
         
         // Tab functionality
@@ -812,7 +309,7 @@
 
             try {
                 console.log('Searching for:', query);
-                const response = await fetch(`${API_BASE}/search`, {
+                const response = await fetch(`${API_BASE}/api/v1/search`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -938,20 +435,10 @@
 
         // Separate the actual processing logic
         function processVideoWithUrl(youtubeUrl) {
-            if (isGloballyProcessing) {
-                alert('A job is already running in another tab. Please wait for it to complete.');
-                return;
-            }
-
             const language = document.getElementById('language-select').value;
-            const statusDiv = document.getElementById('status');
             const processBtn = document.getElementById('process-btn');
-            const stepsDiv = document.getElementById('steps');
 
-            // Set global processing state
-            markGlobalProcessingState(true);
-
-            fetch(`${API_BASE}/generate`, {
+            fetch(`${API_BASE}/api/v1/generate`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -968,14 +455,6 @@
                 return response.json();
             })
             .then(data => {
-                // Check if server is busy with another job
-                if (data.status === 'busy') {
-                    statusDiv.className = 'status error';
-                    statusDiv.innerHTML = `${getHeroIcon('exclamation-triangle')} ${data.error}`;
-                    markGlobalProcessingState(false);
-                    return;
-                }
-
                 currentJobId = data.job_id;
                 currentSessionId = data.session_id;
                 
@@ -993,21 +472,23 @@
                 // Reset steps display
                 resetSteps();
                 
-                // Update UI
+                // Update UI - keep original button text
                 processBtn.disabled = true;
-                processBtn.innerHTML = `${getHeroIcon('spinner')} Processing...`;
-                statusDiv.className = 'status processing';
-                statusDiv.innerHTML = `${getHeroIcon('spinner')} Processing video...`;
-                statusDiv.style.display = 'block';
                 
-                // Show progress steps
-                stepsDiv.style.display = 'block';
-                updateStepsBasedOnStatus('processing');
+                // Start directly with STEP 1/5 - no gray "Processing..." state
+                globalProgress = 0;
+                targetProgress = 20; // Start with 20% for first step
+                currentStep = 0;
+                window.lastStatus = null;
+                // DON'T show any status box initially - let updateStepsBasedOnStatus handle it
+                
+                // Then update with backend status which will start the animation
+                updateStepsBasedOnStatus('PROCESSING');
                 
                 // Start polling for status
                 statusInterval = setInterval(async () => {
                     try {
-                        const statusResponse = await fetch(`${API_BASE}/status/${currentJobId}`);
+                        const statusResponse = await fetch(`${API_BASE}/api/v1/status/${currentJobId}`);
                         if (!statusResponse.ok) {
                             throw new Error(`Status check failed: ${statusResponse.status}`);
                         }
@@ -1029,42 +510,50 @@
                             window.lastLogCount = statusData.logs.length;
                         }
                         
-                        if (statusData.status === 'completed') {
+                        if (statusData.status.toUpperCase() === 'COMPLETED') {
                             clearInterval(statusInterval);
                             statusInterval = null;
                             
-                            // Create download button instead of automatic download
-                            const downloadUrl = `${API_BASE}/result/${currentJobId}`;
+                            // Create download URL
+                            const downloadUrl = `${API_BASE}/api/v1/result/${currentJobId}`;
                             
-                            // Make sure status div is visible
-                            statusDiv.style.display = 'block';
-                            statusDiv.className = 'status success';
-                            statusDiv.innerHTML = `
-                                <div style="margin-bottom: 1rem;">
-                                    ${getHeroIcon('check-circle')} PDF generated successfully!
-                                </div>
-                                <button class="download-btn" onclick="downloadPDF('${downloadUrl}')" style="background: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 auto;">
-                                    ${getHeroIcon('download')} Download Recipe (PDF)
-                                </button>
-                            `;
+                            // Show completion status with 100% progress
+                            showMainStatusBox('COMPLETED: PDF generated successfully!', 100);
                             
+                            // Create and add download button after status box
+                            setTimeout(() => {
+                                const statusBox = document.getElementById('main-status-box');
+                                const statusText = document.getElementById('main-status-text');
+                                
+                                // Clear the progress fill for clean look
+                                const fill = document.getElementById('main-status-progress-fill');
+                                fill.style.width = '100%';
+                                fill.style.background = 'rgba(76,175,80,0.3)';
+                                
+                                statusText.innerHTML = `
+                                    PDF generated successfully! 
+                                    <br><br>
+                                    <button onclick="downloadPDF('${downloadUrl}')" class="btn download-btn" style="display:inline-block;margin-top:1rem;padding:0.8rem 1.5rem;background:#4caf50;color:white;border:none;border-radius:8px;font-weight:600;cursor:pointer;">
+                                        ${getHeroIcon('download')} Download Recipe (PDF)
+                                    </button>
+                                `;
+                            }, 500);
+                            
+                            // Reset process button
                             processBtn.disabled = false;
                             processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                             
                             // Final completion message in console
-                            console.log('%c[COMPLETE] JOB COMPLETED! PDF download initiated.', 
+                            console.log('%c[COMPLETE] JOB COMPLETED! PDF download available.', 
                                 'color: #4CAF50; font-size: 16px; font-weight: bold;');
                             
                             // Save job ID for future downloads
                             localStorage.setItem('makeiteasy_last_job_id', currentJobId);
                             
-                            markGlobalProcessingState(false);
-                            
-                        } else if (statusData.status === 'failed') {
+                        } else if (statusData.status.toUpperCase() === 'FAILED') {
                             clearInterval(statusInterval);
                             statusInterval = null;
-                            statusDiv.className = 'status error';
-                            statusDiv.innerHTML = `${getHeroIcon('exclamation-triangle')} Error: ${statusData.error || 'Unknown error'}`;
+                            showMainStatusBox(`Error: ${statusData.error || 'Unknown error'}`, 0);
                             processBtn.disabled = false;
                             processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                             
@@ -1075,34 +564,26 @@
                             // Reset job tracking and global state
                             currentJobId = null;
                             currentSessionId = null;
-                            markGlobalProcessingState(false);
                         }
                     } catch (error) {
                         console.error('Error checking status:', error);
                         clearInterval(statusInterval);
                         statusInterval = null;
-                        statusDiv.className = 'status error';
-                        statusDiv.innerHTML = `${getHeroIcon('exclamation-triangle')} Error checking status`;
+                        showMainStatusBox(`Error checking status`, 0);
                         processBtn.disabled = false;
                         processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
                         
                         // Reset job tracking and global state
                         currentJobId = null;
                         currentSessionId = null;
-                        markGlobalProcessingState(false);
                     }
                 }, 1000);
             })
             .catch(error => {
                 console.error('Error:', error);
-                statusDiv.style.display = 'block';
-                statusDiv.className = 'status error';
-                statusDiv.innerHTML = `${getHeroIcon('exclamation-triangle')} Error processing video`;
+                showMainStatusBox(`Error processing video`, 0);
                 processBtn.disabled = false;
                 processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
-                
-                // Reset global state on error
-                markGlobalProcessingState(false);
             });
         }
 
@@ -1117,26 +598,6 @@
                     searchYouTube();
                 }
             });
-            
-            // Add test button for debugging
-            const testBtn = document.createElement('button');
-            testBtn.innerHTML = 'TEST SEARCH';
-            testBtn.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;padding:10px;background:red;color:white;';
-            testBtn.onclick = function() {
-                console.log('TEST: Manual search test');
-                const mockResults = [
-                    {
-                        video_id: 'test1',
-                        title: 'Test Video 1',
-                        channel_title: 'Test Channel',
-                        thumbnail_url: 'https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg',
-                        view_count: '1M views',
-                        published_at: '1 day ago'
-                    }
-                ];
-                displaySearchResults(mockResults);
-            };
-            document.body.appendChild(testBtn);
         });
 
         // Allow Enter key to submit
@@ -1146,120 +607,98 @@
             }
         });
 
-        // Check global state when page loads
-        window.addEventListener('load', function() {
-            if (checkGlobalProcessingState()) {
-                const statusDiv = document.getElementById('status');
-                const processBtn = document.getElementById('process-btn');
-                
-                statusDiv.style.display = 'block';
-                statusDiv.className = 'status info';
-                statusDiv.innerHTML = `${getHeroIcon('info-circle')} A job is already running in another tab. Please wait for it to complete.`;
-                processBtn.disabled = true;
-                processBtn.innerHTML = `${getHeroIcon('clock')} Waiting...`;
-                
-                // Check every few seconds if the global job is done
-                const globalCheckInterval = setInterval(() => {
-                    if (!checkGlobalProcessingState()) {
-                        clearInterval(globalCheckInterval);
-                        statusDiv.style.display = 'none';
-                        processBtn.disabled = false;
-                        processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
-                    }
-                }, 3000);
-            }
-            
-            // Check if there's a recent completed job
-            checkForRecentCompletedJob();
-        });
-        
-        // Function to check for recent completed jobs
-        function checkForRecentCompletedJob() {
-            const lastJobId = localStorage.getItem('makeiteasy_last_job_id');
-            if (lastJobId) {
-                // Check if this job is still available for download
-                fetch(`${API_BASE}/status/${lastJobId}`)
-                    .then(response => {
-                        if (response.ok) {
-                            return response.json();
-                        }
-                        throw new Error('Job not found');
-                    })
-                    .then(statusData => {
-                        if (statusData.status === 'completed') {
-                            // Show download button for recent completed job
-                            const statusDiv = document.getElementById('status');
-                            statusDiv.style.display = 'block';
-                            statusDiv.className = 'status success';
-                            statusDiv.innerHTML = `
-                                <div style="margin-bottom: 1rem;">
-                                    ${getHeroIcon('check-circle')} Previous PDF is ready for download!
-                                </div>
-                                <button class="download-btn" onclick="downloadPDF('${API_BASE}/result/${lastJobId}')" style="background: #4CAF50; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; margin: 0 auto;">
-                                    ${getHeroIcon('download')} Download Previous Recipe (PDF)
-                                </button>
-                            `;
-                        }
-                    })
-                    .catch(() => {
-                        // Remove invalid job ID
-                        localStorage.removeItem('makeiteasy_last_job_id');
-                    });
-            }
-        }
-        
-        // Also check when tab becomes visible (user switches back to this tab)
-        document.addEventListener('visibilitychange', function() {
-            if (!document.hidden && !currentJobId) {
-                if (checkGlobalProcessingState()) {
-                    const statusDiv = document.getElementById('status');
-                    const processBtn = document.getElementById('process-btn');
-                    
-                    statusDiv.style.display = 'block';
-                    statusDiv.className = 'status info';
-                    statusDiv.innerHTML = `${getHeroIcon('info-circle')} A job is already running in another tab. Please wait for it to complete.`;
-                    processBtn.disabled = true;
-                    processBtn.innerHTML = `${getHeroIcon('clock')} Waiting...`;
-                } else {
-                    // If no global job and no local job, reset UI
-                    const statusDiv = document.getElementById('status');
-                    const processBtn = document.getElementById('process-btn');
-                    
-                    statusDiv.style.display = 'none';
-                    processBtn.disabled = false;
-                    processBtn.innerHTML = `${getHeroIcon('rocket')} Create PDF Instructions`;
-                }
-            }
-        });
-        
         // Function to download PDF when button is clicked
         function downloadPDF(downloadUrl) {
-            console.log('[DOWNLOAD] Starting PDF download...');
+            console.log('[DOWNLOAD] Attempting PDF download from:', downloadUrl);
             
-            // Create download link
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = 'MakeItEasy_Recipe.pdf'; // This will be overridden by server
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            
-            // Update button to show download started
+            // Update button to show download starting
             const downloadBtn = document.querySelector('.download-btn');
             if (downloadBtn) {
-                downloadBtn.innerHTML = `${getHeroIcon('check')} Download started!`;
+                downloadBtn.innerHTML = `${getHeroIcon('spinner', 'heroicon-spin')} Downloading...`;
                 downloadBtn.style.background = '#45a049';
                 downloadBtn.disabled = true;
-                
-                // Re-enable after 3 seconds in case user wants to download again
-                setTimeout(() => {
-                    downloadBtn.innerHTML = `${getHeroIcon('download')} Download Recipe (PDF)`;
-                    downloadBtn.style.background = '#4CAF50';
-                    downloadBtn.disabled = false;
-                }, 3000);
             }
             
-            console.log('[SUCCESS] PDF download initiated!');
+            // Simple direct download approach
+            try {
+                // Method 1: Direct link click
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+                link.download = 'MakeItEasy_Recipe.pdf';
+                link.target = '_blank';
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                
+                console.log('[DOWNLOAD] Triggering download link click...');
+                link.click();
+                
+                // Clean up
+                setTimeout(() => {
+                    document.body.removeChild(link);
+                }, 1000);
+                
+                // Update button to show success
+                if (downloadBtn) {
+                    downloadBtn.innerHTML = `${getHeroIcon('check')} Download Started!`;
+                    downloadBtn.style.background = '#4CAF50';
+                    
+                    // Re-enable after 3 seconds
+                    setTimeout(() => {
+                        downloadBtn.innerHTML = `${getHeroIcon('download')} Download Recipe (PDF)`;
+                        downloadBtn.disabled = false;
+                    }, 3000);
+                }
+                
+                console.log('[SUCCESS] PDF download initiated!');
+                
+            } catch (error) {
+                console.error('[ERROR] PDF download failed:', error);
+                
+                // Fallback: Open in new window
+                console.log('[FALLBACK] Opening PDF in new window...');
+                window.open(downloadUrl, '_blank');
+                
+                // Update button to show it opened in new tab
+                if (downloadBtn) {
+                    downloadBtn.innerHTML = `${getHeroIcon('check')} Opened in New Tab`;
+                    downloadBtn.style.background = '#4CAF50';
+                    
+                    setTimeout(() => {
+                        downloadBtn.innerHTML = `${getHeroIcon('download')} Download Recipe (PDF)`;
+                        downloadBtn.disabled = false;
+                    }, 3000);
+                }
+            }
+        }
+
+        // I JavaScript: Ersätt alla statusDiv.className, statusDiv.innerHTML, statusDiv.style.display med motsvarande på global-status-message
+        // Exempel: visa felmeddelande
+        function showMainStatusBox(text, percent) {
+            const box = document.getElementById('main-status-box');
+            const txt = document.getElementById('main-status-text');
+            const fill = document.getElementById('main-status-progress-fill');
+            box.style.display = 'block';
+            txt.textContent = text;
+            fill.style.width = percent + '%';
+            
+            // Progressive green color - more opaque and greener as progress increases
+            const greenIntensity = Math.min(percent / 100, 1);
+            const alpha = 0.1 + (greenIntensity * 0.4); // From 0.1 to 0.5 opacity
+            const greenValue = 40 + (greenIntensity * 127); // From 40 to 167 (darker to lighter green)
+            
+            fill.style.background = `rgba(${greenValue},${Math.min(200, 120 + greenIntensity * 80)},69,${alpha})`;
+            
+            // Keep text dark for readability
+            txt.style.color = '#495057';
+        }
+        function hideMainStatusBox() {
+            const box = document.getElementById('main-status-box');
+            const txt = document.getElementById('main-status-text');
+            const fill = document.getElementById('main-status-progress-fill');
+            box.style.display = 'none';
+            txt.textContent = '';
+            fill.style.width = '0%';
+            txt.style.color = '#1a237e';
         }
     </script>
 </body>
