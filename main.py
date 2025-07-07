@@ -1,6 +1,7 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, HttpUrl
 from pathlib import Path
 import uuid
@@ -17,6 +18,11 @@ import time
 from datetime import datetime
 import yt_dlp
 import traceback
+from models.types import VideoRequest, YouTubeSearchRequest, YouTubeVideo, VideoContent
+from logic.video_processing import download_video, transcribe_audio, smart_frame_selection, get_video_duration
+from logic.recipe_parser import analyze_video_content
+from logic.pdf_generator import generate_pdf, clean_text_for_pdf
+from core.config import jobs, update_status, OUTPUT_DIR, FRAMES_DIR
 
 # Create necessary directories
 DOWNLOADS_DIR = Path("downloads")
@@ -184,60 +190,6 @@ class YouTubeVideo(BaseModel):
     view_count: str
     published_at: str
     description: str
-
-def clean_text_for_pdf(text: str) -> str:
-    """Clean text to remove problematic characters while preserving Swedish characters"""
-    if not text:
-        return ""
-    
-    # Remove any bullet points from the beginning of the text (AI often adds these)
-    text = text.strip()
-    while text and text[0] in ['•', '●', '◦', '‣', '⁃', '▪', '▫', '▸', '‧']:
-        text = text[1:].strip()
-    
-    # Replace problematic quotation marks and dashes
-    replacements = {
-        """: '"',
-        """: '"',
-        "'": "'",
-        "'": "'",
-        "—": "-",
-        "–": "-",
-        "…": "...",
-        "•": "-",  # Bullet point
-        "●": "-",  # Filled bullet
-        "◦": "-",  # White bullet  
-        "‣": "-",  # Triangular bullet
-        "⁃": "-",  # Hyphen bullet
-        "▪": "-",  # Black square
-        "▫": "-",  # White square
-        "▸": "-",  # Triangular bullet
-        "‧": "-",  # Hyphenation point
-        "‚": ",",
-        "„": '"',
-        "‹": "<",
-        "›": ">",
-        "«": '"',
-        "»": '"',
-    }
-    
-    result = text
-    for old, new in replacements.items():
-        result = result.replace(old, new)
-    
-    # More aggressive cleaning - keep only safe characters
-    safe_chars = []
-    for char in result:
-        # Keep ASCII chars, Swedish chars, and some common European chars
-        if (ord(char) < 128 or 
-            char in 'åäöÅÄÖéèàáíìúùóòñÑüÜ°' or 
-            char.isspace()):
-            safe_chars.append(char)
-        else:
-            # Replace any other problematic Unicode with simple equivalent
-            safe_chars.append('?')
-    
-    return ''.join(safe_chars).strip()
 
 def download_video(youtube_url: str, job_id: str) -> str:
     """Download video using yt-dlp with progress logging"""
@@ -1072,272 +1024,8 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
 
 def generate_pdf(video_content: VideoContent, job_id: str, language: str = "en") -> str:
     """Generate PDF with professional layout matching the reference design"""
-    output_path = OUTPUT_DIR / f"{job_id}.pdf"
-    
-    try:
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"\n[PDF {timestamp}] Starting PDF generation...")
-        
-        # Create PDF with custom margins
-        pdf = FPDF(orientation='P', unit='mm', format='A4')
-        pdf.set_auto_page_break(auto=True, margin=20)
-        pdf.add_page()
-        
-        # Set margins
-        pdf.set_margins(20, 20, 20)
-        
-        # TITLE - Large, bold, uppercase
-        pdf.set_font("Arial", "B", 24)
-        title = clean_text_for_pdf(video_content.title).upper()
-        pdf.ln(15)
-        
-        # Calculate title position for centering
-        title_width = pdf.get_string_width(title)
-        page_width = pdf.w - 2 * pdf.l_margin
-        title_x = (page_width - title_width) / 2 + pdf.l_margin
-        pdf.set_x(title_x)
-        pdf.cell(title_width, 12, title, ln=True)
-        
-        # DESCRIPTION TEXT - Professional paragraph
-        pdf.ln(8)
-        pdf.set_font("Arial", "", 11)
-        
-        # Create a description based on video type
-        if video_content.video_type == "recipe":
-            description = f"A simple and delicious recipe that combines the best ingredients for an exquisite meal. Perfect balance between flavor and nutrition, ideal for both weekdays and celebrations. Follow these steps for guaranteed results that will impress family and friends."
-        else:
-            description = f"A step-by-step guide that takes you through the entire process in a simple and clear way. Professional tips and techniques that make the difference. Everything you need to know to succeed with your project from start to finish."
-        
-        # Word wrap for description
-        words = description.split()
-        line = ""
-        max_width = 140  # characters per line
-        
-        for word in words:
-            if len(line + " " + word) < max_width:
-                line += " " + word if line else word
-            else:
-                if line:
-                    pdf.cell(0, 6, line, ln=True)
-                line = word
-        if line:
-            pdf.cell(0, 6, line, ln=True)
-        
-        # Add some metadata
-        pdf.ln(5)
-        pdf.set_font("Arial", "B", 10)
-        pdf.cell(0, 5, f"Number of steps: {len(video_content.steps)}", ln=True)
-        if video_content.video_type == "recipe":
-            pdf.cell(0, 5, f"Number of ingredients: {len(video_content.materials_or_ingredients)}", ln=True)
-        
-        # INGREDIENTS/MATERIALS SECTION
-        pdf.ln(12)
-        pdf.set_font("Arial", "B", 16)
-        
-        if video_content.video_type == "recipe":
-            section_title = "Ingredients:"
-        else:
-            section_title = "Material:"
-            
-        pdf.cell(0, 10, section_title, ln=True)
-        
-        # Ingredients list with bullets
-        pdf.set_font("Arial", "", 11)
-        pdf.ln(3)
-        
-        # Two-column layout for ingredients if many items
-        ingredients = video_content.materials_or_ingredients
-        if len(ingredients) > 8:
-            # Two columns
-            mid_point = len(ingredients) // 2
-            left_column = ingredients[:mid_point]
-            right_column = ingredients[mid_point:]
-            
-            y_start = pdf.get_y()
-            
-            # Left column
-            for item in left_column:
-                clean_item = clean_text_for_pdf(item)
-                if clean_item and not clean_item.startswith(('•', '-')):
-                    clean_item = clean_item[0].upper() + clean_item[1:] if len(clean_item) > 1 else clean_item.upper()
-                pdf.cell(90, 6, f"- {clean_item}", ln=True)  # Use - instead of •
-            
-            # Right column
-            pdf.set_xy(110, y_start)
-            for item in right_column:
-                clean_item = clean_text_for_pdf(item)
-                if clean_item and not clean_item.startswith(('•', '-')):
-                    clean_item = clean_item[0].upper() + clean_item[1:] if len(clean_item) > 1 else clean_item.upper()
-                pdf.cell(90, 6, f"- {clean_item}", ln=True)  # Use - instead of •
-                pdf.set_x(110)
-            
-            # Reset to full width
-            pdf.set_x(pdf.l_margin)
-        else:
-            # Single column
-            for item in ingredients:
-                clean_item = clean_text_for_pdf(item)
-                if clean_item and not clean_item.startswith(('•', '-')):
-                    clean_item = clean_item[0].upper() + clean_item[1:] if len(clean_item) > 1 else clean_item.upper()
-                pdf.cell(0, 6, f"- {clean_item}", ln=True)  # Use - instead of •
-        
-        # INSTRUCTIONS SECTION
-        pdf.ln(15)
-        pdf.set_font("Arial", "B", 16)
-        pdf.cell(0, 10, "Instructions:", ln=True)
-        
-        # Steps with images
-        for i, step in enumerate(video_content.steps, 1):
-            pdf.ln(8)
-            
-            # Check if we need a new page
-            if pdf.get_y() > 250:
-                pdf.add_page()
-                pdf.ln(10)
-            
-            # Step number and title
-            pdf.set_font("Arial", "B", 14)
-            action = clean_text_for_pdf(step.action)
-            
-            # Create step header like "1. Prepare the Chicken:"
-            step_header = f"{i}. {action}:"
-            pdf.cell(0, 8, step_header, ln=True)
-            
-            pdf.ln(3)
-            
-            # Step explanation
-            pdf.set_font("Arial", "", 11)
-            explanation = clean_text_for_pdf(step.explanation)
-            
-            # Check if we have an image for this step
-            # First check if step.image_path is set (from smart_frame_selection)
-            if step.image_path and os.path.exists(step.image_path) and os.path.getsize(step.image_path) > 1000:
-                step_image_path = step.image_path
-                has_image = True
-                print(f"[PDF] Using image path from step object: {step_image_path}")
-            else:
-                # Fall back to conventional path
-                step_image_path = FRAMES_DIR / f"{job_id}_{step.number}.jpg"
-                has_image = os.path.exists(step_image_path) and os.path.getsize(step_image_path) > 1000
-                print(f"[PDF] Using fallback image path: {step_image_path}, exists: {os.path.exists(step_image_path)}")
-            
-            if has_image:
-                print(f"[PDF] Adding image for step {step.number}: {step_image_path}")
-                # Text with image layout
-                y_start = pdf.get_y()
-                
-                # Text area (left side, reduced width)
-                text_width = 100  # mm
-                words = explanation.split()
-                line = ""
-                max_chars = 60  # Reduced for image layout
-                
-                for word in words:
-                    if len(line + " " + word) < max_chars:
-                        line += " " + word if line else word
-                    else:
-                        if line:
-                            pdf.cell(text_width, 5, line, ln=True)
-                        line = word
-                if line:
-                    pdf.cell(text_width, 5, line, ln=True)
-                
-                # Image (right side)
-                try:
-                    img_x = text_width + 25  # Position from left
-                    img_y = y_start
-                    img_width = 60  # mm
-                    
-                    pdf.image(str(step_image_path), x=img_x, y=img_y, w=img_width)
-                    print(f"[PDF] Successfully added image for step {step.number}")
-                    
-                    # Ensure we move past the image
-                    text_height = pdf.get_y() - y_start
-                    img_height = img_width * 0.6  # Approximate aspect ratio
-                    
-                    if img_height > text_height:
-                        pdf.set_y(y_start + img_height + 5)
-                    
-                except Exception as e:
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    print(f"[PDF {timestamp}] Could not add image for step {step.number}: {e}")
-                    print(f"[PDF {timestamp}] Traceback: {traceback.format_exc()}")
-                    
-            else:
-                print(f"[PDF] No image available for step {step.number}, using text-only layout")
-                # Full-width text (no image)
-                words = explanation.split()
-                line = ""
-                max_chars = 90
-                
-                for word in words:
-                    if len(line + " " + word) < max_chars:
-                        line += " " + word if line else word
-                    else:
-                        if line:
-                            pdf.cell(0, 5, line, ln=True)
-                        line = word
-                if line:
-                    pdf.cell(0, 5, line, ln=True)
-            
-            # Add subtle separator between steps
-            if i < len(video_content.steps):
-                pdf.ln(8)
-                pdf.set_draw_color(230, 230, 230)
-                pdf.line(pdf.l_margin, pdf.get_y(), pdf.w - pdf.r_margin, pdf.get_y())
-        
-        # Footer
-        pdf.ln(15)
-        pdf.set_font("Arial", "I", 9)
-        pdf.set_text_color(128, 128, 128)
-        pdf.cell(0, 5, f"Generated by MakeItEasy - {datetime.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
-        
-        # Save PDF
-        pdf.output(str(output_path))
-        
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[PDF {timestamp}] PDF created with professional layout: {output_path}")
-        return str(output_path)
-        
-    except Exception as e:
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        print(f"[PDF {timestamp}] PDF generation error: {e}")
-        print(f"[PDF {timestamp}] Traceback: {traceback.format_exc()}")
-        
-        # Create simple fallback PDF - ENSURE we create a valid PDF file
-        try:
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", "B", 16)
-            pdf.cell(0, 10, "PDF generation failed", ln=True)
-            pdf.ln(10)
-            pdf.set_font("Arial", "", 12)
-            pdf.cell(0, 10, "An error occurred while creating the PDF file.", ln=True)
-            pdf.ln(5)
-            pdf.cell(0, 10, f"Error message: {str(e)}", ln=True)
-            pdf.ln(10)
-            pdf.cell(0, 10, "Try processing the video again or contact support.", ln=True)
-            
-            # Ensure the fallback PDF is saved
-            pdf.output(str(output_path))
-            print(f"[PDF {timestamp}] Fallback PDF created: {output_path}")
-            return str(output_path)
-            
-        except Exception as fallback_error:
-            print(f"[PDF {timestamp}] Even fallback PDF creation failed: {fallback_error}")
-            # Last resort: create a minimal PDF with basic text
-            try:
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", "", 12)
-                pdf.cell(0, 10, "Critical error in PDF creation", ln=True)
-                pdf.output(str(output_path))
-                return str(output_path)
-            except:
-                # Absolute last resort: create empty PDF structure
-                with open(output_path, 'wb') as f:
-                    f.write(b'%PDF-1.4\n1 0 obj\n<</Type/Catalog/Pages 2 0 R>>\nendobj\n2 0 obj\n<</Type/Pages/Kids[3 0 R]/Count 1>>\nendobj\n3 0 obj\n<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<</Size 4/Root 1 0 R>>\nstartxref\n174\n%%EOF')
-                return str(output_path)
+    from logic.pdf_generator import generate_pdf
+    return generate_pdf(video_content, job_id, language)
 
 def search_youtube_videos(query: str, max_results: int = 10) -> List[YouTubeVideo]:
     """Search YouTube videos using official API"""
@@ -1610,37 +1298,33 @@ async def get_status(job_id: str) -> dict:
 @app.get("/result/{job_id}")
 async def get_result(job_id: str) -> FileResponse:
     """Get generated PDF for download"""
-    
-    # First check if job exists in memory
-    if job_id in jobs:
-        job = jobs[job_id]
-        if job["status"] != "completed":
-            raise HTTPException(status_code=400, detail="Job not completed")
-        pdf_path = job["pdf_path"]
-    else:
+    if job_id not in jobs:
         # If job not in memory, check if PDF file exists on disk
         # This handles cases where server was restarted after job completion
         pdf_path = OUTPUT_DIR / f"{job_id}.pdf"
         if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
             raise HTTPException(status_code=404, detail="PDF file not found or empty")
-        pdf_path = str(pdf_path)
+        return FileResponse(
+            str(pdf_path),
+            media_type="application/pdf",
+            filename=f"MakeItEasy_Recipe_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
+        )
     
-    # Verify the PDF file actually exists and is not empty
+    job = jobs[job_id]
+    if job["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Job not completed")
+    
+    pdf_path = job["pdf_path"]
     if not os.path.exists(pdf_path) or os.path.getsize(pdf_path) == 0:
         raise HTTPException(status_code=404, detail="PDF file not found or empty")
     
     # Create a better filename with timestamp
-    from datetime import datetime
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M")
-    filename = f"MakeItEasy_Recipe_{timestamp}.pdf"
+    filename = f"MakeItEasy_Recipe_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
     
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
-        filename=filename,
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}"
-        }
+        filename=filename
     )
 
 @app.get("/", response_class=HTMLResponse)

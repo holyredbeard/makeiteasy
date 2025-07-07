@@ -7,6 +7,7 @@ from logic.video_processing import (
 )
 from logic.recipe_parser import analyze_video_content
 from logic.pdf_generator import generate_pdf
+from core.config import jobs, update_status
 import uuid
 from typing import Dict, Any
 import os
@@ -14,25 +15,16 @@ import traceback
 
 router = APIRouter()
 
-# In-memory storage for jobs.
-jobs: Dict[str, Dict[str, Any]] = {}
-
-def update_status(job_id: str, status: str, message: str, pdf_path: str = None):
-    jobs[job_id]['status'] = status
-    jobs[job_id]['message'] = message
-    if pdf_path:
-        jobs[job_id]['pdf_path'] = pdf_path
-
 def process_video_task(youtube_url: str, job_id: str, language: str = "en"):
     """The main background task."""
     try:
-        update_status(job_id, 'processing', 'Downloading video...')
+        update_status(job_id, "overall", "processing", "Downloading video...")
         video_path = download_video(youtube_url, job_id)
 
-        update_status(job_id, 'processing', 'Transcribing audio...')
+        update_status(job_id, "overall", "processing", "Transcribing audio...")
         transcript = transcribe_audio(video_path, job_id)
 
-        update_status(job_id, 'processing', 'Analyzing content...')
+        update_status(job_id, "overall", "processing", "Analyzing content...")
         video_content = analyze_video_content(transcript, language)
         if not video_content:
             raise Exception("Failed to analyze video content.")
@@ -41,15 +33,15 @@ def process_video_task(youtube_url: str, job_id: str, language: str = "en"):
         for step in video_content.steps:
             smart_frame_selection(video_path, step, job_id, video_duration, len(video_content.steps))
         
-        update_status(job_id, 'processing', 'Generating PDF...')
+        update_status(job_id, "overall", "processing", "Generating PDF...")
         pdf_path = generate_pdf(video_content, job_id, language)
 
-        update_status(job_id, 'completed', 'Job completed!', pdf_path=pdf_path)
+        update_status(job_id, "overall", "completed", "Job completed!", pdf_path=pdf_path)
 
     except Exception as e:
         print(f"Job {job_id} failed: {e}")
         traceback.print_exc()
-        update_status(job_id, 'failed', str(e))
+        update_status(job_id, "overall", "failed", str(e))
 
 @router.post("/generate")
 async def generate_instructions(video: VideoRequest, background_tasks: BackgroundTasks) -> dict:
@@ -67,13 +59,16 @@ async def get_status(job_id: str) -> dict:
 
 @router.get("/result/{job_id}")
 async def get_result(job_id: str) -> FileResponse:
-    job = jobs.get(job_id)
-    if not job or job.get('status') != 'completed':
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = jobs[job_id]
+    if job["status"] != "completed":
         raise HTTPException(status_code=404, detail="Result not ready or job failed")
     
-    pdf_path = job.get('pdf_path')
+    pdf_path = job.get("pdf_path")
     if not pdf_path or not os.path.exists(pdf_path):
         raise HTTPException(status_code=404, detail="PDF file not found")
         
-    return FileResponse(pdf_path, media_type='application/pdf', filename=f"{job_id}.pdf")
+    return FileResponse(pdf_path, media_type="application/pdf", filename=f"{job_id}.pdf")
 
