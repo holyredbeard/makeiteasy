@@ -17,15 +17,17 @@ const API_BASE = 'http://localhost:8000';
 const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => (
   <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">
     <div className="max-w-7xl mx-auto px-6">
-      <div className="flex justify-between items-center py-4">
-        <div className="flex items-center gap-3">
-          <img className="h-9 w-auto" src="/logo.png" alt="Food2Guide" />
+      <div className="flex justify-between items-center py-3">
+        <div className="flex items-center gap-2">
+          <a href="/">
+            <img className="h-10 w-auto" src="/logo.png" alt="Food2Guide" />
+          </a>
         </div>
         {currentUser ? (
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2">
                 <UserCircleIcon className="h-6 w-6 text-gray-500" />
-                <span className="text-sm text-gray-700 font-medium hidden sm:block">Welcome, {currentUser.full_name || currentUser.email}</span>
+                <span className="text-sm text-gray-700 font-medium hidden sm:block">{currentUser.full_name || currentUser.email}</span>
             </div>
             {currentUser.is_admin && (
               <button 
@@ -478,15 +480,17 @@ export default function Food2Guide() {
   const [usageStatus, setUsageStatus] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isTestPdfModalOpen, setIsTestPdfModalOpen] = useState(false);
+  // 1. Add state for welcome snackbar
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const languages = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
-    { code: 'sv', name: 'Svenska', flag: '🇸🇪' },
-    { code: 'no', name: 'Norsk', flag: '🇳🇴' },
-    { code: 'da', name: 'Dansk', flag: '🇩🇰' },
-    { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-    { code: 'fr', name: 'Français', flag: '🇫🇷' },
-    { code: 'es', name: 'Español', flag: '🇪🇸' },
+    { code: 'en', name: 'English' },
+    { code: 'sv', name: 'Svenska' },
+    { code: 'no', name: 'Norsk' },
+    { code: 'da', name: 'Dansk' },
+    { code: 'de', name: 'Deutsch' },
+    { code: 'fr', name: 'Français' },
+    { code: 'es', name: 'Español' },
   ];
 
   useEffect(() => {
@@ -564,6 +568,8 @@ export default function Food2Guide() {
         localStorage.setItem('authToken', data.access_token);
         setAuthToken(data.access_token);
         setIsAuthModalOpen(false); // Close modal on successful auth
+        setShowWelcome(true);
+        setTimeout(() => setShowWelcome(false), 4000);
       } else {
         const error = await response.json();
         alert(error.detail || 'Action failed');
@@ -724,7 +730,7 @@ export default function Food2Guide() {
   const showLoginScreen = false; // Changed from requiring login to allowing anonymous usage
 
   return (
-    <div className="font-poppins bg-gradient-to-br from-[#f8fafc] to-[#e7f5eb] min-h-screen">
+    <div className="font-poppins bg-gradient-to-br from-[#d6e5dd] to-[#eaf3ef] min-h-screen">
       <Header currentUser={currentUser} handleLogout={handleLogout} showAuthModal={() => setIsAuthModalOpen(true)} usageStatus={usageStatus} showTestPdfModal={() => setIsTestPdfModalOpen(true)} />
       <AuthModal
         isOpen={isAuthModalOpen}
@@ -742,6 +748,11 @@ export default function Food2Guide() {
           currentUser={currentUser}
         />
       )}
+      {showWelcome && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg text-lg font-semibold animate-fade-in-out">
+          Welcome, {currentUser?.full_name || currentUser?.email}!
+        </div>
+      )}
       
       <main className="max-w-xl mx-auto py-10 px-8">
         <div className="relative bg-white shadow-xl rounded-2xl p-10">
@@ -751,14 +762,16 @@ export default function Food2Guide() {
              <JobStatus job={job} onReset={resetAll} />
           ) : (
             <>
-              <h1 className="text-xl font-bold tracking-tight text-gray-800 text-center">🍳 Turn any tasty video into a delicious step-by-step recipe guide</h1>
+              <h1 className="text-xl font-bold tracking-tight text-gray-800 text-center">
+                Turn cooking videos into step-by-step recipes.
+              </h1>
               {usageStatus && !usageStatus.is_authenticated && (
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-center">
                   <p className="text-sm text-blue-800">
                     <span className="font-semibold">{usageStatus.remaining_usage}</span> free conversions remaining today. 
                     <button onClick={() => setIsAuthModalOpen(true)} className="ml-1 text-blue-600 underline hover:text-blue-800">
                       Sign in for unlimited access
-                  </button>
+                    </button>
                   </p>
                 </div>
               )}
@@ -768,52 +781,50 @@ export default function Food2Guide() {
                     <button onClick={() => setActiveTab('paste')} className={`w-full text-sm rounded-lg px-4 py-2 flex items-center justify-center gap-2 transition-colors ${activeTab === 'paste' ? 'bg-green-600 text-white font-semibold shadow-sm' : 'bg-transparent text-gray-600 hover:bg-white/50'}`}>
                       <LinkIcon className="h-5 w-5"/>
                       <span>Paste Link</span>
-              </button>
+                    </button>
                     <button onClick={() => setActiveTab('search')} className={`w-full text-sm rounded-lg px-4 py-2 flex items-center justify-center gap-2 transition-colors ${activeTab === 'search' ? 'bg-green-600 text-white font-semibold shadow-sm' : 'bg-transparent text-gray-600 hover:bg-white/50'}`}>
                       <MagnifyingGlassIcon className="h-5 w-5"/>
                       <span>Search YouTube</span>
-              </button>
-            </div>
-
+                    </button>
+                  </div>
                   <div className="mt-6">
-            {activeTab === 'paste' && (
-                <div>
-                  <input
+                    {activeTab === 'paste' && (
+                      <div>
+                        <input
                           id="video-url"
                           type="text"
-                    value={videoUrl}
+                          value={videoUrl}
                           onChange={(e) => { setVideoUrl(e.target.value); setSelectedVideoId(null); }}
-                          placeholder="https://www.youtube.com/watch?v=..."
+                          placeholder="Paste a YouTube or TikTok recipe video…"
                           className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                         />
-              </div>
-            )}
-            {activeTab === 'search' && (
+                      </div>
+                    )}
+                    {activeTab === 'search' && (
                       <div className="flex gap-2">
-                    <input
-                            id="search-query"
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && searchYouTube()}
-                            placeholder="e.g., 'Gordon Ramsay scrambled eggs'"
-                            className="flex-grow px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
-                    />
-                          <button onClick={searchYouTube} disabled={isSearching} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-400">
-                            {isSearching ? '...' : <MagnifyingGlassIcon className="h-5 w-5" />}
-                    </button>
-                        </div>
+                        <input
+                          id="search-query"
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onKeyPress={(e) => e.key === 'Enter' && searchYouTube()}
+                          placeholder="e.g., 'Gordon Ramsay scrambled eggs'"
+                          className="flex-grow px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
+                        />
+                        <button onClick={searchYouTube} disabled={isSearching} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-400">
+                          {isSearching ? '...' : <MagnifyingGlassIcon className="h-5 w-5" />}
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
-
                 {searchResults.length > 0 && (
                   <div className="space-y-4">
                     <h3 className="text-gray-800 text-sm font-bold tracking-tight">Search Results</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {searchResults.map((video) => (
                         <div
-                          key={video.id} 
+                          key={video.id}
                           onClick={() => { setSelectedVideoId(video.id); setVideoUrl(`https://www.youtube.com/watch?v=${video.id}`); }}
                           className={`cursor-pointer border-2 rounded-xl overflow-hidden transition-all duration-200 ${selectedVideoId === video.id ? 'border-green-500 shadow-lg scale-105' : 'border-transparent hover:border-green-400/50'}`}
                         >
@@ -824,24 +835,22 @@ export default function Food2Guide() {
                           </div>
                         </div>
                       ))}
-                </div>
-              </div>
-            )}
-
+                    </div>
+                  </div>
+                )}
                 <div>
-              <select
-                        id="language-select"
-                value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm text-gray-700"
-              >
-                        {languages.map(lang => <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>)}
-              </select>
+                  <select
+                    id="language-select"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm text-gray-700"
+                  >
+                    {languages.map(lang => <option key={lang.code} value={lang.code}>{lang.name}</option>)}
+                  </select>
                 </div>
-                
                 <div className="pt-6 border-t border-gray-200 flex flex-col items-center gap-6">
                   <button onClick={processVideo} className="flex items-center gap-2 w-full justify-center bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md px-6 py-3 transition-transform hover:scale-[1.02]">
-                    <FireIcon className="h-5 w-5" />
+                    <SparklesIcon className="h-6 w-6 mr-2" />
                     <span>Generate Recipe</span>
                   </button>
                 </div>
@@ -852,4 +861,4 @@ export default function Food2Guide() {
       </main>
     </div>
   );
-} 
+}
