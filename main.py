@@ -1,11 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import logging
+from dotenv import load_dotenv
 from api.routes import router
 from api.auth_routes import router as auth_router
 from api.google_auth import router as google_auth_router
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -24,6 +29,15 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Add CORS middleware to allow React frontend to communicate with backend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:8001"],  # React development server and frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
@@ -34,7 +48,14 @@ app.include_router(google_auth_router, prefix="/api/v1/auth", tags=["google-auth
 
 # Serve the main HTML page
 @app.get("/")
-async def read_index():
+async def read_index(request: Request):
+    # Check if this is a Google OAuth callback
+    code = request.query_params.get("code")
+    if code:
+        # This is a Google OAuth callback, redirect to the proper handler
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=f"/api/v1/auth/google/callback?{request.url.query}")
+    
     return FileResponse("static/index.html")
 
 # Serve generated PDFs

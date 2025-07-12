@@ -125,7 +125,15 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
     def process_video_task(job_id: str, video_url: str, language: str, user_id: Optional[int]):
         try:
             # 1. Download Video
-            update_status(job_id, "processing", "Downloading video from YouTube...")
+            # Detect platform for better user messaging
+            if "tiktok.com" in video_url.lower():
+                platform = "TikTok"
+            elif "youtube.com" in video_url.lower() or "youtu.be" in video_url.lower():
+                platform = "YouTube"
+            else:
+                platform = "video"
+            
+            update_status(job_id, "processing", f"Downloading video from {platform}...")
             video_path = download_video(video_url, job_id)
             if not video_path:
                 raise ValueError("Failed to download video. Please check the URL and try again.")
@@ -165,7 +173,7 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
             video_duration = get_video_duration(video_path)
 
             for i, step in enumerate(recipe.steps):
-                update_status(job_id, "frames", f"Processing frame {i+1}...")
+                update_status(job_id, "frames", f"Processing step {i+1}...")
                 success = smart_frame_selection(video_path, step, job_id, video_duration, total_steps)
                 if not success:
                     logger.warning(f"Could not find a suitable frame for step {step.step_number} in job {job_id}.")
@@ -181,7 +189,7 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
                 db.link_pdf_to_user(user_id, job_id, pdf_path)
 
             # 8. Complete Job
-            update_status(job_id, "completed", "Job finished successfully!", pdf_url=f"/result/{job_id}")
+            update_status(job_id, "completed", "Job finished successfully!", pdf_url=f"/api/v1/result/{job_id}")
 
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")

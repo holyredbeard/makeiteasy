@@ -6,12 +6,9 @@ GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 
 # OAuth URLs
-GOOGLE_OAUTH_URL = "https://accounts.google.com/o/oauth2/auth"
+GOOGLE_OAUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
-
-# Redirect URI - update this to match your domain
-GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000")
 
 # OAuth Scopes
 GOOGLE_SCOPES = [
@@ -24,7 +21,7 @@ def get_google_oauth_config():
     return {
         "client_id": GOOGLE_CLIENT_ID,
         "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000"),
         "scopes": GOOGLE_SCOPES
     }
 

@@ -1,3 +1,4 @@
+import os
 import secrets
 import time
 import urllib.parse
@@ -31,7 +32,9 @@ async def get_google_config():
     config = get_google_oauth_config()
     return {
         "client_id": config["client_id"],
-        "enabled": is_google_oauth_configured()
+        "enabled": is_google_oauth_configured(),
+        "redirect_uri": config["redirect_uri"],  # Debug: show redirect URI
+        "env_redirect_uri": os.getenv("GOOGLE_REDIRECT_URI", "NOT_SET")  # Debug: show env var
     }
 
 @router.get("/google/url")
@@ -76,16 +79,19 @@ async def google_callback(request: Request):
         if error:
             logger.error(f"Google OAuth error: {error}")
             # Redirect to frontend with error
-            return RedirectResponse(url=f"/?error=oauth_error&message={error}")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8001")
+            return RedirectResponse(url=f"{frontend_url}/?error=oauth_error&message={error}")
         
         if not code or not state:
             logger.error("Missing code or state in OAuth callback")
-            return RedirectResponse(url="/?error=oauth_error&message=missing_parameters")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8001")
+            return RedirectResponse(url=f"{frontend_url}/?error=oauth_error&message=missing_parameters")
         
         # Verify state (CSRF protection)
         if state not in oauth_states:
             logger.error(f"Invalid OAuth state: {state}")
-            return RedirectResponse(url="/?error=oauth_error&message=invalid_state")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            return RedirectResponse(url=f"{frontend_url}/?error=oauth_error&message=invalid_state")
         
         # Clean up state
         del oauth_states[state]
@@ -103,14 +109,16 @@ async def google_callback(request: Request):
         token_response = requests.post(GOOGLE_TOKEN_URL, data=token_data)
         if not token_response.ok:
             logger.error(f"Failed to exchange code for token: {token_response.text}")
-            return RedirectResponse(url="/?error=oauth_error&message=token_exchange_failed")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            return RedirectResponse(url=f"{frontend_url}/?error=oauth_error&message=token_exchange_failed")
         
         token_info = token_response.json()
         access_token = token_info.get("access_token")
         
         if not access_token:
             logger.error("No access token received from Google")
-            return RedirectResponse(url="/?error=oauth_error&message=no_access_token")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            return RedirectResponse(url=f"{frontend_url}/?error=oauth_error&message=no_access_token")
         
         # Get user info from Google
         user_response = requests.get(
@@ -154,7 +162,8 @@ async def google_callback(request: Request):
         )
         
         # Redirect to frontend with token
-        redirect_url = f"/?token={jwt_token}&oauth_success=true"
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8001")
+        redirect_url = f"{frontend_url}/?token={jwt_token}&oauth_success=true"
         return RedirectResponse(url=redirect_url)
         
     except Exception as e:
