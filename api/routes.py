@@ -2,6 +2,7 @@ import uuid
 import traceback
 import logging
 from typing import Optional
+from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse, FileResponse
 from models.types import VideoRequest, Recipe, YouTubeSearchRequest, YouTubeVideo, User
@@ -134,7 +135,13 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
                 platform = "video"
             
             update_status(job_id, "processing", f"Downloading video from {platform}...")
-            video_path = download_video(video_url, job_id)
+            download_result = download_video(video_url, job_id)
+            if isinstance(download_result, tuple):
+                video_path, video_title = download_result
+            else:
+                video_path = download_result
+                video_title = None
+            
             if not video_path:
                 raise ValueError("Failed to download video. Please check the URL and try again.")
 
@@ -173,14 +180,14 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
             video_duration = get_video_duration(video_path)
 
             for i, step in enumerate(recipe.steps):
-                update_status(job_id, "frames", f"Processing step {i+1}...")
+                update_status(job_id, "frames", f"Creating step {i+1}...")
                 success = smart_frame_selection(video_path, step, job_id, video_duration, total_steps)
                 if not success:
                     logger.warning(f"Could not find a suitable frame for step {step.step_number} in job {job_id}.")
             
             # 6. Generate PDF
             update_status(job_id, "generating_pdf", "Generating PDF instructions...")
-            pdf_path = generate_pdf(recipe, job_id, template_name="professional", video_url=video_url)
+            pdf_path = generate_pdf(recipe, job_id, template_name="professional", video_url=video_url, video_title=video_title)
             if not pdf_path:
                 raise ValueError("Failed to generate PDF.")
 
@@ -203,6 +210,37 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
         "status": "processing", 
         "details": "Job started."
     })
+
+@router.get("/usage-status", summary="Get current usage status for anonymous users")
+async def get_usage_status(request: Request):
+    """Get remaining usage for non-authenticated users"""
+    client_ip = request.client.host if request.client else "unknown"
+    current_user = get_optional_user(request)
+    
+    if current_user:
+        # Authenticated users have unlimited usage
+        return {
+            "is_authenticated": True,
+            "remaining_usage": -1,  # -1 means unlimited
+            "daily_limit": -1,
+            "message": "Unlimited usage with account"
+        }
+    else:
+        # Non-authenticated users have limited usage
+        remaining = DAILY_LIMIT_NO_AUTH
+        if client_ip in ip_usage:
+            current_time = time.time()
+            # Reset count if it's a new day (24 hours)
+            if current_time - ip_usage[client_ip]["last_reset"] > 24 * 3600:
+                ip_usage[client_ip] = {"count": 0, "last_reset": current_time}
+            remaining = max(0, DAILY_LIMIT_NO_AUTH - ip_usage[client_ip]["count"])
+        
+        return {
+            "is_authenticated": False,
+            "remaining_usage": remaining,
+            "daily_limit": DAILY_LIMIT_NO_AUTH,
+            "message": f"You can create {remaining} more PDFs today without an account"
+        }
 
 @router.post("/reset", summary="Reset IP rate limiting (temporary admin function)")
 async def reset_rate_limiting(request: Request):
@@ -243,11 +281,26 @@ async def get_result(job_id: str, request: Request):
     if job.get("status") != "completed":
         raise HTTPException(status_code=400, detail="Job not completed yet.")
     
-    pdf_path = f"output/{job_id}.pdf"
-    if not os.path.exists(pdf_path):
+    # Look for PDF files in the output directory that match the job_id
+    output_dir = Path("output")
+    pdf_files = list(output_dir.glob(f"*{job_id}*.pdf")) + list(output_dir.glob(f"{job_id}.pdf"))
+    
+    if not pdf_files:
+        # Try to find any PDF file that might have been generated with video title
+        pdf_files = list(output_dir.glob("*-recipe-guide.pdf"))
+        if pdf_files:
+            # Sort by modification time to get the most recent one
+            pdf_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+    
+    if not pdf_files:
         raise HTTPException(status_code=404, detail="PDF file not found.")
     
-    return FileResponse(pdf_path, media_type="application/pdf", filename=f"recipe_{job_id}.pdf")
+    pdf_path = pdf_files[0]  # Use the first (most recent) matching file
+    
+    # Extract filename for download
+    download_filename = pdf_path.name
+    
+    return FileResponse(str(pdf_path), media_type="application/pdf", filename=download_filename)
 
 @router.post("/search", summary="Search YouTube for videos")
 async def search_youtube(request: YouTubeSearchRequest):
@@ -310,7 +363,7 @@ async def process_video_request(request: VideoRequest):
         video_duration = get_video_duration(video_path)
 
         for i, step in enumerate(recipe.steps):
-            logger.info(f"[{job_id}] Processing step {i+1}/{total_steps}...")
+            logger.info(f"[{job_id}] Creating step {i+1}/{total_steps}...")
             success = smart_frame_selection(video_path, step, job_id, video_duration, total_steps)
             if not success:
                 logger.warning(f"[{job_id}] Could not find frame for step {step.step_number}.")

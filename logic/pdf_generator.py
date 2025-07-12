@@ -147,11 +147,18 @@ def calculate_image_dimensions(image_path: str, max_width: float, max_height: fl
         logger.error(f"Error calculating image dimensions: {e}")
         return max_width, max_height  # Default fallback
 
-def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", language: str = "en", video_url: Optional[str] = None) -> str:
+def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", language: str = "en", video_url: Optional[str] = None, video_title: Optional[str] = None) -> str:
     """Generate PDF from recipe content using a CSS template."""
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
-    output_path = output_dir / f"{job_id}.pdf"
+    
+    # Use video title for filename if provided, otherwise use job_id
+    if video_title:
+        filename = f"{video_title}-recipe-guide.pdf"
+    else:
+        filename = f"{job_id}.pdf"
+    
+    output_path = output_dir / filename
     
     log_pdf_step("START", "Starting PDF generation", job_id=job_id)
     log_pdf_step("CONFIG", f"Using template: {template_name}, language: {language}", job_id=job_id)

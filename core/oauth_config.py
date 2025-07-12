@@ -21,7 +21,7 @@ def get_google_oauth_config():
     return {
         "client_id": GOOGLE_CLIENT_ID,
         "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000"),
+        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000"),
         "scopes": GOOGLE_SCOPES
     }
 

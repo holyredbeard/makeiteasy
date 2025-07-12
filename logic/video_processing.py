@@ -41,6 +41,51 @@ def log_video_step(step_name: str, message: str, error: bool = False):
     else:
         logger.info(f"[{step_name}] {message}")
 
+def sanitize_filename(title: str) -> str:
+    """Convert video title to a safe filename format."""
+    # Remove or replace problematic characters
+    safe_title = re.sub(r'[^\w\s-]', '', title)  # Remove special characters except spaces and hyphens
+    safe_title = re.sub(r'[-\s]+', '-', safe_title)  # Replace spaces and multiple hyphens with single hyphen
+    safe_title = safe_title.strip('-')  # Remove leading/trailing hyphens
+    safe_title = safe_title.lower()  # Convert to lowercase
+    
+    # Limit length to avoid filesystem issues
+    if len(safe_title) > 50:
+        safe_title = safe_title[:50].rstrip('-')
+    
+    # Ensure it's not empty
+    if not safe_title:
+        safe_title = "recipe"
+    
+    return safe_title
+
+def extract_video_metadata(video_url: str) -> dict:
+    """Extract video metadata including title."""
+    try:
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': False,
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+            
+            metadata = {
+                'title': info.get('title', 'Unknown Title'),
+                'uploader': info.get('uploader', 'Unknown'),
+                'duration': info.get('duration', 0),
+                'view_count': info.get('view_count', 0),
+                'upload_date': info.get('upload_date', ''),
+            }
+            
+            log_video_step("METADATA", f"Extracted title: {metadata['title']}")
+            return metadata
+            
+    except Exception as e:
+        log_video_step("METADATA", f"Failed to extract metadata: {e}", error=True)
+        return {'title': 'Unknown Title'}
+
 class ModelManager:
     _instance = None
     _lock = threading.Lock()
@@ -119,7 +164,7 @@ def is_youtube_url(url: str) -> bool:
             return True
     return False
 
-def download_video(video_url: str, job_id: str) -> str:
+def download_video(video_url: str, job_id: str) -> Tuple[str, str]:
     """Download video from YouTube or TikTok with enhanced error handling and validation."""
     log_video_step("DOWNLOAD", f"Starting download for job {job_id}")
     log_video_step("DOWNLOAD", f"URL: {video_url}")
@@ -223,7 +268,14 @@ def download_video(video_url: str, job_id: str) -> str:
                             duration = get_video_duration(str(output_path))
                             if duration and duration > 1.0:  # At least 1 second
                                 log_video_step("DOWNLOAD", f"Successfully downloaded {platform} video with format '{format_option}': {output_path} ({file_size} bytes, {duration:.2f}s)")
-                                return str(output_path)
+                                # Extract video title for filename
+                                try:
+                                    metadata = extract_video_metadata(video_url)
+                                    video_title = sanitize_filename(metadata['title'])
+                                except Exception as e:
+                                    log_video_step("DOWNLOAD", f"Failed to extract title: {e}")
+                                    video_title = "recipe"
+                                return str(output_path), video_title
                             else:
                                 log_video_step("DOWNLOAD", f"Downloaded file has no valid duration ({duration}s), trying next format")
                         except Exception as duration_error:
