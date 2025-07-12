@@ -4,6 +4,8 @@ from fastapi.responses import FileResponse
 import os
 import logging
 from api.routes import router
+from api.auth_routes import router as auth_router
+from api.google_auth import router as google_auth_router
 
 # Configure logging
 logging.basicConfig(
@@ -27,6 +29,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include API routes
 app.include_router(router, prefix="/api/v1")
+app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
+app.include_router(google_auth_router, prefix="/api/v1/auth", tags=["google-auth"])
 
 # Serve the main HTML page
 @app.get("/")

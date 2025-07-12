@@ -14,6 +14,7 @@ import threading
 import logging
 import numpy as np
 import cv2
+import pytesseract
 
 # Configure logging
 logging.basicConfig(
@@ -89,19 +90,35 @@ def download_video(youtube_url: str, job_id: str) -> str:
     output_path = DOWNLOADS_DIR / f"{job_id}.mp4"
     
     try:
-        ydl_opts = {
-            'format': '18',  # 360p mp4
-            'outtmpl': str(output_path),
-            'noplaylist': True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([youtube_url])
+        # Try multiple format options prioritizing smaller file sizes for faster downloads
+        format_options = [
+            'worst[height>=240][ext=mp4]', # Smallest quality MP4 (but at least 240p)
+            'worst[ext=mp4]',              # Smallest available MP4
+            '18',                          # 360p MP4 (fallback)
+            '17',                          # 144p 3GP (very small)
+            'worst',                       # Absolute smallest available
+        ]
         
-        if output_path.exists() and output_path.stat().st_size > 0:
-            log_video_step("DOWNLOAD", f"Successfully downloaded video: {output_path}")
-            return str(output_path)
-        else:
-            raise Exception("Downloaded file is empty or does not exist")
+        for format_option in format_options:
+            try:
+                ydl_opts = {
+                    'format': format_option,
+                    'outtmpl': str(output_path),
+                    'noplaylist': True,
+                }
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([youtube_url])
+                
+                if output_path.exists() and output_path.stat().st_size > 0:
+                    log_video_step("DOWNLOAD", f"Successfully downloaded video with format '{format_option}': {output_path}")
+                    return str(output_path)
+                    
+            except Exception as format_error:
+                log_video_step("DOWNLOAD", f"Format '{format_option}' failed: {format_error}")
+                continue
+        
+        # If we get here, all formats failed
+        raise Exception("All download format options failed")
             
     except Exception as e:
         log_video_step("DOWNLOAD", f"Error downloading video: {e}", error=True)
@@ -385,3 +402,58 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
     create_placeholder_image(str(output_path), step.step_number, "Could not find relevant frame")
     step.image_path = str(output_path)
     return False 
+
+def extract_text_from_frames(video_path: str, job_id: str) -> str:
+    """Extract text from video frames using OCR."""
+    log_video_step("OCR", f"Starting OCR text extraction for job {job_id}")
+    
+    try:
+        duration = get_video_duration(video_path)
+        if not duration:
+            log_video_step("OCR", "Could not get video duration", error=True)
+            return ""
+        
+        # Extract frames every 5 seconds to capture text
+        extracted_text = []
+        # Smart frame selection - scale interval based on video length
+        if duration <= 60:  # Short video (≤1 min) - every 10 seconds
+            interval = 10
+        elif duration <= 300:  # Medium video (≤5 min) - every 15 seconds
+            interval = 15
+        elif duration <= 600:  # Long video (≤10 min) - every 20 seconds
+            interval = 20
+        else:  # Very long video (>10 min) - every 30 seconds
+            interval = 30
+        
+        frame_times = np.arange(0, duration, interval)
+        
+        for time_seconds in frame_times:
+            temp_frame_path = FRAMES_DIR / f"ocr_frame_{time_seconds:.1f}.jpg"
+            
+            if extract_frame(video_path, time_seconds, str(temp_frame_path)):
+                try:
+                    # Use pytesseract to extract text
+                    image = Image.open(temp_frame_path)
+                    text = pytesseract.image_to_string(image, config='--psm 6')
+                    
+                    if text.strip():
+                        log_video_step("OCR", f"Found text at {time_seconds}s: {text[:50]}...")
+                        extracted_text.append(text.strip())
+                
+                except Exception as e:
+                    log_video_step("OCR", f"OCR failed for frame at {time_seconds}s: {e}", error=True)
+                
+                finally:
+                    # Clean up temporary frame
+                    if temp_frame_path.exists():
+                        temp_frame_path.unlink()
+        
+        # Combine all extracted text
+        combined_text = "\n".join(extracted_text)
+        log_video_step("OCR", f"OCR extraction complete. Found {len(extracted_text)} text segments")
+        
+        return combined_text
+        
+    except Exception as e:
+        log_video_step("OCR", f"Error in OCR extraction: {e}", error=True)
+        return "" 

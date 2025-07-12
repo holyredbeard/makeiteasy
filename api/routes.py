@@ -2,15 +2,20 @@ import uuid
 import traceback
 import logging
 from typing import Optional
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse, FileResponse
-from models.types import VideoRequest, Recipe, YouTubeSearchRequest, YouTubeVideo
+from models.types import VideoRequest, Recipe, YouTubeSearchRequest, YouTubeVideo, User
+from core.auth import get_current_active_user
+from core.database import db
+from typing import Union
+import time
 from logic.video_processing import (
     download_video,
     transcribe_audio,
     smart_frame_selection,
     get_video_duration,
-    extract_thumbnail
+    extract_thumbnail,
+    extract_text_from_frames
 )
 from logic.recipe_parser import analyze_video_content
 from logic.pdf_generator import generate_pdf
@@ -20,6 +25,11 @@ import os
 router = APIRouter()
 jobs = {}
 logger = logging.getLogger(__name__)
+
+# Rate limiting for non-authenticated users
+ip_usage = {}  # {ip: {"count": int, "last_reset": timestamp}}
+DAILY_LIMIT_NO_AUTH = 2  # 2 PDFs per day without account
+TEMP_PDF_LIFETIME = 24 * 3600  # 24 hours in seconds
 
 # --- Helper Functions ---
 def update_job_status(job_id: str, status: str, details: str, pdf_url: Optional[str] = None):
@@ -33,17 +43,86 @@ def update_status(job_id: str, status: str, details: str, pdf_url: Optional[str]
     """Update the status of a job (alias for compatibility)."""
     update_job_status(job_id, status, details, pdf_url)
 
+def check_rate_limit(client_ip: str) -> bool:
+    """Check if IP has exceeded daily limit for non-authenticated users"""
+    current_time = time.time()
+    
+    if client_ip not in ip_usage:
+        ip_usage[client_ip] = {"count": 0, "last_reset": current_time}
+        return True
+    
+    # Reset count if it's a new day (24 hours)
+    if current_time - ip_usage[client_ip]["last_reset"] > 24 * 3600:
+        ip_usage[client_ip] = {"count": 0, "last_reset": current_time}
+    
+    return ip_usage[client_ip]["count"] < DAILY_LIMIT_NO_AUTH
+
+def increment_ip_usage(client_ip: str):
+    """Increment usage count for IP"""
+    current_time = time.time()
+    if client_ip not in ip_usage:
+        ip_usage[client_ip] = {"count": 1, "last_reset": current_time}
+    else:
+        ip_usage[client_ip]["count"] += 1
+
+def get_optional_user(request: Request) -> Optional[User]:
+    """Get current user if authenticated, None otherwise"""
+    try:
+        # Try to get Authorization header
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return None
+        
+        # Import here to avoid circular imports
+        from core.auth import verify_token
+        
+        token = auth_header.split(" ")[1]
+        token_data = verify_token(token)
+        if not token_data or not token_data.email:
+            return None
+        
+        user = db.get_user_by_email(token_data.email)
+        if not user:
+            return None
+        
+        # Convert UserInDB to User
+        return User(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            is_active=user.is_active,
+            created_at=user.created_at
+        )
+    except Exception:
+        return None
+
 # --- API Endpoints ---
 @router.post("/generate", summary="Process a video to generate a recipe PDF")
-async def generate_endpoint(request: VideoRequest, background_tasks: BackgroundTasks):
+async def generate_endpoint(video_request: VideoRequest, background_tasks: BackgroundTasks, request: Request):
+    # Check if user is authenticated
+    current_user = get_optional_user(request)
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Rate limiting for non-authenticated users
+    if not current_user:
+        if not check_rate_limit(client_ip):
+            remaining_time = 24 * 3600 - (time.time() - ip_usage[client_ip]["last_reset"])
+            hours_left = int(remaining_time // 3600)
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Daily limit reached. You can create {DAILY_LIMIT_NO_AUTH} PDFs per day without an account. "
+                       f"Try again in {hours_left} hours or create a free account for unlimited access."
+            )
+        increment_ip_usage(client_ip)
+    
     job_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
-    video_url = str(request.youtube_url)
-    language = request.language or "en"
+    video_url = str(video_request.youtube_url)
+    language = video_request.language or "en"
     
     update_job_status(job_id, "processing", "Job has been received and is scheduled to start.")
 
-    def process_video_task(job_id: str, video_url: str, language: str):
+    def process_video_task(job_id: str, video_url: str, language: str, user_id: Optional[int]):
         try:
             # 1. Download Video
             update_status(job_id, "processing", "Downloading video from YouTube...")
@@ -51,11 +130,23 @@ async def generate_endpoint(request: VideoRequest, background_tasks: BackgroundT
             if not video_path:
                 raise ValueError("Failed to download video. Please check the URL and try again.")
 
-            # 2. Transcribe Video
-            update_status(job_id, "transcribing", "Transcribing audio content...")
-            transcript = transcribe_audio(video_path, job_id)
-            if not transcript:
-                raise ValueError("Failed to transcribe video. The video may not contain speech.")
+            # 2. Extract Text (Smart approach)
+            update_status(job_id, "transcribing", "Extracting text from audio...")
+            
+            # Get text from audio first (Whisper)
+            audio_transcript = transcribe_audio(video_path, job_id)
+            
+            # Check if audio transcript is good enough
+            transcript = audio_transcript or ""
+            
+            # Only run OCR if audio transcript is poor or empty
+            if not transcript.strip() or len(transcript.strip()) < 50 or "theatre這裏doesmos" in transcript:
+                update_status(job_id, "transcribing", "Audio unclear, extracting text from images...")
+                ocr_text = extract_text_from_frames(video_path, job_id)
+                transcript = f"Audio transcript:\n{audio_transcript or 'No clear audio'}\n\nText from images:\n{ocr_text or ''}"
+            
+            if not transcript.strip():
+                raise ValueError("Failed to extract any text from video (neither audio nor visual text found).")
             
             # 3. Analyze Content
             update_status(job_id, "analyzing", "Analyzing content with AI...")
@@ -85,14 +176,18 @@ async def generate_endpoint(request: VideoRequest, background_tasks: BackgroundT
             if not pdf_path:
                 raise ValueError("Failed to generate PDF.")
 
-            # 7. Complete Job
+            # 7. Link PDF to user (only if user is logged in)
+            if user_id:
+                db.link_pdf_to_user(user_id, job_id, pdf_path)
+
+            # 8. Complete Job
             update_status(job_id, "completed", "Job finished successfully!", pdf_url=f"/result/{job_id}")
 
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
             update_status(job_id, "failed", f"An error occurred: {e}")
 
-    background_tasks.add_task(process_video_task, job_id, video_url, language)
+    background_tasks.add_task(process_video_task, job_id, video_url, language, current_user.id if current_user else None)
     
     return JSONResponse(status_code=202, content={
         "job_id": job_id, 
@@ -100,6 +195,19 @@ async def generate_endpoint(request: VideoRequest, background_tasks: BackgroundT
         "status": "processing", 
         "details": "Job started."
     })
+
+@router.post("/reset", summary="Reset IP rate limiting (temporary admin function)")
+async def reset_rate_limiting(request: Request):
+    """Reset rate limiting for the current IP address"""
+    client_ip = request.client.host if request.client else "unknown"
+    
+    # Clear the IP from rate limiting
+    if client_ip in ip_usage:
+        del ip_usage[client_ip]
+        logger.info(f"Rate limiting reset for IP: {client_ip}")
+        return {"message": f"Rate limiting reset for IP {client_ip}", "ip": client_ip}
+    else:
+        return {"message": f"No rate limiting data found for IP {client_ip}", "ip": client_ip}
 
 @router.get("/status/{job_id}", summary="Get the status of a processing job")
 async def get_status(job_id: str):
@@ -119,7 +227,7 @@ async def get_status(job_id: str):
     return JSONResponse(content=response)
 
 @router.get("/result/{job_id}", summary="Download the generated PDF")
-async def get_result(job_id: str):
+async def get_result(job_id: str, request: Request):
     job = jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found.")

@@ -48,6 +48,33 @@ def validate_step(step_data: dict) -> Tuple[bool, str]:
     
     return True, ""
 
+def validate_ingredients_safety(ingredients: list) -> Tuple[list, list]:
+    """Filter out dangerous ingredients and return safe ones."""
+    # List of dangerous/illegal substances to filter out
+    dangerous_keywords = [
+        'lsd', 'acid', 'mdma', 'ecstasy', 'cocaine', 'heroin', 'methamphetamine', 'meth',
+        'cannabis', 'marijuana', 'weed', 'thc', 'cbd', 'mushroom', 'shroom', 'psilocybin',
+        'opium', 'morphine', 'fentanyl', 'amphetamine', 'barbiturate', 'benzodiazepine',
+        'pcp', 'ketamine', 'ghb', 'rohypnol', 'dmt', 'ayahuasca', 'mescaline', 'peyote',
+        'chemical', 'poison', 'toxic', 'bleach', 'ammonia', 'base', 'alkali',
+        'chöringen', 'choringen', 'psychedelic', 'hallucinogen', 'narcotic'
+    ]
+    
+    safe_ingredients = []
+    removed_ingredients = []
+    
+    for ingredient in ingredients:
+        ingredient_lower = ingredient.lower()
+        is_dangerous = any(dangerous in ingredient_lower for dangerous in dangerous_keywords)
+        
+        if is_dangerous:
+            removed_ingredients.append(ingredient)
+            logger.warning(f"Removed dangerous ingredient: {ingredient}")
+        else:
+            safe_ingredients.append(ingredient)
+    
+    return safe_ingredients, removed_ingredients
+
 def validate_response(response_data: dict) -> Tuple[bool, str]:
     """Validate the AI response data."""
     if not isinstance(response_data, dict):
@@ -62,6 +89,13 @@ def validate_response(response_data: dict) -> Tuple[bool, str]:
     # Validate materials/ingredients is a list of strings
     if not isinstance(response_data['materials_or_ingredients'], list):
         return False, "materials_or_ingredients must be a list"
+    
+    # Safety check: Filter dangerous ingredients
+    safe_ingredients, removed = validate_ingredients_safety(response_data['materials_or_ingredients'])
+    response_data['materials_or_ingredients'] = safe_ingredients
+    
+    if removed:
+        logger.warning(f"Removed {len(removed)} dangerous ingredients: {removed}")
     
     # Validate steps
     if not isinstance(response_data['steps'], list):
@@ -112,26 +146,38 @@ def call_deepseek_api(prompt: str) -> dict:
 def analyze_video_content(text: str, language: str = "en") -> Optional[Recipe]:
     """Analyze video transcript to extract structured data."""
     prompts = {
-        "en": ("You are an expert at analyzing video transcripts. Your task is to extract structured recipe data. "
+        "en": ("You are an expert at analyzing video transcripts for COOKING RECIPES ONLY. Your task is to extract structured recipe data. "
                "Format your response as a JSON object with the following keys: 'title', 'description', "
                "'servings', 'prep_time', 'cook_time', 'materials_or_ingredients', and 'steps'.\n\n"
+               "CRITICAL SAFETY RULES:\n"
+               "- ONLY include safe, edible cooking ingredients\n"
+               "- NEVER include drugs, chemicals, or harmful substances\n"
+               "- If you see unusual words, interpret them as the closest NORMAL food ingredient\n"
+               "- When in doubt, use common cooking ingredients like salt, pepper, herbs, spices\n"
+               "- NO psychoactive substances, drugs, or chemicals of any kind\n\n"
                "Follow these specific instructions:\n"
                "1. 'title': The full, official name of the recipe.\n"
                "2. 'description': A brief, engaging summary of the dish. If not mentioned, create a suitable one.\n"
                "3. 'servings', 'prep_time', 'cook_time': Extract these values. If they are not mentioned, YOU MUST ESTIMATE them based on the ingredients and cooking process. Provide them as strings (e.g., '2-3 people', '15 minutes').\n"
-               "4. 'materials_or_ingredients': A list of all ingredients as an array of strings.\n"
+               "4. 'materials_or_ingredients': A list of SAFE FOOD ingredients only as an array of strings.\n"
                "5. 'steps': A step-by-step guide as an array of objects, each with 'step_number' (integer), 'description' (string), and 'timestamp' (string, 'MM:SS').\n\n"
-               "Ensure your entire response is a single, valid JSON object."),
-        "sv": ("Du är en expert på att analysera videotranskriptioner. Din uppgift är att extrahera strukturerad receptdata. "
+               "Ensure your entire response is a single, valid JSON object with ONLY safe cooking ingredients."),
+        "sv": ("Du är en expert på att analysera videotranskriptioner för MATLAGNINGSRECEPT ENDAST. Din uppgift är att extrahera strukturerad receptdata. "
                "Formatera ditt svar som ett JSON-objekt med följande nycklar: 'title', 'description', "
                "'servings', 'prep_time', 'cook_time', 'materials_or_ingredients', och 'steps'.\n\n"
+               "KRITISKA SÄKERHETSREGLER:\n"
+               "- Inkludera ENDAST säkra, ätbara matingredienser\n"
+               "- Inkludera ALDRIG droger, kemikalier eller skadliga ämnen\n"
+               "- Om du ser ovanliga ord, tolka dem som närmaste NORMALA matingredienser\n"
+               "- Vid tvivel, använd vanliga matingredienser som salt, peppar, örter, kryddor\n"
+               "- INGA psykoaktiva ämnen, droger eller kemikalier av något slag\n\n"
                "Följ dessa specifika instruktioner:\n"
                "1. 'title': Det fullständiga, officiella namnet på receptet.\n"
                "2. 'description': En kort, engagerande sammanfattning av rätten. Om den inte nämns, skapa en passande.\n"
                "3. 'servings', 'prep_time', 'cook_time': Extrahera dessa värden. Om de inte nämns, MÅSTE DU UPPSKATTA dem baserat på ingredienserna och tillagningsprocessen. Ange dem som strängar (t.ex. '2-3 personer', '15 minuter').\n"
-               "4. 'materials_or_ingredients': En lista över alla ingredienser som en array av strängar.\n"
+               "4. 'materials_or_ingredients': En lista över SÄKRA MATINGREDIENSER endast som en array av strängar.\n"
                "5. 'steps': En steg-för-steg-guide som en array av objekt, var och en med 'step_number' (heltal), 'description' (sträng), och 'timestamp' (sträng, 'MM:SS').\n\n"
-               "Se till att hela ditt svar är ett enda, giltigt JSON-objekt.")
+               "Se till att hela ditt svar är ett enda, giltigt JSON-objekt med ENDAST säkra matingredienser.")
     }
     
     prompt = prompts.get(language, prompts["en"]) + f"\n\nTranscript:\n{text}"

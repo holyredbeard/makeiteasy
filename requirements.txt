@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 python-dotenv
-pydantic
+pydantic[email]
 yt-dlp
 openai-whisper
 torch
@@ -12,4 +12,11 @@ langchain-deepseek
 langchain-core
 loguru
 torchaudio
+pytesseract
+PyJWT
+python-multipart
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+requests
 --extra-index-url https://download.pytorch.org/whl/cu121 

@@ -265,7 +265,7 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
             step_style = style_manager.get_style("step-item")
             log_pdf_step("DEBUG", f"Step style: {step_style}", job_id=job_id)
             
-            for step in recipe.steps:
+            for idx, step in enumerate(recipe.steps, 1):
                 usable_width = pdf.w - pdf.l_margin - pdf.r_margin
                 text_col_width = usable_width * 0.50
                 image_col_width = usable_width * 0.40
@@ -278,8 +278,10 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                     title = step.description.strip()
                     desc = ""
 
-                pdf.set_font("DejaVu", style="B", size=14)
-                title_lines = pdf.multi_cell(text_col_width, 8, title, align="L", split_only=True)
+                # Lägg till numrering och ta bort bold
+                numbered_title = f"{idx}. {title}"
+                pdf.set_font("DejaVu", style="", size=14)
+                title_lines = pdf.multi_cell(text_col_width, 8, numbered_title, align="L", split_only=True)
                 pdf.set_font("DejaVu", style="", size=12)
                 desc_lines = pdf.multi_cell(text_col_width, 8, desc, align="L", split_only=True) if desc else []
                 text_height = (len(title_lines) * 8) + (len(desc_lines) * 8)
@@ -292,8 +294,8 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                     start_y = pdf.get_y()
 
                 pdf.set_xy(pdf.l_margin, start_y)
-                pdf.set_font("DejaVu", style="B", size=14)
-                pdf.multi_cell(text_col_width, 8, title, align="L")
+                pdf.set_font("DejaVu", style="", size=14)
+                pdf.multi_cell(text_col_width, 8, numbered_title, align="L")
                 if desc:
                     pdf.set_font("DejaVu", style="", size=12)
                     pdf.multi_cell(text_col_width, 8, desc, align="L")
