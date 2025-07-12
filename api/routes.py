@@ -172,7 +172,7 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
             
             # 6. Generate PDF
             update_status(job_id, "generating_pdf", "Generating PDF instructions...")
-            pdf_path = generate_pdf(recipe, job_id, template_name="professional")
+            pdf_path = generate_pdf(recipe, job_id, template_name="professional", video_url=video_url)
             if not pdf_path:
                 raise ValueError("Failed to generate PDF.")
 
@@ -309,7 +309,7 @@ async def process_video_request(request: VideoRequest):
         
         # 6. Generate PDF
         logger.info(f"[{job_id}] Step 6/6: Generating final PDF...")
-        pdf_path = generate_pdf(recipe, job_id, template_name="professional")
+        pdf_path = generate_pdf(recipe, job_id, template_name="professional", video_url=video_url)
         if not pdf_path:
             raise ValueError("Failed to generate PDF.")
 

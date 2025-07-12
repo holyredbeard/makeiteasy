@@ -15,6 +15,7 @@ import logging
 import numpy as np
 import cv2
 import pytesseract
+import re
 
 # Configure logging
 logging.basicConfig(
@@ -84,74 +85,234 @@ class ModelManager:
         self._initialize_clip()
         return self.clip_model, self.clip_processor
 
-def download_video(youtube_url: str, job_id: str) -> str:
-    """Download video with progress logging."""
+def is_tiktok_url(url: str) -> bool:
+    """Check if the URL is a TikTok URL."""
+    tiktok_patterns = [
+        r'(?:https?://)?(?:www\.)?tiktok\.com/@[^/]+/video/\d+',
+        r'(?:https?://)?(?:vm|vt)\.tiktok\.com/[A-Za-z0-9]+',
+        r'(?:https?://)?(?:www\.)?tiktok\.com/t/[A-Za-z0-9]+',
+        r'(?:https?://)?(?:m\.)?tiktok\.com/@[^/]+/video/\d+',
+    ]
+    
+    for pattern in tiktok_patterns:
+        if re.match(pattern, url.strip()):
+            return True
+    return False
+
+def is_youtube_url(url: str) -> bool:
+    """Check if the URL is a YouTube URL."""
+    youtube_patterns = [
+        r'(?:https?://)?(?:www\.)?youtube\.com/watch\?v=[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/shorts/[\w-]+',  # YouTube Shorts support
+        r'(?:https?://)?(?:www\.)?youtube\.com/embed/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/v/[\w-]+',
+        r'(?:https?://)?youtu\.be/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/playlist\?list=[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/channel/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/user/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/c/[\w-]+',
+        r'(?:https?://)?(?:www\.)?youtube\.com/@[\w-]+',
+    ]
+    
+    for pattern in youtube_patterns:
+        if re.match(pattern, url.strip()):
+            return True
+    return False
+
+def download_video(video_url: str, job_id: str) -> str:
+    """Download video from YouTube or TikTok with enhanced error handling and validation."""
     log_video_step("DOWNLOAD", f"Starting download for job {job_id}")
+    log_video_step("DOWNLOAD", f"URL: {video_url}")
     output_path = DOWNLOADS_DIR / f"{job_id}.mp4"
     
+    # Detect platform
+    is_tiktok = is_tiktok_url(video_url)
+    is_youtube = is_youtube_url(video_url)
+    
+    if is_tiktok:
+        log_video_step("DOWNLOAD", "Detected TikTok URL")
+        platform = "TikTok"
+    elif is_youtube:
+        log_video_step("DOWNLOAD", "Detected YouTube URL") 
+        platform = "YouTube"
+    else:
+        log_video_step("DOWNLOAD", "Unknown platform, attempting download anyway")
+        platform = "Unknown"
+    
     try:
-        # Try multiple format options prioritizing smaller file sizes for faster downloads
-        format_options = [
-            'worst[height>=240][ext=mp4]', # Smallest quality MP4 (but at least 240p)
-            'worst[ext=mp4]',              # Smallest available MP4
-            '18',                          # 360p MP4 (fallback)
-            '17',                          # 144p 3GP (very small)
-            'worst',                       # Absolute smallest available
-        ]
+        # Configure format options based on platform
+        if is_tiktok:
+            # TikTok-specific format options
+            format_options = [
+                'best[height<=1080][ext=mp4]',  # Best quality up to 1080p MP4
+                'best[ext=mp4]',                # Best available MP4
+                'worst[height>=360][ext=mp4]',  # At least 360p MP4
+                'worst[ext=mp4]',               # Smallest available MP4
+                'best',                         # Absolute best available
+            ]
+        else:
+            # YouTube and other platforms format options - enhanced for Shorts
+            format_options = [
+                'best[height<=720][ext=mp4]',   # Best quality up to 720p MP4 (good for Shorts)
+                'best[height<=480][ext=mp4]',   # Best quality up to 480p MP4
+                'worst[height>=360][ext=mp4]',  # At least 360p MP4
+                'best[ext=mp4]',                # Best available MP4
+                'worst[height>=240][ext=mp4]',  # At least 240p MP4
+                'worst[ext=mp4]',               # Smallest available MP4
+                '22',                           # 720p MP4 (YouTube format)
+                '18',                           # 360p MP4 (YouTube format)
+                'best',                         # Absolute best available
+                'worst',                        # Absolute smallest available
+            ]
+        
+        min_file_size = 50000  # Minimum 50KB for valid video
         
         for format_option in format_options:
             try:
+                # Clean up any existing file
+                if output_path.exists():
+                    output_path.unlink()
+                
                 ydl_opts = {
                     'format': format_option,
                     'outtmpl': str(output_path),
                     'noplaylist': True,
+                    'extract_flat': False,
+                    'writesubtitles': False,
+                    'writeautomaticsub': False,
+                    'ignoreerrors': False,
+                    'no_warnings': False,
                 }
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([youtube_url])
                 
-                if output_path.exists() and output_path.stat().st_size > 0:
-                    log_video_step("DOWNLOAD", f"Successfully downloaded video with format '{format_option}': {output_path}")
-                    return str(output_path)
+                # Add platform-specific options
+                if is_tiktok:
+                    ydl_opts.update({
+                        'http_headers': {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                        }
+                    })
+                elif is_youtube:
+                    # Enhanced YouTube-specific options for better compatibility
+                    ydl_opts.update({
+                        'extractor_args': {
+                            'youtube': {
+                                'skip': ['hls'],  # Skip HLS streams that might cause issues
+                                'player_client': ['android', 'web', 'ios'],  # Try multiple clients
+                                'innertube_host': 'www.youtube.com',
+                                'innertube_key': None,
+                            }
+                        },
+                        'http_headers': {
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                        }
+                    })
+                
+                log_video_step("DOWNLOAD", f"Attempting download with format: {format_option}")
+                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([video_url])
+                
+                # Validate downloaded file
+                if output_path.exists():
+                    file_size = output_path.stat().st_size
+                    log_video_step("DOWNLOAD", f"Downloaded file size: {file_size} bytes")
+                    
+                    if file_size >= min_file_size:
+                        # Additional validation: check if it's actually a video file
+                        try:
+                            duration = get_video_duration(str(output_path))
+                            if duration and duration > 1.0:  # At least 1 second
+                                log_video_step("DOWNLOAD", f"Successfully downloaded {platform} video with format '{format_option}': {output_path} ({file_size} bytes, {duration:.2f}s)")
+                                return str(output_path)
+                            else:
+                                log_video_step("DOWNLOAD", f"Downloaded file has no valid duration ({duration}s), trying next format")
+                        except Exception as duration_error:
+                            log_video_step("DOWNLOAD", f"Cannot validate video duration: {duration_error}, trying next format")
+                    else:
+                        log_video_step("DOWNLOAD", f"Downloaded file is too small ({file_size} bytes), trying next format")
+                    
+                    # Clean up small/invalid file
+                    output_path.unlink()
+                else:
+                    log_video_step("DOWNLOAD", f"No file was downloaded with format '{format_option}'")
                     
             except Exception as format_error:
                 log_video_step("DOWNLOAD", f"Format '{format_option}' failed: {format_error}")
+                if output_path.exists():
+                    output_path.unlink()  # Clean up failed download
                 continue
         
         # If we get here, all formats failed
-        raise Exception("All download format options failed")
+        raise Exception(f"All download format options failed for {platform} video. The video may be unavailable, region-blocked, or in an unsupported format.")
             
     except Exception as e:
-        log_video_step("DOWNLOAD", f"Error downloading video: {e}", error=True)
+        log_video_step("DOWNLOAD", f"Error downloading {platform} video: {e}", error=True)
         raise
 
 def transcribe_audio(video_path: str, job_id: Optional[str] = None) -> str:
-    """Transcribe video audio with error handling."""
+    """Transcribe video audio with comprehensive error handling and fallback content."""
     log_video_step("TRANSCRIBE", f"Starting transcription for job {job_id}")
     
     try:
+        # Check if video file exists and has content
+        if not os.path.exists(video_path):
+            log_video_step("TRANSCRIBE", f"Video file does not exist: {video_path}", error=True)
+            return "Video file could not be found. Please try downloading the video again."
+        
+        file_size = os.path.getsize(video_path)
+        log_video_step("TRANSCRIBE", f"Video file size: {file_size} bytes")
+        
+        if file_size < 50000:  # Less than 50KB is likely empty or corrupted
+            log_video_step("TRANSCRIBE", f"Video file is too small ({file_size} bytes), likely empty or corrupted", error=True)
+            return "The downloaded video file appears to be corrupted or empty. This may be due to the video being unavailable or region-blocked. Please try a different video or check if the video is accessible in your region."
+        
+        # Check video duration to ensure it has content
+        duration = get_video_duration(video_path)
+        if not duration or duration < 1.0:  # Less than 1 second
+            log_video_step("TRANSCRIBE", f"Video duration is too short ({duration}s), likely no audio content", error=True)
+            return "The video appears to be too short or contains no audio content. Please ensure the video has spoken content that can be transcribed."
+        
+        log_video_step("TRANSCRIBE", f"Video validation passed - Duration: {duration:.2f}s, Size: {file_size} bytes")
+        
         model_manager = ModelManager()
         whisper_model = model_manager.get_whisper_model()
         
-        # Try with different configurations to handle tensor size issues
-        try:
-            result = whisper_model.transcribe(video_path, fp16=False)
-        except Exception as e1:
-            log_video_step("TRANSCRIBE", f"First attempt failed: {e1}, trying with different settings")
-            try:
-                result = whisper_model.transcribe(video_path, fp16=False, language="en")
-            except Exception as e2:
-                log_video_step("TRANSCRIBE", f"Second attempt failed: {e2}, trying with minimal settings")
-                result = whisper_model.transcribe(video_path, fp16=False, language="en", task="transcribe")
+        # Try with different configurations to handle various audio issues
+        transcription_attempts = [
+            {"params": {"fp16": False}, "description": "standard settings"},
+            {"params": {"fp16": False, "language": "en"}, "description": "English language hint"},
+            {"params": {"fp16": False, "language": "en", "task": "transcribe"}, "description": "explicit transcribe task"},
+            {"params": {"fp16": False, "temperature": 0.0}, "description": "deterministic mode"},
+        ]
         
-        if result and 'text' in result:
-            log_video_step("TRANSCRIBE", "Successfully transcribed audio")
-            return result['text']
-        else:
-            raise Exception("Transcription result is empty or invalid")
+        for i, attempt in enumerate(transcription_attempts, 1):
+            try:
+                log_video_step("TRANSCRIBE", f"Attempt {i}/{len(transcription_attempts)}: {attempt['description']}")
+                result = whisper_model.transcribe(video_path, **attempt['params'])
+                
+                if result and 'text' in result and result['text'].strip():
+                    transcribed_text = result['text'].strip()
+                    log_video_step("TRANSCRIBE", f"Successfully transcribed audio (attempt {i}): {len(transcribed_text)} characters")
+                    return transcribed_text
+                else:
+                    log_video_step("TRANSCRIBE", f"Attempt {i} returned empty text, trying next approach")
+                    
+            except Exception as attempt_error:
+                log_video_step("TRANSCRIBE", f"Attempt {i} failed: {attempt_error}")
+                if i < len(transcription_attempts):
+                    continue
+                else:
+                    # This was the last attempt, provide fallback
+                    log_video_step("TRANSCRIBE", "All transcription attempts failed, providing fallback content")
+                    return f"Audio transcription failed after {len(transcription_attempts)} attempts. The video may contain no speech, background music only, or audio in a format that cannot be processed. Please review the video manually to extract any cooking instructions or recipe information."
+        
+        # If we get here, all attempts returned empty text
+        log_video_step("TRANSCRIBE", "All transcription attempts returned empty text, providing fallback content")
+        return "The video audio could not be transcribed, possibly due to no speech content, background music only, or audio quality issues. Please review the video manually for any cooking instructions or recipe information."
             
     except Exception as e:
-        log_video_step("TRANSCRIBE", f"Error transcribing audio: {e}", error=True)
-        raise
+        log_video_step("TRANSCRIBE", f"Transcription process failed: {e}", error=True)
+        return f"Audio transcription encountered an error: {str(e)}. Please try again or review the video manually for cooking instructions."
 
 def get_video_duration(video_path: str) -> Optional[float]:
     """Get the duration of a video file using OpenCV."""

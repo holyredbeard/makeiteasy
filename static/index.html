@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Make It Easy - YouTube to PDF</title>
-    <link rel="stylesheet" href="/static/style.css?v=1.7">
+    <title>Make It Easy - Video to PDF Guide</title>
+    <link rel="stylesheet" href="/static/style.css?v=2.0">
 </head>
 <body>
     <div class="container">
@@ -136,13 +136,16 @@
             <!-- Paste Tab Content -->
             <div id="paste-tab" class="tab-content active">
                 <div class="input-group">
-                    <label for="youtube-url">YouTube URL:</label>
+                    <label for="youtube-url">Video URL:</label>
                     <input 
                         type="url" 
                         id="youtube-url" 
-                        placeholder="Paste YouTube link here... (e.g. https://www.youtube.com/watch?v=...)"
+                        placeholder="Paste YouTube or TikTok link here... (e.g. https://www.youtube.com/watch?v=... or https://www.tiktok.com/@user/video/...)"
                         required
                     >
+                </div>
+                <div class="supported-platforms">
+                    <small>✅ Supported platforms: YouTube, TikTok</small>
                 </div>
             </div>
 
@@ -596,35 +599,79 @@
             console.log('Selected video:', video.title, 'ID:', video.video_id);
         }
 
+        // Helper functions to detect video platform
+        function isTikTokUrl(url) {
+            const tiktokPatterns = [
+                /(?:https?:\/\/)?(?:www\.)?tiktok\.com\/@[^\/]+\/video\/\d+/,
+                /(?:https?:\/\/)?(?:vm|vt)\.tiktok\.com\/[A-Za-z0-9]+/,
+                /(?:https?:\/\/)?(?:www\.)?tiktok\.com\/t\/[A-Za-z0-9]+/,
+                /(?:https?:\/\/)?(?:m\.)?tiktok\.com\/@[^\/]+\/video\/\d+/
+            ];
+            return tiktokPatterns.some(pattern => pattern.test(url.trim()));
+        }
+
+        function isYouTubeUrl(url) {
+            const youtubePatterns = [
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/watch\?v=[\w-]+/,
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/shorts\/[\w-]+/,  // YouTube Shorts support
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/embed\/[\w-]+/,
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/v\/[\w-]+/,
+                /(?:https?:\/\/)?youtu\.be\/[\w-]+/,
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/playlist\?list=[\w-]+/,
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/channel\/[\w-]+/,
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/user\/[\w-]+/,
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/c\/[\w-]+/,
+                /(?:https?:\/\/)?(?:www\.)?youtube\.com\/@[\w-]+/
+            ];
+            return youtubePatterns.some(pattern => pattern.test(url.trim()));
+        }
+
+        function detectPlatform(url) {
+            if (isTikTokUrl(url)) return 'TikTok';
+            if (isYouTubeUrl(url)) return 'YouTube';
+            return 'Unknown';
+        }
+
         // Modified processVideo function to handle both paste and search modes
         function processVideo() {
-            let youtubeUrl = '';
+            let videoUrl = '';
             
             // Check which tab is active
             const activeTab = document.querySelector('.tab-content.active');
             
             if (activeTab.id === 'paste-tab') {
                 // Paste mode - get URL from input
-                youtubeUrl = document.getElementById('youtube-url').value.trim();
-                if (!youtubeUrl) {
-                    alert('Please paste a YouTube URL');
+                videoUrl = document.getElementById('youtube-url').value.trim();
+                if (!videoUrl) {
+                    alert('Please paste a video URL');
                     return;
                 }
+                
+                // Validate the URL
+                const platform = detectPlatform(videoUrl);
+                if (platform === 'Unknown') {
+                    alert('Please enter a valid YouTube or TikTok URL.\n\nSupported formats:\n• YouTube: https://www.youtube.com/watch?v=...\n• TikTok: https://www.tiktok.com/@user/video/...');
+                    return;
+                }
+                
+                console.log(`[PLATFORM] Detected ${platform} URL: ${videoUrl}`);
+                
             } else if (activeTab.id === 'search-tab') {
-                // Search mode - use selected video
+                // Search mode - use selected video (YouTube only)
                 if (!selectedVideoId) {
                     alert('Please select a video from the search results');
                     return;
                 }
-                youtubeUrl = `https://www.youtube.com/watch?v=${selectedVideoId}`;
+                videoUrl = `https://www.youtube.com/watch?v=${selectedVideoId}`;
+                console.log('[PLATFORM] Using YouTube URL from search results');
             }
 
             // Continue with existing process logic
-            processVideoWithUrl(youtubeUrl);
+            processVideoWithUrl(videoUrl);
         }
 
         // Separate the actual processing logic
-        function processVideoWithUrl(youtubeUrl) {
+        function processVideoWithUrl(videoUrl) {
             const language = document.getElementById('language-select').value;
             const processBtn = document.getElementById('process-btn');
 
@@ -634,7 +681,7 @@
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    youtube_url: youtubeUrl,
+                    youtube_url: videoUrl,  // Backend still expects this parameter name for compatibility
                     language: language
                 })
             })
@@ -803,7 +850,7 @@
                 // Method 1: Direct link click
                 const link = document.createElement('a');
                 link.href = downloadUrl;
-                link.download = 'MakeItEasy_Recipe.pdf';
+                link.download = 'Food2Guide_Recipe.pdf';
                 link.target = '_blank';
                 link.style.display = 'none';
                 document.body.appendChild(link);
@@ -1507,7 +1554,7 @@
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement('a');
                 link.href = url;
-                link.download = 'MakeItEasy_Recipe.pdf';
+                link.download = 'Food2Guide_Recipe.pdf';
                 link.click();
                 window.URL.revokeObjectURL(url);
                 

@@ -7,6 +7,7 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 from .pdf_styles import PDFStyleManager
+from PIL import Image
 
 # Ensure output directory exists
 output_dir = Path("output")
@@ -105,7 +106,48 @@ def add_metadata_item(pdf: FPDF, label: str, value: str, x_pos: float):
     pdf.set_font("DejaVu", style="", size=11)
     pdf.multi_cell(0, 7, value, align="L")
 
-def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", language: str = "en") -> str:
+def get_image_orientation(image_path: str) -> str:
+    """
+    Detect image orientation (portrait, landscape, or square).
+    Returns: 'portrait', 'landscape', or 'square'
+    """
+    try:
+        with Image.open(image_path) as img:
+            width, height = img.size
+            if height > width:
+                return 'portrait'
+            elif width > height:
+                return 'landscape'
+            else:
+                return 'square'
+    except Exception as e:
+        logger.error(f"Error detecting image orientation: {e}")
+        return 'landscape'  # Default fallback
+
+def calculate_image_dimensions(image_path: str, max_width: float, max_height: float) -> tuple:
+    """
+    Calculate optimal image dimensions while maintaining aspect ratio.
+    Returns: (width, height)
+    """
+    try:
+        with Image.open(image_path) as img:
+            original_width, original_height = img.size
+            aspect_ratio = original_width / original_height
+            
+            # Calculate dimensions that fit within max constraints
+            if aspect_ratio > 1:  # Landscape
+                width = min(max_width, max_height * aspect_ratio)
+                height = width / aspect_ratio
+            else:  # Portrait or square
+                height = min(max_height, max_width / aspect_ratio)
+                width = height * aspect_ratio
+            
+            return width, height
+    except Exception as e:
+        logger.error(f"Error calculating image dimensions: {e}")
+        return max_width, max_height  # Default fallback
+
+def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", language: str = "en", video_url: Optional[str] = None) -> str:
     """Generate PDF from recipe content using a CSS template."""
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
@@ -173,7 +215,25 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
             
             # Left column - Image or Placeholder with text
             if recipe.thumbnail_path and os.path.exists(recipe.thumbnail_path):
-                pdf.image(recipe.thumbnail_path, x=pdf.l_margin, y=start_y, w=image_width, h=image_height)
+                # Check image orientation and adjust dimensions
+                orientation = get_image_orientation(recipe.thumbnail_path)
+                log_pdf_step("HEADER", f"Thumbnail orientation: {orientation}", job_id=job_id)
+                
+                if orientation == 'portrait':
+                    # For portrait images, make them taller and narrower
+                    image_width = usable_width * 0.35
+                    image_height = image_width * 1.4  # Portrait ratio
+                    desc_x = pdf.l_margin + image_width + (usable_width * 0.04)
+                    desc_width = usable_width * 0.57
+                
+                # Calculate optimal dimensions maintaining aspect ratio
+                img_width, img_height = calculate_image_dimensions(
+                    recipe.thumbnail_path, image_width, image_height
+                )
+                
+                # Always align thumbnail top with the start position
+                pdf.image(recipe.thumbnail_path, x=pdf.l_margin, y=start_y, w=img_width, h=img_height)
+                image_height = img_height  # Update for layout calculation
             else:
                 pdf.set_fill_color(230, 230, 230) # Light gray
                 pdf.rect(pdf.l_margin, start_y, image_width, image_height, 'F')
@@ -267,9 +327,36 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
             
             for idx, step in enumerate(recipe.steps, 1):
                 usable_width = pdf.w - pdf.l_margin - pdf.r_margin
-                text_col_width = usable_width * 0.50
-                image_col_width = usable_width * 0.40
-                image_height = 50
+                
+                # Check if step has an image to determine layout
+                has_image = step.image_path and os.path.exists(step.image_path)
+                
+                if has_image and step.image_path:
+                    # Detect image orientation
+                    orientation = get_image_orientation(step.image_path)
+                    log_pdf_step("STEP", f"Step {idx} image orientation: {orientation}", job_id=job_id)
+                    
+                    if orientation == 'portrait':
+                        # Portrait layout: image takes more vertical space, less horizontal
+                        text_col_width = usable_width * 0.65
+                        image_col_width = usable_width * 0.30
+                        max_image_height = 80  # Taller for portrait images
+                    else:
+                        # Landscape layout: traditional side-by-side
+                        text_col_width = usable_width * 0.50
+                        image_col_width = usable_width * 0.40
+                        max_image_height = 50  # Standard height for landscape
+                    
+                    # Calculate actual image dimensions
+                    img_width, img_height = calculate_image_dimensions(
+                        step.image_path, image_col_width, max_image_height
+                    )
+                else:
+                    # No image: use full width for text
+                    text_col_width = usable_width
+                    img_width = img_height = 0
+                
+                # Parse step description
                 if ':' in step.description:
                     title, desc = step.description.split(':', 1)
                     title = title.strip()
@@ -278,7 +365,7 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                     title = step.description.strip()
                     desc = ""
 
-                # Lägg till numrering och ta bort bold
+                # Calculate text height
                 numbered_title = f"{idx}. {title}"
                 pdf.set_font("DejaVu", style="", size=14)
                 title_lines = pdf.multi_cell(text_col_width, 8, numbered_title, align="L", split_only=True)
@@ -286,13 +373,17 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                 desc_lines = pdf.multi_cell(text_col_width, 8, desc, align="L", split_only=True) if desc else []
                 text_height = (len(title_lines) * 8) + (len(desc_lines) * 8)
 
-                needed_height = max(text_height, image_height) + 15
+                # Calculate needed height
+                needed_height = max(text_height, img_height) + 15
+                
+                # Check if we need a new page
                 if pdf.get_y() + needed_height > pdf.h - pdf.b_margin:
                     pdf.add_page()
                     start_y = pdf.get_y()
                 else:
                     start_y = pdf.get_y()
 
+                # Add text content
                 pdf.set_xy(pdf.l_margin, start_y)
                 pdf.set_font("DejaVu", style="", size=14)
                 pdf.multi_cell(text_col_width, 8, numbered_title, align="L")
@@ -300,13 +391,17 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                     pdf.set_font("DejaVu", style="", size=12)
                     pdf.multi_cell(text_col_width, 8, desc, align="L")
 
-                if step.image_path and os.path.exists(step.image_path):
+                # Add image if available
+                if has_image:
                     img_x = pdf.l_margin + text_col_width + 10
-                    img_y = start_y
-                    image_width = image_col_width
-                    pdf.image(step.image_path, x=img_x, y=img_y, w=image_width, h=image_height)
+                    img_y = start_y  # Always align image top with text top
+                    
+                    pdf.image(step.image_path, x=img_x, y=img_y, w=img_width, h=img_height)
+                    log_pdf_step("STEP", f"Added {orientation} image for step {idx}: {img_width}x{img_height} at position ({img_x}, {img_y})", job_id=job_id)
 
-                pdf.set_y(start_y + max(text_height, image_height) + 15)
+                # Move to next step
+                pdf.set_y(start_y + max(text_height, img_height) + 15)
+                
         except Exception as e:
             log_pdf_step("ERROR", f"Failed to add instructions section: {str(e)}", error=True, job_id=job_id)
             raise
@@ -320,8 +415,20 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                         size=footer_style.get("font_size", 9))
             if "text_color" in footer_style:
                 pdf.set_text_color(*footer_style["text_color"])
-            pdf.cell(0, 5, f"Generated by MakeItEasy - {datetime.now().strftime('%Y-%m-%d %H:%M')}", 
-                    ln=True, align=footer_style.get("align", "C"))
+            
+            # Generate timestamp
+            timestamp = datetime.now().strftime('%Y-%m-%d %H:%M')
+            footer_text = f"Generated by Food2Guide - {timestamp}"
+            
+            # Add footer text
+            pdf.cell(0, 5, footer_text, ln=True, align=footer_style.get("align", "C"))
+            
+            # Add video URL if provided
+            if video_url:
+                pdf.ln(3)  # Small space
+                pdf.set_font("DejaVu", style="", size=8)
+                pdf.cell(0, 5, f"Original video: {video_url}", ln=True, align="C")
+                
         except Exception as e:
             log_pdf_step("ERROR", f"Failed to add footer: {str(e)}", error=True, job_id=job_id)
             raise
