@@ -30,6 +30,18 @@
     margin-bottom: 30pt;
 }
 
+/* Thumbnail images - landscape (YouTube) */
+.thumbnail-landscape {
+    width: 80pt;
+    aspect-ratio: 40 / 71;
+}
+
+/* Thumbnail images - portrait (TikTok, YouTube Shorts) */
+.thumbnail-portrait {
+    width: 120pt;
+    aspect-ratio: 40 / 71;
+}
+
 /* Description text styling */
 .description {
     font-family: DejaVu;
@@ -78,7 +90,7 @@
 
 /* Instructions section styling */
 .step {
-    margin-bottom: 15pt;
+    margin-bottom: 60pt;
 }
 
 .step-header {
@@ -102,9 +114,21 @@
     flex: 1 1 55%;
 }
 
-.step-image {
+/* Step images - landscape (YouTube) */
+.step-image-landscape {
     flex: 0 0 40%;
     max-width: 40%;
+    width: 70pt;
+    aspect-ratio: 40 / 71;
+    margin-bottom: 0;
+}
+
+/* Step images - portrait (TikTok, YouTube Shorts) */
+.step-image-portrait {
+    flex: 0 0 30%;
+    max-width: 30%;
+    height: 142pt;
+    aspect-ratio: 40 / 71;
     margin-bottom: 0;
 }
 

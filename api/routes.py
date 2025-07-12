@@ -3,7 +3,7 @@ import traceback
 import logging
 from typing import Optional
 from pathlib import Path
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request, Form, status
 from fastapi.responses import JSONResponse, FileResponse
 from models.types import VideoRequest, Recipe, YouTubeSearchRequest, YouTubeVideo, User
 from core.auth import get_current_active_user
@@ -21,6 +21,9 @@ from logic.video_processing import (
 from logic.recipe_parser import analyze_video_content
 from logic.pdf_generator import generate_pdf
 import os
+from datetime import datetime
+from models.types import Step
+import glob
 
 # --- Globals ---
 router = APIRouter()
@@ -164,7 +167,7 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
                 raise ValueError("Failed to extract any text from video (neither audio nor visual text found).")
             
             # 3. Analyze Content
-            update_status(job_id, "analyzing", "Analyzing content with AI...")
+            update_status(job_id, "analyzing", "Analyzing content...")
             recipe = analyze_video_content(transcript, language)
             if not recipe:
                 raise Exception("Failed to analyze video content.")
@@ -380,4 +383,126 @@ async def process_video_request(request: VideoRequest):
     except Exception as e:
         logger.error(f"[{job_id}] Error processing job: {e}", exc_info=True)
         return None
+
+@router.post("/test-pdf")
+async def generate_test_pdf(
+    template_name: str = Form(..., description="CSS template name (default, modern, professional)"),
+    image_orientation: str = Form(..., description="Image orientation (landscape, portrait)"),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Generate a test PDF with predefined data and test images"""
+    
+    # Check if user is admin
+    if not getattr(current_user, 'is_admin', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    try:
+        # Create test recipe data
+        test_recipe = Recipe(
+            title="Test Recipe - Layout Preview",
+            description="This is a test recipe to preview the PDF layout and styling.",
+            serves="4 people",
+            prep_time="15 minutes",
+            cook_time="30 minutes",
+            ingredients=[
+                "2 cups flour",
+                "1 cup sugar",
+                "3 eggs",
+                "1/2 cup butter",
+                "1 tsp vanilla extract",
+                "1 cup milk",
+                "2 tsp baking powder"
+            ],
+            steps=[
+                Step(
+                    step_number=1,
+                    description="Preheat your oven to 350°F (175°C). Grease and flour a 9-inch round cake pan.",
+                    image_path=f"static/test_images/test_{image_orientation}.jpg"
+                ),
+                Step(
+                    step_number=2,
+                    description="In a large bowl, cream together the butter and sugar until light and fluffy. Beat in eggs one at a time, then stir in vanilla.",
+                    image_path=f"static/test_images/test_{image_orientation}.jpg"
+                ),
+                Step(
+                    step_number=3,
+                    description="Combine flour and baking powder in a separate bowl. Gradually add to creamed mixture alternately with milk, beating well after each addition.",
+                    image_path=f"static/test_images/test_{image_orientation}.jpg"
+                ),
+                Step(
+                    step_number=4,
+                    description="Pour batter into prepared pan. Bake for 30-35 minutes or until a toothpick inserted in center comes out clean.",
+                    image_path=f"static/test_images/test_{image_orientation}.jpg"
+                ),
+                Step(
+                    step_number=5,
+                    description="Cool in pan for 10 minutes before removing to wire rack. Serve warm or at room temperature.",
+                    image_path=f"static/test_images/test_{image_orientation}.jpg"
+                )
+            ],
+            thumbnail_path=f"static/test_images/test_{image_orientation}.jpg"
+        )
+        
+        # Generate unique job ID for test
+        job_id = f"test-{datetime.now().strftime('%Y%m%d-%H%M%S')}-{image_orientation}"
+        
+        # Create PDF using the existing PDF generator
+        pdf_path = generate_pdf(
+            recipe=test_recipe,
+            job_id=job_id,
+            template_name=template_name
+        )
+        
+        # Return the PDF file
+        if os.path.exists(pdf_path):
+            return FileResponse(
+                path=pdf_path,
+                media_type='application/pdf',
+                filename=f"test-{template_name}-{image_orientation}.pdf"
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to generate test PDF"
+            )
+            
+    except Exception as e:
+        logger.error(f"Error generating test PDF: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate test PDF: {str(e)}"
+        )
+
+@router.get("/templates")
+async def get_pdf_templates(current_user: User = Depends(get_current_active_user)):
+    """Get list of available PDF templates"""
+    
+    # Check if user is admin
+    if not getattr(current_user, 'is_admin', False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    try:
+        templates_dir = "static/templates/pdf"
+        templates = []
+        
+        if os.path.exists(templates_dir):
+            for file in os.listdir(templates_dir):
+                if file.endswith('.css'):
+                    template_name = file.replace('.css', '')
+                    templates.append(template_name)
+        
+        return {"templates": templates}
+        
+    except Exception as e:
+        logger.error(f"Error getting templates: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get templates: {str(e)}"
+        )
 

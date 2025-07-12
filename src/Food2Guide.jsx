@@ -9,11 +9,12 @@ import {
   SparklesIcon,
   FireIcon,
   XMarkIcon,
+  WrenchScrewdriverIcon,
 } from '@heroicons/react/24/outline';
 
 const API_BASE = 'http://localhost:8000';
 
-const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus }) => (
+const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => (
   <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">
     <div className="max-w-7xl mx-auto px-6">
       <div className="flex justify-between items-center py-4">
@@ -26,6 +27,15 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus }) => (
                 <UserCircleIcon className="h-6 w-6 text-gray-500" />
                 <span className="text-sm text-gray-700 font-medium hidden sm:block">Welcome, {currentUser.full_name || currentUser.email}</span>
             </div>
+            {currentUser.is_admin && (
+              <button 
+                onClick={showTestPdfModal}
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                <WrenchScrewdriverIcon className="h-5 w-5" />
+                <span className="hidden sm:block">TEST PDF</span>
+              </button>
+            )}
             <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-600 hover:text-red-600 transition-colors">
               <ArrowRightOnRectangleIcon className="h-5 w-5" />
               <span className="hidden sm:block">Sign Out</span>
@@ -205,6 +215,146 @@ const AuthModal = ({ isOpen, onClose, handleLogin, handleRegister, initiateGoogl
               </button>
             </div>
           )}
+          
+
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TestPdfModal = ({ isOpen, onClose, currentUser }) => {
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState('professional');
+  const [selectedOrientation, setSelectedOrientation] = useState('landscape');
+  const [isGenerating, setIsGenerating] = useState(false);
+  
+  // Fetch available templates when modal opens
+  useEffect(() => {
+    if (isOpen && currentUser?.is_admin) {
+      fetchTemplates();
+    }
+  }, [isOpen, currentUser]);
+
+  const fetchTemplates = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/templates`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTemplates(data.templates || []);
+      }
+    } catch (error) {
+      console.error('Error fetching templates:', error);
+    }
+  };
+
+  const generateTestPdf = async () => {
+    setIsGenerating(true);
+    try {
+      const formData = new FormData();
+      formData.append('template_name', selectedTemplate);
+      formData.append('image_orientation', selectedOrientation);
+      
+      const response = await fetch(`${API_BASE}/api/v1/test-pdf`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: formData
+      });
+      
+      if (response.ok) {
+        // Download the PDF
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `test-${selectedTemplate}-${selectedOrientation}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        // Close modal
+        onClose();
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.detail || 'Failed to generate test PDF'}`);
+      }
+    } catch (error) {
+      console.error('Error generating test PDF:', error);
+      alert('Error generating test PDF. Please try again.');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800">Test PDF Generation</h2>
+            <button 
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <XMarkIcon className="h-6 w-6" />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                CSS Template
+              </label>
+              <select 
+                value={selectedTemplate}
+                onChange={(e) => setSelectedTemplate(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {templates.map(template => (
+                  <option key={template} value={template}>
+                    {template.charAt(0).toUpperCase() + template.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Image Orientation
+              </label>
+              <select 
+                value={selectedOrientation}
+                onChange={(e) => setSelectedOrientation(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="landscape">Landscape (YouTube)</option>
+                <option value="portrait">Portrait (TikTok/Shorts)</option>
+              </select>
+            </div>
+            
+            <div className="pt-4">
+              <button
+                onClick={generateTestPdf}
+                disabled={isGenerating}
+                className={`w-full font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-transform transform hover:scale-[1.02] ${
+                  isGenerating 
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700 text-white'
+                }`}
+              >
+                {isGenerating ? 'Generating...' : 'CREATE'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -327,6 +477,7 @@ export default function Food2Guide() {
   const [isSearching, setIsSearching] = useState(false);
   const [usageStatus, setUsageStatus] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isTestPdfModalOpen, setIsTestPdfModalOpen] = useState(false);
 
   const languages = [
     { code: 'en', name: 'English', flag: '🇺🇸' },
@@ -425,7 +576,11 @@ export default function Food2Guide() {
   const handleLogin = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-    const body = Object.fromEntries(formData.entries());
+    const email = formData.get('email');
+    const password = formData.get('password');
+    
+    // Use regular login endpoint for both admin and regular users
+    const body = { email, password };
     handleAuthAction(`${API_BASE}/api/v1/auth/login`, body);
   };
 
@@ -439,6 +594,8 @@ export default function Food2Guide() {
     };
     handleAuthAction(`${API_BASE}/api/v1/auth/register`, body);
   };
+
+
 
   const handleLogout = () => {
     setAuthToken(null);
@@ -568,7 +725,7 @@ export default function Food2Guide() {
 
   return (
     <div className="font-poppins bg-gradient-to-br from-[#f8fafc] to-[#e7f5eb] min-h-screen">
-      <Header currentUser={currentUser} handleLogout={handleLogout} showAuthModal={() => setIsAuthModalOpen(true)} usageStatus={usageStatus} />
+      <Header currentUser={currentUser} handleLogout={handleLogout} showAuthModal={() => setIsAuthModalOpen(true)} usageStatus={usageStatus} showTestPdfModal={() => setIsTestPdfModalOpen(true)} />
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
@@ -578,6 +735,13 @@ export default function Food2Guide() {
         authTab={authTab}
         setAuthTab={setAuthTab}
       />
+      {isTestPdfModalOpen && (
+        <TestPdfModal 
+          isOpen={isTestPdfModalOpen}
+          onClose={() => setIsTestPdfModalOpen(false)}
+          currentUser={currentUser}
+        />
+      )}
       
       <main className="max-w-xl mx-auto py-10 px-8">
         <div className="relative bg-white shadow-xl rounded-2xl p-10">

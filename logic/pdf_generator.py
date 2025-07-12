@@ -147,6 +147,61 @@ def calculate_image_dimensions(image_path: str, max_width: float, max_height: fl
         logger.error(f"Error calculating image dimensions: {e}")
         return max_width, max_height  # Default fallback
 
+def crop_image_if_needed(image_path: str, crop_top: float, crop_bottom: float, job_id: str) -> str:
+    """
+    Crop image from top and bottom if crop values are specified.
+    Returns: path to cropped image (or original if no cropping needed)
+    """
+    if crop_top <= 0 and crop_bottom <= 0:
+        return image_path  # No cropping needed
+    
+    try:
+        with Image.open(image_path) as img:
+            width, height = img.size
+            
+            # Convert points to pixels (assuming 72 DPI)
+            crop_top_px = int(crop_top * 72 / 72)  # Points to pixels
+            crop_bottom_px = int(crop_bottom * 72 / 72)  # Points to pixels
+            
+            # Calculate crop box
+            left = 0
+            top = crop_top_px
+            right = width
+            bottom = height - crop_bottom_px
+            
+            # Ensure valid crop box
+            if bottom <= top:
+                log_pdf_step("CROP", f"Invalid crop dimensions for {image_path}, skipping crop", job_id=job_id)
+                return image_path
+            
+            # Crop the image
+            cropped_img = img.crop((left, top, right, bottom))
+            
+            # Save cropped image with suffix
+            path_obj = Path(image_path)
+            cropped_path = path_obj.parent / f"{path_obj.stem}_cropped{path_obj.suffix}"
+            cropped_img.save(cropped_path)
+            
+            log_pdf_step("CROP", f"Cropped image: {crop_top}pt top, {crop_bottom}pt bottom -> {cropped_path}", job_id=job_id)
+            return str(cropped_path)
+            
+    except Exception as e:
+        log_pdf_step("CROP", f"Error cropping image {image_path}: {e}", error=True, job_id=job_id)
+        return image_path  # Return original on error
+
+def get_image_style_from_orientation(orientation: str, image_type: str) -> str:
+    """
+    Get CSS class name based on image orientation and type.
+    image_type: 'thumbnail' or 'step'
+    orientation: 'portrait', 'landscape', or 'square'
+    """
+    if image_type == "thumbnail":
+        return f"thumbnail-{orientation}" if orientation in ['portrait', 'landscape'] else "thumbnail-landscape"
+    elif image_type == "step":
+        return f"step-image-{orientation}" if orientation in ['portrait', 'landscape'] else "step-image-landscape"
+    else:
+        return "step-image-landscape"  # Default fallback
+
 def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", language: str = "en", video_url: Optional[str] = None, video_title: Optional[str] = None) -> str:
     """Generate PDF from recipe content using a CSS template."""
     output_dir = Path("output")
@@ -215,31 +270,54 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
             
             # Define column layout
             usable_width = pdf.w - pdf.l_margin - pdf.r_margin
+            # Default dimensions (will be overridden by CSS if available)
             image_width = usable_width * 0.48
             image_height = image_width * 0.75
-            desc_x = pdf.l_margin + image_width + (usable_width * 0.04)
-            desc_width = usable_width * 0.48
             
             # Left column - Image or Placeholder with text
             if recipe.thumbnail_path and os.path.exists(recipe.thumbnail_path):
-                # Check image orientation and adjust dimensions
+                # Check image orientation and get appropriate CSS style
                 orientation = get_image_orientation(recipe.thumbnail_path)
                 log_pdf_step("HEADER", f"Thumbnail orientation: {orientation}", job_id=job_id)
                 
-                if orientation == 'portrait':
-                    # For portrait images, make them taller and narrower
-                    image_width = usable_width * 0.35
-                    image_height = image_width * 1.4  # Portrait ratio
-                    desc_x = pdf.l_margin + image_width + (usable_width * 0.04)
-                    desc_width = usable_width * 0.57
+                # Get orientation-specific CSS style
+                thumbnail_style_class = get_image_style_from_orientation(orientation, "thumbnail")
+                thumbnail_style = style_manager.get_style(thumbnail_style_class)
+                log_pdf_step("HEADER", f"Using thumbnail style: {thumbnail_style_class} -> {thumbnail_style}", job_id=job_id)
                 
-                # Calculate optimal dimensions maintaining aspect ratio
-                img_width, img_height = calculate_image_dimensions(
-                    recipe.thumbnail_path, image_width, image_height
-                )
+                # Get dimensions from CSS or use defaults
+                if thumbnail_style.get("width"):
+                    image_width = thumbnail_style["width"]
+                elif thumbnail_style.get("width_percent"):
+                    image_width = usable_width * (thumbnail_style["width_percent"] / 100)
+                else:
+                    image_width = usable_width * (0.35 if orientation == 'portrait' else 0.48)
+                
+                if thumbnail_style.get("height"):
+                    image_height = thumbnail_style["height"]
+                elif thumbnail_style.get("height_percent"):
+                    image_height = image_width * (thumbnail_style["height_percent"] / 100)
+                else:
+                    image_height = image_width * (1.4 if orientation == 'portrait' else 0.75)
+                
+                # Apply max dimensions from CSS
+                if thumbnail_style.get("max_width"):
+                    image_width = min(image_width, thumbnail_style["max_width"])
+                if thumbnail_style.get("max_height"):
+                    image_height = min(image_height, thumbnail_style["max_height"])
+                
+                # Apply cropping if specified for portrait images
+                thumbnail_path = recipe.thumbnail_path
+                if orientation == 'portrait':
+                    crop_top = thumbnail_style.get("crop_top", 0)
+                    crop_bottom = thumbnail_style.get("crop_bottom", 0)
+                    thumbnail_path = crop_image_if_needed(thumbnail_path, crop_top, crop_bottom, job_id)
+                
+                # Use CSS dimensions directly for consistent sizing
+                img_width, img_height = image_width, image_height
                 
                 # Always align thumbnail top with the start position
-                pdf.image(recipe.thumbnail_path, x=pdf.l_margin, y=start_y, w=img_width, h=img_height)
+                pdf.image(thumbnail_path, x=pdf.l_margin, y=start_y, w=img_width, h=img_height)
                 image_height = img_height  # Update for layout calculation
             else:
                 pdf.set_fill_color(230, 230, 230) # Light gray
@@ -248,8 +326,23 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                 pdf.set_font("DejaVu", style="I", size=12)
                 pdf.multi_cell(image_width, 10, "Image not available", align="C")
 
+            # Calculate description column layout based on actual image width
+            gap = 10  # Gap between image and text
+            desc_x = pdf.l_margin + image_width + gap
+            desc_width = usable_width - image_width - gap
+            
+            # Ensure minimum width for description text
+            min_desc_width = 80  # Minimum 80pt for text
+            if desc_width < min_desc_width:
+                # If calculated width is too small, use full width layout instead
+                log_pdf_step("HEADER", f"Description width too small ({desc_width}pt), using full-width layout", job_id=job_id)
+                desc_x = pdf.l_margin
+                desc_width = usable_width
+                desc_y = start_y + image_height + 10  # Place text below image
+            else:
+                desc_y = start_y  # Place text beside image
+
             # Right column - Description and metadata
-            desc_y = start_y
             if recipe.description:
                 desc_style = style_manager.get_style("description")
                 pdf.set_xy(desc_x, desc_y)
@@ -329,39 +422,20 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                         size=header_style.get("font_size", 24))
             pdf.cell(0, 12, "Instructions:", align=header_style.get("align", "L"), ln=True)
             
-            step_style = style_manager.get_style("step-item")
+            step_style = style_manager.get_style("step")
+            step_content_style = style_manager.get_style("step-content")
             log_pdf_step("DEBUG", f"Step style: {step_style}", job_id=job_id)
+            log_pdf_step("DEBUG", f"Step content style: {step_content_style}", job_id=job_id)
+            
+            # DEBUG: Let's see what margin-bottom value we're actually getting
+            step_margin_bottom = step_style.get("margin_bottom", 80)
+            log_pdf_step("DEBUG", f"Step margin-bottom from CSS: {step_margin_bottom}pt", job_id=job_id)
             
             for idx, step in enumerate(recipe.steps, 1):
                 usable_width = pdf.w - pdf.l_margin - pdf.r_margin
                 
                 # Check if step has an image to determine layout
                 has_image = step.image_path and os.path.exists(step.image_path)
-                
-                if has_image and step.image_path:
-                    # Detect image orientation
-                    orientation = get_image_orientation(step.image_path)
-                    log_pdf_step("STEP", f"Step {idx} image orientation: {orientation}", job_id=job_id)
-                    
-                    if orientation == 'portrait':
-                        # Portrait layout: image takes more vertical space, less horizontal
-                        text_col_width = usable_width * 0.65
-                        image_col_width = usable_width * 0.30
-                        max_image_height = 80  # Taller for portrait images
-                    else:
-                        # Landscape layout: traditional side-by-side
-                        text_col_width = usable_width * 0.50
-                        image_col_width = usable_width * 0.40
-                        max_image_height = 50  # Standard height for landscape
-                    
-                    # Calculate actual image dimensions
-                    img_width, img_height = calculate_image_dimensions(
-                        step.image_path, image_col_width, max_image_height
-                    )
-                else:
-                    # No image: use full width for text
-                    text_col_width = usable_width
-                    img_width = img_height = 0
                 
                 # Parse step description
                 if ':' in step.description:
@@ -372,42 +446,77 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                     title = step.description.strip()
                     desc = ""
 
-                # Calculate text height
-                numbered_title = f"{idx}. {title}"
-                pdf.set_font("DejaVu", style="", size=14)
-                title_lines = pdf.multi_cell(text_col_width, 8, numbered_title, align="L", split_only=True)
-                pdf.set_font("DejaVu", style="", size=12)
-                desc_lines = pdf.multi_cell(text_col_width, 8, desc, align="L", split_only=True) if desc else []
-                text_height = (len(title_lines) * 8) + (len(desc_lines) * 8)
-
-                # Calculate needed height
-                needed_height = max(text_height, img_height) + 15
-                
                 # Check if we need a new page
-                if pdf.get_y() + needed_height > pdf.h - pdf.b_margin:
+                if pdf.get_y() + 60 > pdf.h - pdf.b_margin:
                     pdf.add_page()
-                    start_y = pdf.get_y()
-                else:
-                    start_y = pdf.get_y()
-
-                # Add text content
-                pdf.set_xy(pdf.l_margin, start_y)
-                pdf.set_font("DejaVu", style="", size=14)
-                pdf.multi_cell(text_col_width, 8, numbered_title, align="L")
-                if desc:
-                    pdf.set_font("DejaVu", style="", size=12)
-                    pdf.multi_cell(text_col_width, 8, desc, align="L")
-
-                # Add image if available
-                if has_image:
-                    img_x = pdf.l_margin + text_col_width + 10
-                    img_y = start_y  # Always align image top with text top
+                
+                start_y = pdf.get_y()
+                
+                # Layout configuration using CSS styles
+                if has_image and step.image_path:
+                    # Get image orientation and appropriate CSS style
+                    step_orientation = get_image_orientation(step.image_path)
+                    step_image_style_class = get_image_style_from_orientation(step_orientation, "step")
+                    step_image_style = style_manager.get_style(step_image_style_class)
+                    log_pdf_step("STEP", f"Step {idx} image orientation: {step_orientation}, using style: {step_image_style_class}", job_id=job_id)
                     
-                    pdf.image(step.image_path, x=img_x, y=img_y, w=img_width, h=img_height)
-                    log_pdf_step("STEP", f"Added {orientation} image for step {idx}: {img_width}x{img_height} at position ({img_x}, {img_y})", job_id=job_id)
-
-                # Move to next step
-                pdf.set_y(start_y + max(text_height, img_height) + 15)
+                    # Get dimensions from CSS or use defaults
+                    if step_image_style.get("width"):
+                        image_width = step_image_style["width"]
+                    else:
+                        image_width = usable_width * (0.30 if step_orientation == 'portrait' else 0.40)
+                    
+                    if step_image_style.get("height"):
+                        image_height = step_image_style["height"]
+                    else:
+                        image_height = 120 if step_orientation == 'portrait' else 67
+                    
+                    # Calculate text width based on image width
+                    gap = 24  # 24pt gap from CSS
+                    text_width = usable_width - image_width - gap
+                    
+                    # Apply cropping if specified for portrait images
+                    step_image_path = step.image_path
+                    if step_orientation == 'portrait':
+                        crop_top = step_image_style.get("crop_top", 0)
+                        crop_bottom = step_image_style.get("crop_bottom", 0)
+                        step_image_path = crop_image_if_needed(step_image_path, crop_top, crop_bottom, job_id)
+                    
+                    # Use CSS dimensions directly for consistent sizing
+                    img_width, img_height = image_width, image_height
+                    
+                    # Position image on the right with gap from CSS
+                    img_x = pdf.l_margin + text_width + gap
+                    img_y = start_y + 5
+                    
+                    pdf.image(step_image_path, x=img_x, y=img_y, w=img_width, h=img_height)
+                    log_pdf_step("STEP", f"Added {step_orientation} image for step {idx}: {img_width}x{img_height} at ({img_x}, {img_y})", job_id=job_id)
+                else:
+                    # No image: use full width for text
+                    text_width = usable_width
+                
+                # Add text content using CSS styles
+                pdf.set_xy(pdf.l_margin, start_y + 5)
+                
+                # Title and description using CSS step-content styles
+                numbered_title = f"{idx}. {title}"
+                pdf.set_font("DejaVu", 
+                           style=step_content_style.get("font_style", ""), 
+                           size=step_content_style.get("font_size", 12))
+                pdf.multi_cell(text_width, step_content_style.get("line_height", 6), numbered_title, align=step_content_style.get("align", "L"))
+                
+                # Description
+                if desc:
+                    pdf.set_font("DejaVu", 
+                               style=step_content_style.get("font_style", ""), 
+                               size=step_content_style.get("font_size", 12))
+                    pdf.multi_cell(text_width, step_content_style.get("line_height", 6), desc, align=step_content_style.get("align", "L"))
+                
+                # Move to next step using CSS margin-bottom from .step class
+                current_y = pdf.get_y()
+                step_margin_bottom = step_style.get("margin_bottom", 80)  # Default 80pt from CSS
+                pdf.set_y(current_y + step_margin_bottom)
+                log_pdf_step("STEP", f"Step {idx} completed, moved {step_margin_bottom}pt down", job_id=job_id)
                 
         except Exception as e:
             log_pdf_step("ERROR", f"Failed to add instructions section: {str(e)}", error=True, job_id=job_id)

@@ -47,22 +47,42 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         headers={"WWW-Authenticate": "Bearer"},
     )
     
-    token_data = verify_token(credentials.credentials)
-    if token_data is None or token_data.email is None:
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        is_admin: bool = payload.get("is_admin", False)
+        
+        if email is None:
+            raise credentials_exception
+        
+        # Handle admin user
+        if is_admin and email == "admin@admin.com":
+            return User(
+                id=0,
+                email="admin@admin.com",
+                full_name="System Administrator",
+                is_admin=True,
+                usage_count=0,
+                usage_limit=999999,
+                created_at=datetime.now(),
+                is_active=True
+            )
+        
+        # Handle regular user
+        user = db.get_user_by_email(email)
+        if user is None:
+            raise credentials_exception
+        
+        # Convert UserInDB to User
+        return User(
+            id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            is_active=user.is_active,
+            created_at=user.created_at
+        )
+    except jwt.PyJWTError:
         raise credentials_exception
-    
-    user = db.get_user_by_email(token_data.email)
-    if user is None:
-        raise credentials_exception
-    
-    # Convert UserInDB to User
-    return User(
-        id=user.id,
-        email=user.email,
-        full_name=user.full_name,
-        is_active=user.is_active,
-        created_at=user.created_at
-    )
 
 def get_current_active_user(current_user: User = Depends(get_current_user)) -> User:
     """Get the current active user"""

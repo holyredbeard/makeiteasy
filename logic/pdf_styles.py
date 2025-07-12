@@ -71,70 +71,118 @@ class PDFStyleManager:
             # Find the class definition in CSS
             start = self.css.find(f".{element_class}")
             if start == -1:
+                self.logger.info(f"CSS class '.{element_class}' not found in template")
                 return {}
 
             # Find the opening brace
             brace_start = self.css.find("{", start)
             if brace_start == -1:
+                self.logger.error(f"No opening brace found for '.{element_class}'")
                 return {}
 
             # Find the closing brace
             brace_end = self.css.find("}", brace_start)
             if brace_end == -1:
+                self.logger.error(f"No closing brace found for '.{element_class}'")
                 return {}
 
-            # Extract and parse the style rules
-            style_block = self.css[brace_start + 1:brace_end].strip()
+            # Extract the CSS rules
+            css_rules = self.css[brace_start + 1:brace_end].strip()
+            self.logger.info(f"CSS rules for '.{element_class}': {css_rules}")
+
+            # Parse the CSS rules
             style_dict = {}
-            
-            # FPDF alignment map
-            align_map = {
-                'left': 'L',
-                'right': 'R',
-                'center': 'C',
-                'justify': 'J'
-            }
-            
-            for rule in style_block.split(";"):
+            for rule in css_rules.split(";"):
                 rule = rule.strip()
-                if not rule or ":" not in rule:
+                if not rule:
                     continue
-                    
-                prop, value = [x.strip() for x in rule.split(":", 1)]
+                
+                if ":" not in rule:
+                    self.logger.warning(f"Invalid CSS rule: {rule}")
+                    continue
+                
+                prop, value = rule.split(":", 1)
+                prop = prop.strip()
+                value = value.strip()
+                
+                self.logger.info(f"Parsing CSS property: {prop} = {value}")
+                
                 # Convert CSS properties to FPDF parameters
                 if prop == "font-family":
-                    # Always use DejaVu Sans as the font family for Unicode support
-                    style_dict["font_family"] = "DejaVu"
+                    style_dict["font_family"] = value.replace('"', '')
                 elif prop == "font-size":
-                    style_dict["font_size"] = int(value.replace("pt", ""))
+                    if value.endswith("pt"):
+                        style_dict["font_size"] = int(float(value.replace("pt", "")))
+                    else:
+                        style_dict["font_size"] = 12  # Default
                 elif prop == "font-weight":
-                    style_dict["font_style"] = "B" if value == "bold" else ""
+                    if value == "bold":
+                        style_dict["font_style"] = "B"
                 elif prop == "font-style":
                     if value == "italic":
-                        if style_dict.get("font_style") == "B":
-                            style_dict["font_style"] = "BI"
-                        else:
-                            style_dict["font_style"] = "I"
+                        style_dict["font_style"] = "I"
                 elif prop == "text-align":
-                    style_dict["align"] = align_map.get(value.lower(), 'L')
+                    if value == "center":
+                        style_dict["align"] = "C"
+                    elif value == "right":
+                        style_dict["align"] = "R"
+                    else:
+                        style_dict["align"] = "L"
                 elif prop == "color":
-                    # Handle hex colors
+                    # Convert hex color to RGB
                     if value.startswith("#"):
-                        value = value[1:]
-                        style_dict["text_color"] = tuple(int(value[i:i+2], 16) for i in (0, 2, 4))
-                    # Handle rgb colors
-                    elif value.startswith("rgb"):
-                        colors = value.strip("rgb()").split(",")
-                        style_dict["text_color"] = tuple(int(c.strip()) for c in colors)
+                        hex_color = value[1:]
+                        if len(hex_color) == 6:
+                            r = int(hex_color[0:2], 16)
+                            g = int(hex_color[2:4], 16)
+                            b = int(hex_color[4:6], 16)
+                            style_dict["text_color"] = (r, g, b)
                 elif prop == "margin-bottom":
                     style_dict["margin_bottom"] = float(value.replace("pt", ""))
+                    self.logger.info(f"SET margin_bottom to: {style_dict['margin_bottom']}")
                 elif prop == "margin-top":
                     style_dict["margin_top"] = float(value.replace("pt", ""))
-
+                elif prop == "line-height":
+                    # Convert line-height to FPDF line height
+                    if value.endswith("pt"):
+                        style_dict["line_height"] = float(value.replace("pt", ""))
+                    elif value.replace(".", "").isdigit():
+                        # Numeric multiplier (e.g., 1.5)
+                        style_dict["line_height"] = float(value) * 6  # Assume 6pt base
+                    else:
+                        style_dict["line_height"] = 6  # Default
+                elif prop == "width":
+                    if value.endswith("pt"):
+                        style_dict["width"] = float(value.replace("pt", ""))
+                    elif value.endswith("%"):
+                        style_dict["width_percent"] = float(value.replace("%", ""))
+                elif prop == "height":
+                    if value.endswith("pt"):
+                        style_dict["height"] = float(value.replace("pt", ""))
+                    elif value.endswith("%"):
+                        style_dict["height_percent"] = float(value.replace("%", ""))
+                elif prop == "max-width":
+                    if value.endswith("pt"):
+                        style_dict["max_width"] = float(value.replace("pt", ""))
+                elif prop == "max-height":
+                    if value.endswith("pt"):
+                        style_dict["max_height"] = float(value.replace("pt", ""))
+                elif prop == "crop-top":
+                    if value.endswith("pt"):
+                        style_dict["crop_top"] = float(value.replace("pt", ""))
+                    else:
+                        style_dict["crop_top"] = 0.0
+                elif prop == "crop-bottom":
+                    if value.endswith("pt"):
+                        style_dict["crop_bottom"] = float(value.replace("pt", ""))
+                    else:
+                        style_dict["crop_bottom"] = 0.0
+            
+            self.logger.info(f"Final style dict for '.{element_class}': {style_dict}")
             return style_dict
             
         except Exception as e:
-            self.logger.error(f"Error parsing style for {element_class}: {e}")
+            self.logger.error(f"Error parsing CSS for '.{element_class}': {str(e)}")
             return {}
 
     def get_page_settings(self):

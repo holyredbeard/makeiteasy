@@ -28,6 +28,18 @@
     margin-bottom: 40pt;
 }
 
+/* Thumbnail images - landscape (YouTube) */
+.thumbnail-landscape {
+    width: 180pt;
+    height: 101pt; /* 16:9 aspect ratio: 180 / 16 * 9 = 101.25 */
+}
+
+/* Thumbnail images - portrait (TikTok, YouTube Shorts) */
+.thumbnail-portrait {
+    width: 120pt;
+    height: 213pt; /* 9:16 aspect ratio: 120 / 9 * 16 = 213.33 */
+}
+
 .recipe-image {
     width: 45%;
     margin-bottom: 15pt;
@@ -105,9 +117,21 @@
     flex: 1 1 55%;
 }
 
-.step-image {
+/* Step images - landscape (YouTube) */
+.step-image-landscape {
     flex: 0 0 40%;
     max-width: 40%;
+    width: 100pt;
+    height: 56pt; /* 16:9 aspect ratio: 100 / 16 * 9 = 56.25 */
+    margin-bottom: 0;
+}
+
+/* Step images - portrait (TikTok, YouTube Shorts) */
+.step-image-portrait {
+    flex: 0 0 25%;
+    max-width: 25%;
+    width: 67pt;
+    height: 119pt; /* 9:16 aspect ratio: 67 / 9 * 16 = 119.11 */
     margin-bottom: 0;
 }
 

