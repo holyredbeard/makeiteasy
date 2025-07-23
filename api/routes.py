@@ -320,29 +320,43 @@ async def get_result(job_id: str, request: Request):
     
     return FileResponse(str(pdf_path), media_type="application/pdf", filename=download_filename)
 
-@router.post("/search", summary="Search for videos on YouTube or TikTok")
+@router.post("/search", summary="Search for videos on YouTube")
 async def search_videos(request: YouTubeSearchRequest):
     """Search for videos and return a list of results."""
     query = request.query
-    source = request.source or 'youtube'
+    # TikTok search is currently not supported by yt-dlp's search functionality
+    # source = request.source or 'youtube' 
+    source = 'youtube'
 
     if "recipe" not in query.lower():
         query = f"{query} recipe"
 
     try:
-        search_prefix = "ytsearch10:" if source == 'youtube' else "tiktoksearch10:"
+        # TikTok search prefix is invalid, so we hardcode to YouTube for now.
+        search_prefix = "ytsearch10:"
         search_query = f"{search_prefix}{query}"
 
         ydl_opts = {
             'quiet': True,
             'extract_flat': True,  # Speeds up search
+            'force_generic_extractor': False, # Ensure we use the right extractor
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            search_results = ydl.extract_info(search_query, download=False)
-            
+            try:
+                search_results = ydl.extract_info(search_query, download=False)
+            except yt_dlp.utils.DownloadError as e:
+                logger.error(f"yt-dlp download error for query '{query}': {e}")
+                # Check if it's a search-specific error
+                if "no videos found" in str(e).lower():
+                    return JSONResponse(content={"results": []})
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to execute search with yt-dlp: {e}"
+                )
+
             videos = []
-            if 'entries' in search_results:
+            if 'entries' in search_results and search_results.get('entries'):
                 for entry in search_results.get('entries', []):
                     if not entry:
                         continue
@@ -371,10 +385,10 @@ async def search_videos(request: YouTubeSearchRequest):
             return JSONResponse(content={"results": [v.dict() for v in list(unique_videos)[:10]]})
 
     except Exception as e:
-        logger.error(f"Search failed for query '{query}' on source '{source}': {str(e)}")
+        logger.error(f"General search failed for query '{query}' on source '{source}': {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
-            detail=f"An error occurred during the search: {str(e)}"
+            detail=f"An unexpected error occurred during the search."
         )
 
 # Legacy endpoint for compatibility

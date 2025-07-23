@@ -17,6 +17,19 @@ import cv2
 import pytesseract
 import re
 
+# --- Tesseract Configuration ---
+# Set the path to the Tesseract executable, especially for macOS/Homebrew
+try:
+    if os.path.exists('/opt/homebrew/bin/tesseract'):
+        pytesseract.pytesseract.tesseract_cmd = '/opt/homebrew/bin/tesseract'
+    # Add other common paths if needed, e.g., for Windows or other Linux distros
+    # elif os.path.exists('C:/Program Files/Tesseract-OCR/tesseract.exe'):
+    #     pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files/Tesseract-OCR/tesseract.exe'
+except Exception as e:
+    # Log an error if the path configuration fails, but don't crash
+    logging.warning(f"Could not set Tesseract path: {e}")
+
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -240,205 +253,53 @@ def is_youtube_url(url: str) -> bool:
             return True
     return False
 
-def download_video(video_url: str, job_id: str) -> Tuple[str, str, dict]:
-    """Download video from YouTube or TikTok with enhanced error handling and validation."""
-    log_video_step("DOWNLOAD", f"Starting download for job {job_id}")
-    log_video_step("DOWNLOAD", f"URL: {video_url}")
+def download_video(video_url: str, job_id: str) -> Optional[Tuple[str, str, dict]]:
+    """Download video from YouTube or TikTok with optimized format selection."""
+    log_video_step("DOWNLOAD", f"Starting optimized download for job {job_id}...")
     output_path = DOWNLOADS_DIR / f"{job_id}.mp4"
-    
-    # Detect platform
-    is_tiktok = is_tiktok_url(video_url)
-    is_youtube = is_youtube_url(video_url)
-    
-    if is_tiktok:
-        log_video_step("DOWNLOAD", "Detected TikTok URL")
-        platform = "TikTok"
-    elif is_youtube:
-        log_video_step("DOWNLOAD", "Detected YouTube URL") 
-        platform = "YouTube"
-    else:
-        log_video_step("DOWNLOAD", "Unknown platform, attempting download anyway")
-        platform = "Unknown"
-    
-    try:
-        # Configure format options based on platform - ALWAYS start with lowest quality
-        # This saves bandwidth and storage space by prioritizing smaller files
-        if is_tiktok:
-            # TikTok-specific format options - lowest quality first
-            format_options = [
-                'worst[ext=mp4]',               # Smallest available MP4 (LOWEST QUALITY FIRST)
-                'worst[height>=240][ext=mp4]',  # At least 240p MP4
-                'worst[height>=360][ext=mp4]',  # At least 360p MP4
-                'best[ext=mp4]',                # Best available MP4
-                'best[height<=480][ext=mp4]',   # Best quality up to 480p MP4
-                'best[height<=720][ext=mp4]',   # Best quality up to 720p MP4
-                'best[height<=1080][ext=mp4]',  # Best quality up to 1080p MP4
-                'best',                         # Absolute best available (fallback)
-            ]
-        else:
-            # YouTube and other platforms format options - lowest quality first
-            format_options = [
-                '17',                           # 144p MP4 (YouTube format) - LOWEST QUALITY FIRST
-                'worst[height<=144][ext=mp4]',  # 144p or lower MP4
-                'worst[height<=240][ext=mp4]',  # 240p or lower MP4
-                'worst[height<=360][ext=mp4]',  # 360p or lower MP4
-                'worst[ext=mp4]',               # Smallest available MP4
-                'worst',                        # Absolute smallest available
-                '18',                           # 360p MP4 (YouTube format)
-                'best[height<=480][ext=mp4]',   # Best quality up to 480p MP4
-                '22',                           # 720p MP4 (YouTube format)
-                'best[height<=720][ext=mp4]',   # Best quality up to 720p MP4
-                'best[ext=mp4]',                # Best available MP4
-                'best',                         # Absolute best available (fallback)
-            ]
-        
-        min_file_size = 50000  # Minimum 50KB for valid video
-        
-        # Log the quality testing strategy
-        log_video_step("DOWNLOAD", f"🎯 Quality testing strategy for {platform}:")
-        for i, fmt in enumerate(format_options, 1):
-            log_video_step("DOWNLOAD", f"  {i}. {fmt}")
-        log_video_step("DOWNLOAD", f"Starting with 144p or LOWER first to save bandwidth...")
-        
-        for format_option in format_options:
-            try:
-                # Clean up any existing file
-                if output_path.exists():
-                    output_path.unlink()
+
+    # Clean up any existing file
+    if output_path.exists():
+        output_path.unlink()
+
+    # Optimized format selection: prioritize smaller, faster downloads
+    # 480p is a good balance of quality for OCR and speed.
+    format_options = [
+        'best[height<=480][ext=mp4]',  # Best quality up to 480p (ideal)
+        'worst[ext=mp4]',              # Smallest MP4 as a fallback
+        'best[ext=mp4]',               # Best MP4 if others fail
+    ]
+
+    for format_option in format_options:
+        try:
+            ydl_opts = {
+                'format': format_option,
+                'outtmpl': str(output_path),
+                'noplaylist': True,
+                'quiet': True,
+            }
+
+            log_video_step("DOWNLOAD", f"Attempting download with format: {format_option}...")
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([video_url])
+
+            if output_path.exists() and output_path.stat().st_size > 50000:
+                log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded with format '{format_option}'")
                 
-                ydl_opts = {
-                    'format': format_option,
-                    'outtmpl': str(output_path),
-                    'noplaylist': True,
-                    'extract_flat': False,
-                    'writesubtitles': False,
-                    'writeautomaticsub': False,
-                    'ignoreerrors': False,
-                    'no_warnings': False,
-                }
+                # Extract metadata after successful download
+                metadata = extract_video_metadata(video_url)
+                video_title = sanitize_filename(metadata.get('title', 'recipe'))
                 
-                # Add platform-specific options
-                if is_tiktok:
-                    ydl_opts.update({
-                        'http_headers': {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                        }
-                    })
-                elif is_youtube:
-                    # Enhanced YouTube-specific options for better compatibility
-                    ydl_opts.update({
-                        'extractor_args': {
-                            'youtube': {
-                                'skip': ['hls'],  # Skip HLS streams that might cause issues
-                                'player_client': ['android', 'web', 'ios'],  # Try multiple clients
-                                'innertube_host': 'www.youtube.com',
-                                'innertube_key': None,
-                            }
-                        },
-                        'http_headers': {
-                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                        }
-                    })
-                
-                log_video_step("DOWNLOAD", f"Attempting download with format: {format_option}")
-                
-                # Get video info first to show quality details
-                try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        # Extract info to get quality details
-                        info = ydl.extract_info(video_url, download=False)
-                        formats = info.get('formats', [])
-                        
-                        # Find the format that matches our option
-                        selected_format = None
-                        for fmt in formats:
-                            if fmt.get('format_id') == format_option or format_option in str(fmt):
-                                selected_format = fmt
-                                break
-                        
-                        if selected_format:
-                            resolution = selected_format.get('resolution', 'unknown')
-                            filesize = selected_format.get('filesize', 'unknown')
-                            vcodec = selected_format.get('vcodec', 'unknown')
-                            acodec = selected_format.get('acodec', 'unknown')
-                            
-                            log_video_step("DOWNLOAD", f"Selected format details:")
-                            log_video_step("DOWNLOAD", f"  - Resolution: {resolution}")
-                            log_video_step("DOWNLOAD", f"  - File size: {filesize} bytes" if filesize != 'unknown' else "  - File size: unknown")
-                            log_video_step("DOWNLOAD", f"  - Video codec: {vcodec}")
-                            log_video_step("DOWNLOAD", f"  - Audio codec: {acodec}")
-                        else:
-                            log_video_step("DOWNLOAD", f"Could not find detailed format info for: {format_option}")
-                        
-                        # Now download the video
-                        ydl.download([video_url])
-                except Exception as info_error:
-                    log_video_step("DOWNLOAD", f"Could not get format info: {info_error}")
-                    # Fallback to simple download
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([video_url])
-                
-                # Validate downloaded file
-                if output_path.exists():
-                    file_size = output_path.stat().st_size
-                    log_video_step("DOWNLOAD", f"Downloaded file size: {file_size} bytes")
-                    
-                    if file_size >= min_file_size:
-                        # Additional validation: check if it's actually a video file
-                        try:
-                            duration = get_video_duration(str(output_path))
-                            if duration and duration > 1.0:  # At least 1 second
-                                # Get video properties for detailed logging
-                                try:
-                                    cap = cv2.VideoCapture(str(output_path))
-                                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                                    fps = cap.get(cv2.CAP_PROP_FPS)
-                                    cap.release()
-                                    
-                                    log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded {platform} video")
-                                    log_video_step("DOWNLOAD", f"  📁 File: {output_path}")
-                                    log_video_step("DOWNLOAD", f"  📊 Size: {file_size:,} bytes ({file_size/1024/1024:.1f} MB)")
-                                    log_video_step("DOWNLOAD", f"  ⏱️ Duration: {duration:.2f} seconds")
-                                    log_video_step("DOWNLOAD", f"  📐 Resolution: {width}x{height}")
-                                    log_video_step("DOWNLOAD", f"  🎬 FPS: {fps:.1f}")
-                                    log_video_step("DOWNLOAD", f"  🎯 Format used: {format_option}")
-                                except Exception as prop_error:
-                                    log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded {platform} video with format '{format_option}': {output_path} ({file_size:,} bytes, {duration:.2f}s)")
-                                    log_video_step("DOWNLOAD", f"Could not get video properties: {prop_error}")
-                                # Extract video title for filename
-                                try:
-                                    metadata = extract_video_metadata(video_url)
-                                    video_title = sanitize_filename(metadata['title'])
-                                except Exception as e:
-                                    log_video_step("DOWNLOAD", f"Failed to extract title: {e}")
-                                    video_title = "recipe"
-                                    metadata = {'title': 'Unknown Title', 'description': '', 'is_recipe_description': False}
-                                return str(output_path), video_title, metadata
-                            else:
-                                log_video_step("DOWNLOAD", f"Downloaded file has no valid duration ({duration}s), trying next format")
-                        except Exception as duration_error:
-                            log_video_step("DOWNLOAD", f"Cannot validate video duration: {duration_error}, trying next format")
-                    else:
-                        log_video_step("DOWNLOAD", f"Downloaded file is too small ({file_size} bytes), trying next format")
-                    
-                    # Clean up small/invalid file
-                    output_path.unlink()
-                else:
-                    log_video_step("DOWNLOAD", f"No file was downloaded with format '{format_option}'")
-                    
-            except Exception as format_error:
-                log_video_step("DOWNLOAD", f"❌ FAILED: Format '{format_option}' - {format_error}")
-                if output_path.exists():
-                    output_path.unlink()  # Clean up failed download
-                continue
-        
-        # If we get here, all formats failed
-        raise Exception(f"All download format options failed for {platform} video. The video may be unavailable, region-blocked, or in an unsupported format.")
-            
-    except Exception as e:
-        log_video_step("DOWNLOAD", f"Error downloading {platform} video: {e}", error=True)
-        raise
+                return str(output_path), video_title, metadata
+            else:
+                log_video_step("DOWNLOAD", f"Download with format '{format_option}' resulted in an empty file.")
+
+        except Exception as e:
+            log_video_step("DOWNLOAD", f"❌ FAILED format '{format_option}': {e}")
+            continue
+
+    log_video_step("DOWNLOAD", "All download attempts failed.", error=True)
+    return None
 
 def transcribe_audio(video_path: str, job_id: Optional[str] = None) -> str:
     """Transcribe video audio with comprehensive error handling and fallback content."""
