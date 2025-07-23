@@ -37,16 +37,22 @@ DAILY_LIMIT_NO_AUTH = 2  # 2 PDFs per day without account
 TEMP_PDF_LIFETIME = 24 * 3600  # 24 hours in seconds
 
 # --- Helper Functions ---
-def update_job_status(job_id: str, status: str, details: str, pdf_url: Optional[str] = None):
+def update_job_status(job_id: str, status: str, details: str, pdf_url: Optional[str] = None, pdf_path: Optional[str] = None):
     """Update the status of a job."""
-    jobs[job_id] = {"status": status, "details": details}
+    if job_id not in jobs:
+        jobs[job_id] = {}
+        
+    jobs[job_id]["status"] = status
+    jobs[job_id]["details"] = details
     if pdf_url:
         jobs[job_id]["pdf_url"] = pdf_url
+    if pdf_path:
+        jobs[job_id]["pdf_path"] = pdf_path
     logger.info(f"Job {job_id} status updated: {status} - {details}")
 
-def update_status(job_id: str, status: str, details: str, pdf_url: Optional[str] = None):
+def update_status(job_id: str, status: str, details: str, pdf_url: Optional[str] = None, pdf_path: Optional[str] = None):
     """Update the status of a job (alias for compatibility)."""
-    update_job_status(job_id, status, details, pdf_url)
+    update_job_status(job_id, status, details, pdf_url, pdf_path)
 
 def check_rate_limit(client_ip: str) -> bool:
     """Check if IP has exceeded daily limit for non-authenticated users"""
@@ -213,8 +219,14 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
             if user_id:
                 db.link_pdf_to_user(user_id, job_id, pdf_path)
 
-            # 8. Complete Job
-            update_status(job_id, "completed", "Job finished successfully!", pdf_url=f"/api/v1/result/{job_id}")
+            # 8. Complete Job - Save both URL and the exact file path
+            update_status(
+                job_id, 
+                "completed", 
+                "Job finished successfully!", 
+                pdf_url=f"/api/v1/result/{job_id}",
+                pdf_path=pdf_path  # Save the exact path
+            )
 
         except Exception as e:
             logger.error(f"Job {job_id} failed: {e}")
@@ -292,24 +304,32 @@ async def get_status(job_id: str):
 
 @router.get("/result/{job_id}", summary="Download the generated PDF")
 async def get_result(job_id: str, request: Request):
-    # Search for the PDF file on disk first to make downloads robust against server restarts.
-    output_dir = Path("output")
-    # Search for any PDF file that contains the job_id in its name.
-    pdf_files = list(output_dir.glob(f"*{job_id}*.pdf"))
+    job = jobs.get(job_id)
     
+    # First, check the in-memory job data for the exact path.
+    if job and job.get("status") == "completed" and job.get("pdf_path"):
+        pdf_path_str = job.get("pdf_path")
+        if pdf_path_str and os.path.exists(pdf_path_str):
+            pdf_path = Path(pdf_path_str)
+            return FileResponse(str(pdf_path), media_type="application/pdf", filename=pdf_path.name)
+
+    # Fallback for older jobs or if path isn't in memory: search disk.
+    # This makes it robust to restarts, assuming job ID is in the filename.
+    output_dir = Path("output")
+    pdf_files = list(output_dir.glob(f"*{job_id}*.pdf"))
+    if not pdf_files:
+        # If no job-id match, as a last resort, look for any recent recipe guide. This is a bit of a guess.
+        pdf_files = sorted(output_dir.glob("*-recipe-guide.pdf"), key=os.path.getmtime, reverse=True)
+
     if pdf_files:
-        # If a matching file is found on disk, serve it immediately.
         pdf_path = pdf_files[0]
-        download_filename = pdf_path.name
-        return FileResponse(str(pdf_path), media_type="application/pdf", filename=download_filename)
+        return FileResponse(str(pdf_path), media_type="application/pdf", filename=pdf_path.name)
+
+    # If we still can't find it, give a proper error.
+    if job:
+        raise HTTPException(status_code=404, detail=f"PDF not found. Job status is '{job.get('status')}'.")
     else:
-        # If no file is found, check the in-memory job status for running or failed jobs.
-        job = jobs.get(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail="Job not found. It may have failed, expired, or the ID is incorrect.")
-        else:
-            # The job is known, but the PDF is not ready or has been removed.
-            raise HTTPException(status_code=400, detail=f"Job not completed yet. Current status: {job.get('status')}")
+        raise HTTPException(status_code=404, detail="Job not found. It may have failed, expired, or the ID is incorrect.")
 
 @router.post("/search", summary="Search for videos on YouTube")
 async def search_videos(request: YouTubeSearchRequest):
