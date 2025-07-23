@@ -14,6 +14,7 @@ class PDFStyleManager:
         self.template_dir = Path("static/templates/pdf")
         self.logger = logging.getLogger(__name__)
         self.fonts_loaded = False
+        # Font configuration with all available styles
         self.font_paths: Dict[FontStyle, str] = {
             '': 'DejaVuSans.ttf',
             'B': 'DejaVuSans-Bold.ttf',
@@ -30,26 +31,38 @@ class PDFStyleManager:
             for style, filename in self.font_paths.items():
                 font_path = Path('static/fonts') / filename
                 if not font_path.exists():
-                    raise FileNotFoundError(f"Font file not found: {font_path}")
+                    self.logger.warning(f"Font file not found: {font_path}, using fallback")
+                    # Use fallback to basic fonts if DejaVu not available
+                    self.font_paths = {}
+                    return
                 
             self.fonts_loaded = True
-            self.logger.info("All font files verified successfully")
+            self.logger.info("Font files verified successfully")
             
         except Exception as e:
             self.logger.error(f"Failed to verify fonts: {e}")
             self.fonts_loaded = False
-            raise
+            # Don't raise exception, just use fallback fonts
 
     def add_fonts_to_pdf(self, pdf: FPDF):
-        """Add DejaVu fonts to a PDF instance"""
+        """Add fonts to a PDF instance with fallback to system fonts"""
         try:
+            if not self.fonts_loaded:
+                # Use system fonts as fallback
+                self.logger.info("Using system fonts as fallback")
+                return
+                
             for style, filename in self.font_paths.items():
                 font_path = Path('static/fonts') / filename
-                pdf.add_font("DejaVu", style=style, fname=str(font_path))
-                self.logger.info(f"Added font: DejaVu {style} from {filename}")
+                if font_path.exists():
+                    pdf.add_font("DejaVu", style=style, fname=str(font_path))
+                    self.logger.info(f"Added font: DejaVu {style} from {filename}")
+                else:
+                    self.logger.warning(f"Font file missing: {font_path}")
+                    
         except Exception as e:
             self.logger.error(f"Failed to add fonts to PDF: {e}")
-            raise
+            # Continue without custom fonts - FPDF will use defaults
 
     def _load_template(self):
         """Load CSS template from file"""

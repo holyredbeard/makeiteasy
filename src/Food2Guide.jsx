@@ -14,6 +14,13 @@ import {
 
 const API_BASE = 'http://localhost:8000';
 
+const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
+  <svg className={`animate-spin ${size} ${color}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+  </svg>
+);
+
 const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => (
   <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">
     <div className="max-w-7xl mx-auto px-6">
@@ -468,7 +475,7 @@ const JobStatus = ({ job, onReset }) => {
 export default function Food2Guide() {
   const [activeTab, setActiveTab] = useState('paste');
   const [videoUrl, setVideoUrl] = useState('');
-  const [searchQuery, setSearchQuery] = useState('recipe');
+  const [searchQuery, setSearchQuery] = useState("");
   const [language, setLanguage] = useState('en');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedVideoId, setSelectedVideoId] = useState(null);
@@ -482,6 +489,20 @@ export default function Food2Guide() {
   const [isTestPdfModalOpen, setIsTestPdfModalOpen] = useState(false);
   // 1. Add state for welcome snackbar
   const [showWelcome, setShowWelcome] = useState(false);
+  
+  // Advanced Settings state
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [showImages, setShowImages] = useState(true); // Yes (default)
+  const [dietPreference, setDietPreference] = useState('regular'); // regular, vegetarian, vegan
+  const [allergies, setAllergies] = useState({ gluten: false, nuts: false, eggs: false, dairy: false, shellfish: false });
+  const [instructionLevel, setInstructionLevel] = useState('intermediate'); // beginner, intermediate (default), expert
+  const [showCalories, setShowCalories] = useState(false); // No (default)
+  const [pdfStyle, setPdfStyle] = useState('modern');
+  const [includeNutrition, setIncludeNutrition] = useState(true);
+  const [includeTips, setIncludeTips] = useState(true);
+  const [maxSteps, setMaxSteps] = useState(10);
+  const [imageQuality, setImageQuality] = useState('high');
+  const [videoSource, setVideoSource] = useState('youtube'); // youtube eller tiktok
 
   const languages = [
     { code: 'en', name: 'English' },
@@ -648,9 +669,11 @@ export default function Food2Guide() {
     }
   };
 
+  // Ändra searchYouTube så att den skickar med videoSource
   const searchYouTube = async () => {
     if (!searchQuery.trim()) return;
     setIsSearching(true);
+    setSearchResults([]); // Clear previous results
     try {
       const response = await fetch(`${API_BASE}/api/v1/search`, {
         method: 'POST',
@@ -658,7 +681,7 @@ export default function Food2Guide() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${authToken}` 
         },
-        body: JSON.stringify({ query: searchQuery, language })
+        body: JSON.stringify({ query: searchQuery, language, source: videoSource })
       });
       if (response.ok) {
         const data = await response.json();
@@ -698,6 +721,17 @@ export default function Food2Guide() {
           youtube_url: videoUrl,
           video_id: selectedVideoId,
           language: language,
+          pdf_style: pdfStyle,
+          include_nutrition: includeNutrition,
+          include_tips: includeTips,
+          max_steps: maxSteps,
+          image_quality: imageQuality,
+          // Advanced Settings
+          show_images: showImages,
+          diet_preference: dietPreference,
+          allergies: Object.keys(allergies).filter(a => allergies[a]),
+          instruction_level: instructionLevel,
+          show_calories: showCalories,
         }),
       });
 
@@ -765,16 +799,7 @@ export default function Food2Guide() {
               <h1 className="text-xl font-bold tracking-tight text-gray-800 text-center">
                 Turn cooking videos into step-by-step recipes.
               </h1>
-              {usageStatus && !usageStatus.is_authenticated && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-center">
-                  <p className="text-sm text-blue-800">
-                    <span className="font-semibold">{usageStatus.remaining_usage}</span> free conversions remaining today. 
-                    <button onClick={() => setIsAuthModalOpen(true)} className="ml-1 text-blue-600 underline hover:text-blue-800">
-                      Sign in for unlimited access
-                    </button>
-                  </p>
-                </div>
-              )}
+
               <div className="mt-8 space-y-8">
                 <div>
                    <div className="flex gap-2 bg-gray-100 p-1 rounded-xl shadow-inner justify-center">
@@ -802,36 +827,51 @@ export default function Food2Guide() {
                     )}
                     {activeTab === 'search' && (
                       <div className="flex gap-2">
+                        <select
+                          value={videoSource}
+                          onChange={e => setVideoSource(e.target.value)}
+                          className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                        >
+                          <option value="youtube">YouTube</option>
+                          <option value="tiktok">TikTok</option>
+                        </select>
                         <input
                           id="search-query"
                           type="text"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           onKeyPress={(e) => e.key === 'Enter' && searchYouTube()}
-                          placeholder="e.g., 'Gordon Ramsay scrambled eggs'"
+                          placeholder="Search for YouTube or TikTok video..."
                           className="flex-grow px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                         />
-                        <button onClick={searchYouTube} disabled={isSearching} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-400">
-                          {isSearching ? '...' : <MagnifyingGlassIcon className="h-5 w-5" />}
+                        <button onClick={searchYouTube} disabled={isSearching} className="bg-gray-700 text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors disabled:bg-gray-400 flex items-center justify-center w-14">
+                          {isSearching ? <Spinner /> : <MagnifyingGlassIcon className="h-5 w-5" />}
                         </button>
                       </div>
                     )}
                   </div>
                 </div>
-                {searchResults.length > 0 && (
+
+                {isSearching && (
+                  <div className="flex justify-center items-center py-10">
+                    <Spinner size="h-10 w-10" color="text-green-600" />
+                  </div>
+                )}
+
+                {searchResults.length > 0 && !isSearching && (
                   <div className="space-y-4">
                     <h3 className="text-gray-800 text-sm font-bold tracking-tight">Search Results</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {searchResults.map((video) => (
                         <div
-                          key={video.id}
-                          onClick={() => { setSelectedVideoId(video.id); setVideoUrl(`https://www.youtube.com/watch?v=${video.id}`); }}
-                          className={`cursor-pointer border-2 rounded-xl overflow-hidden transition-all duration-200 ${selectedVideoId === video.id ? 'border-green-500 shadow-lg scale-105' : 'border-transparent hover:border-green-400/50'}`}
+                          key={video.video_id}
+                          onClick={() => { setSelectedVideoId(video.video_id); setVideoUrl(`https://www.youtube.com/watch?v=${video.video_id}`); }}
+                          className={`cursor-pointer border-2 rounded-xl overflow-hidden transition-all duration-200 ${selectedVideoId === video.video_id ? 'border-green-500 shadow-lg scale-105' : 'border-transparent hover:border-green-400/50'}`}
                         >
-                          <img src={video.thumbnail} alt={video.title} className="w-full h-28 object-cover" />
+                          <img src={video.thumbnail_url} alt={video.title} className="w-full h-28 object-cover" />
                           <div className="p-3">
                             <p className="font-semibold text-xs text-gray-800 line-clamp-2">{video.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">{video.channel}</p>
+                            <p className="text-xs text-gray-500 mt-1">{video.channel_title}</p>
                           </div>
                         </div>
                       ))}
@@ -848,6 +888,129 @@ export default function Food2Guide() {
                     {languages.map(lang => <option key={lang.code} value={lang.code}>{lang.name}</option>)}
                   </select>
                 </div>
+                
+                {/* Advanced Settings - Only for logged in users */}
+                {currentUser && (
+                  <div className="border-t border-gray-200 pt-6">
+                    <button
+                      onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+                      className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
+                    >
+                      <WrenchScrewdriverIcon className="h-4 w-4" />
+                      <span>Advanced Settings</span>
+                      <svg
+                        className={`h-4 w-4 transition-transform ${showAdvancedSettings ? 'rotate-180' : ''}`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    
+                    {showAdvancedSettings && (
+                      <div className="mt-4 space-y-4 p-4 bg-gray-50 rounded-lg">
+                        {/* 1. Show images */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Show images</label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center">
+                              <input type="radio" name="showImages" checked={showImages} onChange={() => setShowImages(true)} className="mr-2" />
+                              Yes (default)
+                            </label>
+                            <label className="flex items-center">
+                              <input type="radio" name="showImages" checked={!showImages} onChange={() => setShowImages(false)} className="mr-2" />
+                              No
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* 2. Diet preference */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Diet preference</label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center">
+                              <input type="radio" name="dietPreference" value="regular" checked={dietPreference === 'regular'} onChange={() => setDietPreference('regular')} className="mr-2" />
+                              Regular (default)
+                            </label>
+                            <label className="flex items-center">
+                              <input type="radio" name="dietPreference" value="vegetarian" checked={dietPreference === 'vegetarian'} onChange={() => setDietPreference('vegetarian')} className="mr-2" />
+                              Vegetarian
+                            </label>
+                            <label className="flex items-center">
+                              <input type="radio" name="dietPreference" value="vegan" checked={dietPreference === 'vegan'} onChange={() => setDietPreference('vegan')} className="mr-2" />
+                              Vegan
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* 3. Allergies */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Allergies</label>
+                          <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center">
+                              <input type="checkbox" checked={allergies.gluten} onChange={() => setAllergies(a => ({ ...a, gluten: !a.gluten }))} className="mr-2" />
+                              Gluten
+                            </label>
+                            <label className="flex items-center">
+                              <input type="checkbox" checked={allergies.nuts} onChange={() => setAllergies(a => ({ ...a, nuts: !a.nuts }))} className="mr-2" />
+                              Nuts
+                            </label>
+                            <label className="flex items-center">
+                              <input type="checkbox" checked={allergies.eggs} onChange={() => setAllergies(a => ({ ...a, eggs: !a.eggs }))} className="mr-2" />
+                              Eggs
+                            </label>
+                            <label className="flex items-center">
+                              <input type="checkbox" checked={allergies.dairy} onChange={() => setAllergies(a => ({ ...a, dairy: !a.dairy }))} className="mr-2" />
+                              Dairy
+                            </label>
+                            <label className="flex items-center">
+                              <input type="checkbox" checked={allergies.shellfish} onChange={() => setAllergies(a => ({ ...a, shellfish: !a.shellfish }))} className="mr-2" />
+                              Shellfish
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* 4. Instruction detail level */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Instruction detail level</label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center">
+                              <input type="radio" name="instructionLevel" value="beginner" checked={instructionLevel === 'beginner'} onChange={() => setInstructionLevel('beginner')} className="mr-2" />
+                              Beginner
+                            </label>
+                            <label className="flex items-center">
+                              <input type="radio" name="instructionLevel" value="intermediate" checked={instructionLevel === 'intermediate'} onChange={() => setInstructionLevel('intermediate')} className="mr-2" />
+                              Intermediate (default)
+                            </label>
+                            <label className="flex items-center">
+                              <input type="radio" name="instructionLevel" value="expert" checked={instructionLevel === 'expert'} onChange={() => setInstructionLevel('expert')} className="mr-2" />
+                              Expert
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* 5. Show calories / nutrition info */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Show calories / nutrition info</label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center">
+                              <input type="radio" name="showCalories" checked={showCalories} onChange={() => setShowCalories(true)} className="mr-2" />
+                              Yes
+                            </label>
+                            <label className="flex items-center">
+                              <input type="radio" name="showCalories" checked={!showCalories} onChange={() => setShowCalories(false)} className="mr-2" />
+                              No (default)
+                            </label>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+
+                
                 <div className="pt-6 border-t border-gray-200 flex flex-col items-center gap-6">
                   <button onClick={processVideo} className="flex items-center gap-2 w-full justify-center bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md px-6 py-3 transition-transform hover:scale-[1.02]">
                     <SparklesIcon className="h-6 w-6 mr-2" />

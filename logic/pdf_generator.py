@@ -376,41 +376,83 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                         size=header_style.get("font_size", 24))
             pdf.cell(0, 12, "Ingredients:", align=header_style.get("align", "L"), ln=True)
             
-            # Split ingredients into two columns
             ingredient_style = style_manager.get_style("ingredient-item")
             log_pdf_step("DEBUG", f"Ingredient style: {ingredient_style}", job_id=job_id)
             pdf.set_font("DejaVu", 
                         style=ingredient_style.get("font_style", ""), 
                         size=ingredient_style.get("font_size", 12))
             
-            total_ingredients = len(recipe.ingredients)
-            log_pdf_step("DEBUG", f"Total ingredients: {total_ingredients}", job_id=job_id)
-            mid_point = (total_ingredients + 1) // 2
-            col_width = (pdf.w - pdf.l_margin - pdf.r_margin) / 2 # No gap, use full width
-            
-            start_x = pdf.l_margin
+            # Hantera grupperad eller platt lista
+            ingredients_data = recipe.ingredients
+            col_width = (pdf.w - pdf.l_margin - pdf.r_margin) / 2 - 5
+            gap = 10  # Gap mellan kolumner
+            left_x = pdf.l_margin
+            right_x = pdf.l_margin + col_width + gap
             start_y = pdf.get_y() + 5
-            
-            # Left column
-            current_y = start_y
-            for item in recipe.ingredients[:mid_point]:
-                pdf.set_xy(start_x, current_y)
-                clean_item = "• " + clean_text_for_pdf(item, job_id)
-                pdf.multi_cell(col_width - 5, 8, clean_item, align=ingredient_style.get("align", "L")) # Subtract padding
-                current_y = pdf.get_y() + 1 # Smaller gap
-            left_col_height = current_y
+            margin_bottom = 5
+            max_y = pdf.h - pdf.b_margin - 10
+            line_height = 8
 
-            # Right column
-            current_y = start_y
-            for item in recipe.ingredients[mid_point:]:
-                pdf.set_xy(start_x + col_width, current_y)
-                clean_item = "• " + clean_text_for_pdf(item, job_id)
-                pdf.multi_cell(col_width - 5, 8, clean_item, align=ingredient_style.get("align", "L")) # Subtract padding
-                current_y = pdf.get_y() + 1 # Smaller gap
-            right_col_height = current_y
-            
-            # Move cursor past ingredients
-            pdf.set_y(max(left_col_height, right_col_height) + 10)
+            # Gör om till platt lista av rader (strängar)
+            if ingredients_data and isinstance(ingredients_data, list) and isinstance(ingredients_data[0], dict) and 'title' in ingredients_data[0]:
+                # Grupperad lista
+                flat_ingredients = []
+                for block in ingredients_data:
+                    if isinstance(block, dict):
+                        flat_ingredients.append({'type': 'title', 'text': block.get('title', '')})
+                        for item in block.get('items', []):
+                            flat_ingredients.append({'type': 'item', 'text': f"• {item}"})
+                    else:
+                        flat_ingredients.append({'type': 'item', 'text': f"• {str(block)}"})
+            else:
+                # Platt lista
+                flat_ingredients = [{'type': 'item', 'text': f"• {item}"} for item in (ingredients_data if ingredients_data else [])]
+
+            # Dynamisk tvåkolumnslayout
+            y_left = start_y
+            y_right = start_y
+            x_left = left_x
+            x_right = right_x
+            col = 1  # 1 = vänster, 2 = höger
+            i = 0
+            while i < len(flat_ingredients):
+                entry = flat_ingredients[i]
+                # Välj kolumn
+                if col == 1:
+                    pdf.set_xy(x_left, y_left)
+                else:
+                    pdf.set_xy(x_right, y_right)
+                # Sätt font och beräkna höjd
+                if entry['type'] == 'title':
+                    pdf.set_font("DejaVu", style="B", size=14)
+                    # Beräkna höjd för rubrik
+                    n_lines = pdf.get_string_width(entry['text']) // col_width + 1
+                    h = line_height * n_lines
+                else:
+                    pdf.set_font("DejaVu", size=12)
+                    n_lines = pdf.get_string_width(entry['text']) // col_width + 1
+                    h = line_height * n_lines
+                # Rita ut
+                pdf.multi_cell(col_width, line_height, entry['text'])
+                # Uppdatera y-position
+                if col == 1:
+                    y_left = pdf.get_y()
+                    # Om vi når botten, byt till kolumn 2
+                    if y_left + h > max_y:
+                        col = 2
+                else:
+                    y_right = pdf.get_y()
+                    # Om vi når botten, byt sida
+                    if y_right + h > max_y:
+                        pdf.add_page()
+                        y_left = y_right = pdf.get_y() + 5
+                        col = 1
+                # Gå till nästa rad
+                i += 1
+            # Sätt y till efter den högsta kolumnen
+            final_y = max(y_left, y_right)
+            pdf.set_y(final_y + margin_bottom)
+
         except Exception as e:
             log_pdf_step("ERROR", f"Failed to add ingredients section: {str(e)}", error=True, job_id=job_id)
             raise

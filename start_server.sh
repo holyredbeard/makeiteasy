@@ -2,7 +2,7 @@
 
 # Load environment variables from .env file
 if [ -f .env ]; then
-    export $(cat .env | xargs)
+    source .env
 fi
 
 echo "Starting backend server with Google OAuth configured..."

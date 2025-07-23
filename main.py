@@ -4,6 +4,9 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
 import logging
+import signal
+import sys
+import multiprocessing
 from dotenv import load_dotenv
 from api.routes import router
 from api.auth_routes import router as auth_router
@@ -46,6 +49,16 @@ app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(google_auth_router, prefix="/api/v1/auth", tags=["google-auth"])
 
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "message": "Server is running"}
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "message": "Server is running"}
+
 # Serve the main HTML page
 @app.get("/")
 async def read_index(request: Request):
@@ -67,6 +80,44 @@ async def serve_pdf(filename: str):
     else:
         return {"error": "PDF not found"}, 404
 
+def cleanup_multiprocessing():
+    """Clean up multiprocessing resources to prevent leaks"""
+    try:
+        # Clean up any remaining multiprocessing resources
+        multiprocessing.current_process()._cleanup()
+        
+        # Force cleanup of any remaining semaphores
+        import multiprocessing.resource_tracker
+        if hasattr(multiprocessing.resource_tracker, '_CLEANUP_CALLBACKS'):
+            for callback in multiprocessing.resource_tracker._CLEANUP_CALLBACKS:
+                try:
+                    callback()
+                except:
+                    pass
+    except Exception as e:
+        logging.warning(f"Error during multiprocessing cleanup: {e}")
+
+def signal_handler(signum, frame):
+    """Handle shutdown signals gracefully"""
+    logging.info(f"Received signal {signum}, shutting down gracefully...")
+    cleanup_multiprocessing()
+    sys.exit(0)
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    
+    # Set up signal handlers for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
+    # Set multiprocessing start method to 'spawn' to avoid issues on macOS
+    multiprocessing.set_start_method('spawn', force=True)
+    
+    try:
+        uvicorn.run(app, host="127.0.0.1", port=8000)
+    except KeyboardInterrupt:
+        logging.info("Server stopped by user")
+    except Exception as e:
+        logging.error(f"Server error: {e}")
+    finally:
+        cleanup_multiprocessing()

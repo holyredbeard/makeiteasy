@@ -59,8 +59,69 @@ def sanitize_filename(title: str) -> str:
     
     return safe_title
 
+def is_recipe_description(description: str) -> bool:
+    """Check if a video description likely contains a recipe."""
+    if not description or len(description.strip()) < 20:
+        return False
+    
+    # Convert to lowercase for case-insensitive matching
+    desc_lower = description.lower()
+    
+    # Recipe-related keywords in multiple languages
+    recipe_keywords = [
+        # English
+        'ingredients', 'recipe', 'instructions', 'directions', 'prep time', 'cook time',
+        'servings', 'serves', 'preparation', 'cooking', 'method', 'steps',
+        # Swedish
+        'ingredienser', 'recept', 'instruktioner', 'riktningar', 'förberedelsetid', 'koktid',
+        'portioner', 'serverar', 'förberedelse', 'tillagning', 'metod', 'steg',
+        # Common cooking terms
+        'tbsp', 'tsp', 'cup', 'gram', 'g', 'kg', 'ml', 'l', 'oz', 'lb',
+        'dl', 'msk', 'tsk', 'krm', 'st', 'stycken', 'paket', 'burk',
+        # Cooking actions
+        'mix', 'stir', 'cook', 'bake', 'fry', 'boil', 'simmer', 'heat',
+        'blanda', 'röra', 'koka', 'baka', 'steka', 'koka', 'sjuda', 'värma',
+        # Measurements and amounts
+        '1/', '2/', '3/', '4/', '1/2', '1/3', '1/4', '3/4', '2/3',
+        '1-', '2-', '3-', '4-', '5-', '6-', '7-', '8-', '9-',
+        # Bullet points and lists
+        '•', '-', '*', '1.', '2.', '3.', '4.', '5.', '6.', '7.', '8.', '9.',
+        '1)', '2)', '3)', '4)', '5)', '6)', '7)', '8)', '9)',
+    ]
+    
+    # Check for recipe keywords
+    keyword_matches = sum(1 for keyword in recipe_keywords if keyword in desc_lower)
+    
+    # Check for structured content (bullet points, numbered lists)
+    structured_content = any(char in description for char in ['•', '-', '*']) or \
+                        any(f"{i}." in description for i in range(1, 10)) or \
+                        any(f"{i})" in description for i in range(1, 10))
+    
+    # Check for measurements/amounts
+    has_measurements = any(measure in desc_lower for measure in ['tbsp', 'tsp', 'cup', 'gram', 'g', 'kg', 'ml', 'l', 'dl', 'msk', 'tsk'])
+    
+    # Score-based approach
+    score = 0
+    if keyword_matches >= 2:
+        score += 3
+    elif keyword_matches >= 1:
+        score += 1
+    
+    if structured_content:
+        score += 2
+    
+    if has_measurements:
+        score += 2
+    
+    # Check for minimum length (recipes are usually detailed)
+    if len(description.strip()) > 100:
+        score += 1
+    
+    # Threshold for considering it a recipe
+    return score >= 3
+
 def extract_video_metadata(video_url: str) -> dict:
-    """Extract video metadata including title."""
+    """Extract video metadata including title and description."""
     try:
         ydl_opts = {
             'quiet': True,
@@ -71,20 +132,35 @@ def extract_video_metadata(video_url: str) -> dict:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
             
+            description = info.get('description', '')
+            is_recipe = is_recipe_description(description)
+            
             metadata = {
                 'title': info.get('title', 'Unknown Title'),
                 'uploader': info.get('uploader', 'Unknown'),
                 'duration': info.get('duration', 0),
                 'view_count': info.get('view_count', 0),
                 'upload_date': info.get('upload_date', ''),
+                'description': description,
+                'is_recipe_description': is_recipe,
             }
             
             log_video_step("METADATA", f"Extracted title: {metadata['title']}")
+            if description:
+                desc_preview = description[:100] + "..." if len(description) > 100 else description
+                log_video_step("METADATA", f"Description preview: {desc_preview}")
+                if is_recipe:
+                    log_video_step("METADATA", "✅ Description appears to contain a recipe - will be used for recipe generation")
+                else:
+                    log_video_step("METADATA", "ℹ️ Description does not appear to be a recipe - will use transcription only")
+            else:
+                log_video_step("METADATA", "ℹ️ No description found - will use transcription only")
+            
             return metadata
             
     except Exception as e:
         log_video_step("METADATA", f"Failed to extract metadata: {e}", error=True)
-        return {'title': 'Unknown Title'}
+        return {'title': 'Unknown Title', 'description': '', 'is_recipe_description': False}
 
 class ModelManager:
     _instance = None
@@ -164,7 +240,7 @@ def is_youtube_url(url: str) -> bool:
             return True
     return False
 
-def download_video(video_url: str, job_id: str) -> Tuple[str, str]:
+def download_video(video_url: str, job_id: str) -> Tuple[str, str, dict]:
     """Download video from YouTube or TikTok with enhanced error handling and validation."""
     log_video_step("DOWNLOAD", f"Starting download for job {job_id}")
     log_video_step("DOWNLOAD", f"URL: {video_url}")
@@ -185,32 +261,44 @@ def download_video(video_url: str, job_id: str) -> Tuple[str, str]:
         platform = "Unknown"
     
     try:
-        # Configure format options based on platform
+        # Configure format options based on platform - ALWAYS start with lowest quality
+        # This saves bandwidth and storage space by prioritizing smaller files
         if is_tiktok:
-            # TikTok-specific format options
+            # TikTok-specific format options - lowest quality first
             format_options = [
-                'best[height<=1080][ext=mp4]',  # Best quality up to 1080p MP4
-                'best[ext=mp4]',                # Best available MP4
+                'worst[ext=mp4]',               # Smallest available MP4 (LOWEST QUALITY FIRST)
+                'worst[height>=240][ext=mp4]',  # At least 240p MP4
                 'worst[height>=360][ext=mp4]',  # At least 360p MP4
-                'worst[ext=mp4]',               # Smallest available MP4
-                'best',                         # Absolute best available
+                'best[ext=mp4]',                # Best available MP4
+                'best[height<=480][ext=mp4]',   # Best quality up to 480p MP4
+                'best[height<=720][ext=mp4]',   # Best quality up to 720p MP4
+                'best[height<=1080][ext=mp4]',  # Best quality up to 1080p MP4
+                'best',                         # Absolute best available (fallback)
             ]
         else:
-            # YouTube and other platforms format options - enhanced for Shorts
+            # YouTube and other platforms format options - lowest quality first
             format_options = [
-                'best[height<=720][ext=mp4]',   # Best quality up to 720p MP4 (good for Shorts)
-                'best[height<=480][ext=mp4]',   # Best quality up to 480p MP4
-                'worst[height>=360][ext=mp4]',  # At least 360p MP4
-                'best[ext=mp4]',                # Best available MP4
-                'worst[height>=240][ext=mp4]',  # At least 240p MP4
+                '17',                           # 144p MP4 (YouTube format) - LOWEST QUALITY FIRST
+                'worst[height<=144][ext=mp4]',  # 144p or lower MP4
+                'worst[height<=240][ext=mp4]',  # 240p or lower MP4
+                'worst[height<=360][ext=mp4]',  # 360p or lower MP4
                 'worst[ext=mp4]',               # Smallest available MP4
-                '22',                           # 720p MP4 (YouTube format)
-                '18',                           # 360p MP4 (YouTube format)
-                'best',                         # Absolute best available
                 'worst',                        # Absolute smallest available
+                '18',                           # 360p MP4 (YouTube format)
+                'best[height<=480][ext=mp4]',   # Best quality up to 480p MP4
+                '22',                           # 720p MP4 (YouTube format)
+                'best[height<=720][ext=mp4]',   # Best quality up to 720p MP4
+                'best[ext=mp4]',                # Best available MP4
+                'best',                         # Absolute best available (fallback)
             ]
         
         min_file_size = 50000  # Minimum 50KB for valid video
+        
+        # Log the quality testing strategy
+        log_video_step("DOWNLOAD", f"🎯 Quality testing strategy for {platform}:")
+        for i, fmt in enumerate(format_options, 1):
+            log_video_step("DOWNLOAD", f"  {i}. {fmt}")
+        log_video_step("DOWNLOAD", f"Starting with 144p or LOWER first to save bandwidth...")
         
         for format_option in format_options:
             try:
@@ -254,8 +342,41 @@ def download_video(video_url: str, job_id: str) -> Tuple[str, str]:
                 
                 log_video_step("DOWNLOAD", f"Attempting download with format: {format_option}")
                 
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    ydl.download([video_url])
+                # Get video info first to show quality details
+                try:
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        # Extract info to get quality details
+                        info = ydl.extract_info(video_url, download=False)
+                        formats = info.get('formats', [])
+                        
+                        # Find the format that matches our option
+                        selected_format = None
+                        for fmt in formats:
+                            if fmt.get('format_id') == format_option or format_option in str(fmt):
+                                selected_format = fmt
+                                break
+                        
+                        if selected_format:
+                            resolution = selected_format.get('resolution', 'unknown')
+                            filesize = selected_format.get('filesize', 'unknown')
+                            vcodec = selected_format.get('vcodec', 'unknown')
+                            acodec = selected_format.get('acodec', 'unknown')
+                            
+                            log_video_step("DOWNLOAD", f"Selected format details:")
+                            log_video_step("DOWNLOAD", f"  - Resolution: {resolution}")
+                            log_video_step("DOWNLOAD", f"  - File size: {filesize} bytes" if filesize != 'unknown' else "  - File size: unknown")
+                            log_video_step("DOWNLOAD", f"  - Video codec: {vcodec}")
+                            log_video_step("DOWNLOAD", f"  - Audio codec: {acodec}")
+                        else:
+                            log_video_step("DOWNLOAD", f"Could not find detailed format info for: {format_option}")
+                        
+                        # Now download the video
+                        ydl.download([video_url])
+                except Exception as info_error:
+                    log_video_step("DOWNLOAD", f"Could not get format info: {info_error}")
+                    # Fallback to simple download
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([video_url])
                 
                 # Validate downloaded file
                 if output_path.exists():
@@ -267,7 +388,24 @@ def download_video(video_url: str, job_id: str) -> Tuple[str, str]:
                         try:
                             duration = get_video_duration(str(output_path))
                             if duration and duration > 1.0:  # At least 1 second
-                                log_video_step("DOWNLOAD", f"Successfully downloaded {platform} video with format '{format_option}': {output_path} ({file_size} bytes, {duration:.2f}s)")
+                                # Get video properties for detailed logging
+                                try:
+                                    cap = cv2.VideoCapture(str(output_path))
+                                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                                    fps = cap.get(cv2.CAP_PROP_FPS)
+                                    cap.release()
+                                    
+                                    log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded {platform} video")
+                                    log_video_step("DOWNLOAD", f"  📁 File: {output_path}")
+                                    log_video_step("DOWNLOAD", f"  📊 Size: {file_size:,} bytes ({file_size/1024/1024:.1f} MB)")
+                                    log_video_step("DOWNLOAD", f"  ⏱️ Duration: {duration:.2f} seconds")
+                                    log_video_step("DOWNLOAD", f"  📐 Resolution: {width}x{height}")
+                                    log_video_step("DOWNLOAD", f"  🎬 FPS: {fps:.1f}")
+                                    log_video_step("DOWNLOAD", f"  🎯 Format used: {format_option}")
+                                except Exception as prop_error:
+                                    log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded {platform} video with format '{format_option}': {output_path} ({file_size:,} bytes, {duration:.2f}s)")
+                                    log_video_step("DOWNLOAD", f"Could not get video properties: {prop_error}")
                                 # Extract video title for filename
                                 try:
                                     metadata = extract_video_metadata(video_url)
@@ -275,7 +413,8 @@ def download_video(video_url: str, job_id: str) -> Tuple[str, str]:
                                 except Exception as e:
                                     log_video_step("DOWNLOAD", f"Failed to extract title: {e}")
                                     video_title = "recipe"
-                                return str(output_path), video_title
+                                    metadata = {'title': 'Unknown Title', 'description': '', 'is_recipe_description': False}
+                                return str(output_path), video_title, metadata
                             else:
                                 log_video_step("DOWNLOAD", f"Downloaded file has no valid duration ({duration}s), trying next format")
                         except Exception as duration_error:
@@ -289,7 +428,7 @@ def download_video(video_url: str, job_id: str) -> Tuple[str, str]:
                     log_video_step("DOWNLOAD", f"No file was downloaded with format '{format_option}'")
                     
             except Exception as format_error:
-                log_video_step("DOWNLOAD", f"Format '{format_option}' failed: {format_error}")
+                log_video_step("DOWNLOAD", f"❌ FAILED: Format '{format_option}' - {format_error}")
                 if output_path.exists():
                     output_path.unlink()  # Clean up failed download
                 continue
@@ -539,15 +678,46 @@ def extract_thumbnail(video_path: str, job_id: str) -> Optional[str]:
     log_video_step("THUMBNAIL", "Failed to extract a thumbnail after multiple attempts.", error=True)
     return None
 
-def smart_frame_selection(video_path: str, step: Step, job_id: str, video_duration: Optional[float] = None, total_steps: int = 7) -> bool:
+def simple_frame_selection(video_path: str, step: Step, job_id: str, video_duration: Optional[float] = None, total_steps: int = 7) -> bool:
     """
-    Selects the best frame for a step using CLIP for relevance and quality metrics.
+    Simple frame selection that extracts frames at regular intervals without using CLIP.
+    This is a fallback when CLIP-based selection fails.
     """
     output_path = FRAMES_DIR / f"{job_id}_step_{step.step_number}.jpg"
     
     if not video_duration:
         video_duration = get_video_duration(video_path)
+        
+    if not video_duration:
+        log_video_step("SIMPLE_SELECT", f"Cannot determine video duration for step {step.step_number}", error=True)
+        create_placeholder_image(str(output_path), step.step_number, "Video duration unknown")
+        step.image_path = str(output_path)
+        return False
     
+    # Calculate time for this step (simple approach)
+    step_time = video_duration * (step.step_number - 0.5) / total_steps
+    
+    log_video_step("SIMPLE_SELECT", f"Extracting frame at {step_time:.2f}s for step {step.step_number}")
+    
+    if extract_frame(video_path, step_time, str(output_path)):
+        step.image_path = str(output_path)
+        return True
+    else:
+        log_video_step("SIMPLE_SELECT", f"Failed to extract frame for step {step.step_number}", error=True)
+        create_placeholder_image(str(output_path), step.step_number, "Could not extract frame")
+        step.image_path = str(output_path)
+        return False
+
+def smart_frame_selection(video_path: str, step: Step, job_id: str, video_duration: Optional[float] = None, total_steps: int = 7) -> bool:
+    """
+    Selects the best frame for a step using CLIP for relevance and quality metrics.
+    Falls back to simple frame selection if CLIP fails.
+    """
+    output_path = FRAMES_DIR / f"{job_id}_step_{step.step_number}.jpg"
+    
+    if not video_duration:
+        video_duration = get_video_duration(video_path)
+        
     if not video_duration:
         log_video_step("SMART_SELECT", f"Cannot determine video duration for step {step.step_number}", error=True)
         create_placeholder_image(str(output_path), step.step_number, "Video duration unknown")
@@ -592,7 +762,7 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
                     if temp_frame_path.exists():
                         temp_frame_path.unlink()
 
-        if best_frame_time is not None:
+        if best_frame_time is not None and highest_similarity > 0.1:  # Add minimum similarity threshold
             log_video_step("SMART_SELECT", f"Best frame found at {best_frame_time:.2f}s with similarity {highest_similarity:.2f}")
             if extract_frame(video_path, best_frame_time, str(output_path)):
                 # Final quality check and enhancement
@@ -603,70 +773,146 @@ def smart_frame_selection(video_path: str, step: Step, job_id: str, video_durati
                 
                 step.image_path = str(output_path)
                 return True
+            else:
+                log_video_step("SMART_SELECT", "CLIP analysis did not yield a best frame.", error=True)
         else:
-            log_video_step("SMART_SELECT", "CLIP analysis did not yield a best frame.", error=True)
-
+            log_video_step("SMART_SELECT", f"CLIP found frame with low similarity ({highest_similarity:.2f}), falling back to simple selection", error=False)
+                
     except Exception as e:
         log_video_step("SMART_SELECT", f"Error in smart frame selection for step {step.step_number}: {e}", error=True)
         log_video_step("SMART_SELECT", f"Traceback: {traceback.format_exc()}", error=True)
     
-    # Fallback if CLIP fails or no good frame is found
-    log_video_step("SMART_SELECT", "Falling back to placeholder image.", error=False)
-    create_placeholder_image(str(output_path), step.step_number, "Could not find relevant frame")
-    step.image_path = str(output_path)
-    return False 
+    # Fallback to simple frame selection if CLIP fails or no good frame is found
+    log_video_step("SMART_SELECT", "Falling back to simple frame selection.", error=False)
+    return simple_frame_selection(video_path, step, job_id, video_duration, total_steps)
 
-def extract_text_from_frames(video_path: str, job_id: str) -> str:
-    """Extract text from video frames using OCR."""
-    log_video_step("OCR", f"Starting OCR text extraction for job {job_id}")
+def contains_ingredients(text: str) -> bool:
+    """
+    Check if the transcribed text contains recipe ingredients or cooking-related content.
+    Returns True if the text appears to contain recipe information.
+    """
+    if not text or len(text.strip()) < 10:
+        return False
     
+    # Recipe-related keywords in Swedish and English
+    recipe_keywords = [
+        # Swedish
+        'ingrediens', 'recept', 'koka', 'steka', 'baka', 'blanda', 'tillsätt', 'smör', 'mjöl', 'socker',
+        'salt', 'peppar', 'olja', 'vitlök', 'lök', 'tomat', 'ost', 'kött', 'kyckling', 'fisk',
+        'gram', 'kg', 'dl', 'ml', 'krm', 'msk', 'tsk', 'st', 'stycken', 'paket',
+        
+        # English
+        'ingredient', 'recipe', 'cook', 'fry', 'bake', 'mix', 'add', 'butter', 'flour', 'sugar',
+        'salt', 'pepper', 'oil', 'garlic', 'onion', 'tomato', 'cheese', 'meat', 'chicken', 'fish',
+        'grams', 'kg', 'cups', 'tbsp', 'tsp', 'pieces', 'packages', 'ounces', 'pounds'
+    ]
+    
+    # Cooking action words
+    cooking_actions = [
+        'koka', 'steka', 'baka', 'blanda', 'tillsätt', 'röra', 'vispa', 'krama', 'skära',
+        'cook', 'fry', 'bake', 'mix', 'add', 'stir', 'whisk', 'knead', 'cut', 'chop'
+    ]
+    
+    # Measurement words
+    measurements = [
+        'gram', 'kg', 'dl', 'ml', 'krm', 'msk', 'tsk', 'st', 'stycken', 'paket',
+        'grams', 'cups', 'tbsp', 'tsp', 'pieces', 'packages', 'ounces', 'pounds'
+    ]
+    
+    text_lower = text.lower()
+    
+    # Check for recipe keywords
+    keyword_count = sum(1 for keyword in recipe_keywords if keyword in text_lower)
+    
+    # Check for cooking actions
+    action_count = sum(1 for action in cooking_actions if action in text_lower)
+    
+    # Check for measurements
+    measurement_count = sum(1 for measurement in measurements if measurement in text_lower)
+    
+    # Check for numbers (likely measurements)
+    number_count = len(re.findall(r'\d+', text))
+    
+    # Scoring system
+    score = 0
+    if keyword_count >= 3:
+        score += 2
+    if action_count >= 2:
+        score += 2
+    if measurement_count >= 2:
+        score += 2
+    if number_count >= 3:
+        score += 1
+    
+    # If text is very short, require higher score
+    if len(text) < 50:
+        return score >= 4
+    else:
+        return score >= 3
+
+def extract_text_from_frames(video_path: str, job_id: str, max_frames: int = 10) -> str:
+    """
+    Extract text from video frames using OCR.
+    Returns combined text from all frames that contain readable text.
+    """
     try:
-        duration = get_video_duration(video_path)
-        if not duration:
-            log_video_step("OCR", "Could not get video duration", error=True)
+        log_video_step("OCR", f"Starting OCR analysis on video frames...")
+        
+        cap = cv2.VideoCapture(str(video_path))
+        if not cap.isOpened():
+            log_video_step("OCR", "Failed to open video for OCR")
             return ""
         
-        # Extract frames every 5 seconds to capture text
-        extracted_text = []
-        # Smart frame selection - scale interval based on video length
-        if duration <= 60:  # Short video (≤1 min) - every 10 seconds
-            interval = 10
-        elif duration <= 300:  # Medium video (≤5 min) - every 15 seconds
-            interval = 15
-        elif duration <= 600:  # Long video (≤10 min) - every 20 seconds
-            interval = 20
-        else:  # Very long video (>10 min) - every 30 seconds
-            interval = 30
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        duration = total_frames / fps if fps > 0 else 0
         
-        frame_times = np.arange(0, duration, interval)
+        # Extract frames at regular intervals
+        frame_interval = max(1, total_frames // max_frames)
+        extracted_texts = []
         
-        for time_seconds in frame_times:
-            temp_frame_path = FRAMES_DIR / f"ocr_frame_{time_seconds:.1f}.jpg"
+        for i in range(0, total_frames, frame_interval):
+            cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+            ret, frame = cap.read()
             
-            if extract_frame(video_path, time_seconds, str(temp_frame_path)):
-                try:
-                    # Use pytesseract to extract text
-                    image = Image.open(temp_frame_path)
-                    text = pytesseract.image_to_string(image, config='--psm 6')
+            if not ret:
+                continue
+            
+            # Convert BGR to RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Preprocess image for better OCR
+            # Convert to grayscale
+            gray = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2GRAY)
+            
+            # Apply threshold to get black text on white background
+            _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            
+            # Try to extract text
+            try:
+                text = pytesseract.image_to_string(thresh, lang='eng+swe')
+                text = text.strip()
+                
+                if text and len(text) > 5:  # Only keep meaningful text
+                    extracted_texts.append(text)
+                    log_video_step("OCR", f"Found text in frame {i}: {text[:50]}...")
                     
-                    if text.strip():
-                        log_video_step("OCR", f"Found text at {time_seconds}s: {text[:50]}...")
-                        extracted_text.append(text.strip())
-                
-                except Exception as e:
-                    log_video_step("OCR", f"OCR failed for frame at {time_seconds}s: {e}", error=True)
-                
-                finally:
-                    # Clean up temporary frame
-                    if temp_frame_path.exists():
-                        temp_frame_path.unlink()
+            except Exception as e:
+                log_video_step("OCR", f"OCR failed on frame {i}: {e}")
+                continue
+        
+        cap.release()
         
         # Combine all extracted text
-        combined_text = "\n".join(extracted_text)
-        log_video_step("OCR", f"OCR extraction complete. Found {len(extracted_text)} text segments")
+        combined_text = "\n".join(extracted_texts)
         
-        return combined_text
-        
+        if combined_text:
+            log_video_step("OCR", f"OCR completed. Found {len(extracted_texts)} frames with text.")
+            return combined_text
+        else:
+            log_video_step("OCR", "No readable text found in video frames.")
+            return ""
+            
     except Exception as e:
-        log_video_step("OCR", f"Error in OCR extraction: {e}", error=True)
+        log_video_step("OCR", f"OCR analysis failed: {e}")
         return "" 

@@ -1,29 +1,30 @@
 import uuid
 import traceback
 import logging
-from typing import Optional
+from typing import Optional, Union
 from pathlib import Path
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends, Request, Form, status
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Form, BackgroundTasks, Request
+from fastapi.responses import FileResponse, JSONResponse
 from models.types import VideoRequest, Recipe, YouTubeSearchRequest, YouTubeVideo, User
 from core.auth import get_current_active_user
 from core.database import db
-from typing import Union
-import time
 from logic.video_processing import (
     download_video,
     transcribe_audio,
+    extract_text_from_frames,
+    contains_ingredients,
     smart_frame_selection,
     get_video_duration,
-    extract_thumbnail,
-    extract_text_from_frames
+    extract_thumbnail
 )
 from logic.recipe_parser import analyze_video_content
 from logic.pdf_generator import generate_pdf
 import os
+import time
 from datetime import datetime
 from models.types import Step
 import glob
+import yt_dlp
 
 # --- Globals ---
 router = APIRouter()
@@ -139,11 +140,15 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
             
             update_status(job_id, "processing", f"Downloading video from {platform}...")
             download_result = download_video(video_url, job_id)
-            if isinstance(download_result, tuple):
+            if isinstance(download_result, tuple) and len(download_result) == 3:
+                video_path, video_title, metadata = download_result
+            elif isinstance(download_result, tuple) and len(download_result) == 2:
                 video_path, video_title = download_result
+                metadata = {'title': 'Unknown Title', 'description': '', 'is_recipe_description': False}
             else:
                 video_path = download_result
                 video_title = None
+                metadata = {'title': 'Unknown Title', 'description': '', 'is_recipe_description': False}
             
             if not video_path:
                 raise ValueError("Failed to download video. Please check the URL and try again.")
@@ -157,18 +162,28 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
             # Check if audio transcript is good enough
             transcript = audio_transcript or ""
             
-            # Only run OCR if audio transcript is poor or empty
-            if not transcript.strip() or len(transcript.strip()) < 50 or "theatre這裏doesmos" in transcript:
-                update_status(job_id, "transcribing", "Audio unclear, extracting text from images...")
+            # Run OCR if audio transcript is poor, empty, or lacks ingredients
+            ocr_text = ""
+            if not transcript.strip() or len(transcript.strip()) < 50 or "theatre這裡doesmos" in transcript or not contains_ingredients(transcript):
+                update_status(job_id, "transcribing", "Audio unclear or lacks ingredients, extracting text from images...")
                 ocr_text = extract_text_from_frames(video_path, job_id)
-                transcript = f"Audio transcript:\n{audio_transcript or 'No clear audio'}\n\nText from images:\n{ocr_text or ''}"
+                if ocr_text:
+                    transcript = f"Audio transcript:\n{audio_transcript or 'No clear audio'}\n\nText from images:\n{ocr_text}"
+                else:
+                    transcript = f"Audio transcript:\n{audio_transcript or 'No clear audio'}"
             
             if not transcript.strip():
                 raise ValueError("Failed to extract any text from video (neither audio nor visual text found).")
             
             # 3. Analyze Content
             update_status(job_id, "analyzing", "Analyzing content...")
-            recipe = analyze_video_content(transcript, language)
+            recipe = analyze_video_content(
+                transcript, 
+                language, 
+                metadata.get('description', ''), 
+                metadata.get('is_recipe_description', False),
+                ocr_text
+            )
             if not recipe:
                 raise Exception("Failed to analyze video content.")
             
@@ -305,23 +320,62 @@ async def get_result(job_id: str, request: Request):
     
     return FileResponse(str(pdf_path), media_type="application/pdf", filename=download_filename)
 
-@router.post("/search", summary="Search YouTube for videos")
-async def search_youtube(request: YouTubeSearchRequest):
-    # Mock search results for now
-    mock_videos = [
-        YouTubeVideo(
-            video_id="dQw4w9WgXcQ",
-            title="Test Recipe Video",
-            channel_title="Test Channel",
-            thumbnail_url="https://i.ytimg.com/vi/dQw4w9WgXcQ/mqdefault.jpg",
-            duration="5:30",
-            view_count="1M views",
-            published_at="1 day ago",
-            description="A test recipe video for demonstration purposes."
+@router.post("/search", summary="Search for videos on YouTube or TikTok")
+async def search_videos(request: YouTubeSearchRequest):
+    """Search for videos and return a list of results."""
+    query = request.query
+    source = request.source or 'youtube'
+
+    if "recipe" not in query.lower():
+        query = f"{query} recipe"
+
+    try:
+        search_prefix = "ytsearch10:" if source == 'youtube' else "tiktoksearch10:"
+        search_query = f"{search_prefix}{query}"
+
+        ydl_opts = {
+            'quiet': True,
+            'extract_flat': True,  # Speeds up search
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            search_results = ydl.extract_info(search_query, download=False)
+            
+            videos = []
+            if 'entries' in search_results:
+                for entry in search_results.get('entries', []):
+                    if not entry:
+                        continue
+                    
+                    video_id = entry.get('id')
+                    if not video_id:
+                        continue
+                    
+                    # Robust thumbnail extraction
+                    thumb = entry.get('thumbnail')
+                    if not thumb and entry.get('thumbnails'):
+                        thumb = entry['thumbnails'][-1].get('url')
+
+                    videos.append(YouTubeVideo(
+                        video_id=video_id,
+                        title=entry.get('title', 'No Title'),
+                        thumbnail_url=thumb,
+                        channel_title=entry.get('uploader', 'Unknown Channel'),
+                        duration=str(entry.get('duration', 0)),
+                        view_count=str(entry.get('view_count', 0)),
+                        published_at=entry.get('upload_date'),
+                        description=entry.get('description')
+                    ))
+            
+            unique_videos = {v.video_id: v for v in videos}.values()
+            return JSONResponse(content={"results": [v.dict() for v in list(unique_videos)[:10]]})
+
+    except Exception as e:
+        logger.error(f"Search failed for query '{query}' on source '{source}': {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"An error occurred during the search: {str(e)}"
         )
-    ]
-    
-    return JSONResponse(content={"videos": [video.dict() for video in mock_videos]})
 
 # Legacy endpoint for compatibility
 @router.post("/process-video/", summary="Process a video to generate a recipe PDF (legacy)")
@@ -336,19 +390,50 @@ async def process_video_request(request: VideoRequest):
     try:
         # 1. Download Video
         logger.info(f"[{job_id}] Step 1/6: Downloading video...")
-        video_path = download_video(video_url, job_id)
+        download_result = download_video(video_url, job_id)
+        if isinstance(download_result, tuple) and len(download_result) == 3:
+            video_path, video_title, metadata = download_result
+        elif isinstance(download_result, tuple) and len(download_result) == 2:
+            video_path, video_title = download_result
+            metadata = {'title': 'Unknown Title', 'description': '', 'is_recipe_description': False}
+        else:
+            video_path = download_result
+            metadata = {'title': 'Unknown Title', 'description': '', 'is_recipe_description': False}
+        
         if not video_path:
             raise ValueError("Failed to download video.")
 
-        # 2. Transcribe Video
-        logger.info(f"[{job_id}] Step 2/6: Transcribing video...")
-        transcript = transcribe_audio(video_path, job_id)
-        if not transcript:
-            raise ValueError("Failed to transcribe video.")
+        # 2. Extract Text (Smart approach)
+        logger.info(f"[{job_id}] Step 2/6: Extracting text from audio...")
+        
+        # Get text from audio first (Whisper)
+        audio_transcript = transcribe_audio(video_path, job_id)
+        
+        # Check if audio transcript is good enough
+        transcript = audio_transcript or ""
+        
+        # Run OCR if audio transcript is poor, empty, or lacks ingredients
+        ocr_text = ""
+        if not transcript.strip() or len(transcript.strip()) < 50 or "theatre這裡doesmos" in transcript or not contains_ingredients(transcript):
+            logger.info(f"[{job_id}] Audio unclear or lacks ingredients, extracting text from images...")
+            ocr_text = extract_text_from_frames(video_path, job_id)
+            if ocr_text:
+                transcript = f"Audio transcript:\n{audio_transcript or 'No clear audio'}\n\nText from images:\n{ocr_text}"
+            else:
+                transcript = f"Audio transcript:\n{audio_transcript or 'No clear audio'}"
+        
+        if not transcript.strip():
+            raise ValueError("Failed to extract any text from video (neither audio nor visual text found).")
         
         # 3. Analyze Content
         logger.info(f"[{job_id}] Step 3/6: Analyzing recipe content...")
-        recipe = analyze_video_content(transcript, language)
+        recipe = analyze_video_content(
+            transcript, 
+            language, 
+            metadata.get('description', ''), 
+            metadata.get('is_recipe_description', False),
+            ocr_text
+        )
         if not recipe:
             raise ValueError("Failed to analyze video content.")
         
@@ -395,7 +480,7 @@ async def generate_test_pdf(
     # Check if user is admin
     if not getattr(current_user, 'is_admin', False):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=403, # Changed from status.HTTP_403_FORBIDDEN to 403
             detail="Admin access required"
         )
     
@@ -465,14 +550,14 @@ async def generate_test_pdf(
             )
         else:
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status_code=500, # Changed from status.HTTP_500_INTERNAL_SERVER_ERROR to 500
                 detail="Failed to generate test PDF"
             )
             
     except Exception as e:
         logger.error(f"Error generating test PDF: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500, # Changed from status.HTTP_500_INTERNAL_SERVER_ERROR to 500
             detail=f"Failed to generate test PDF: {str(e)}"
         )
 
@@ -483,7 +568,7 @@ async def get_pdf_templates(current_user: User = Depends(get_current_active_user
     # Check if user is admin
     if not getattr(current_user, 'is_admin', False):
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=403, # Changed from status.HTTP_403_FORBIDDEN to 403
             detail="Admin access required"
         )
     
@@ -502,7 +587,7 @@ async def get_pdf_templates(current_user: User = Depends(get_current_active_user
     except Exception as e:
         logger.error(f"Error getting templates: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            status_code=500, # Changed from status.HTTP_500_INTERNAL_SERVER_ERROR to 500
             detail=f"Failed to get templates: {str(e)}"
         )
 

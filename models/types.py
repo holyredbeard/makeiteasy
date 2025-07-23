@@ -26,15 +26,16 @@ class YouTubeVideo(BaseModel):
     video_id: str = Field(..., description="The YouTube video ID.")
     title: str = Field(..., description="The title of the video.")
     channel_title: str = Field(..., description="The name of the YouTube channel.")
-    thumbnail_url: str = Field(..., description="URL to the video thumbnail.")
+    thumbnail_url: Optional[str] = Field(None, description="URL to the video thumbnail.")
     duration: str = Field(..., description="Duration of the video (e.g., '5:30').")
     view_count: str = Field(..., description="Number of views (e.g., '1M views').")
-    published_at: str = Field(..., description="When the video was published (e.g., '1 day ago').")
-    description: str = Field(..., description="Video description.")
+    published_at: Optional[str] = Field(None, description="When the video was published (e.g., '1 day ago').")
+    description: Optional[str] = Field(None, description="Video description.")
 
 class YouTubeSearchRequest(BaseModel):
     query: str = Field(..., description="Search query for YouTube videos.")
     max_results: Optional[int] = Field(10, description="Maximum number of results to return.")
+    source: Optional[str] = Field("youtube", description="The source to search (e.g., 'youtube', 'tiktok').")
 
 # User Authentication Models
 class UserBase(BaseModel):

@@ -32,14 +32,14 @@
 
 /* Thumbnail images - landscape (YouTube) */
 .thumbnail-landscape {
-    width: 80pt;
-    aspect-ratio: 40 / 71;
+    width: 120pt;
+    aspect-ratio: 16 / 9;
 }
 
 /* Thumbnail images - portrait (TikTok, YouTube Shorts) */
 .thumbnail-portrait {
-    width: 120pt;
-    aspect-ratio: 40 / 71;
+    width: 70pt;
+    aspect-ratio: 9 / 16;
 }
 
 /* Description text styling */
@@ -118,8 +118,8 @@
 .step-image-landscape {
     flex: 0 0 40%;
     max-width: 40%;
-    width: 70pt;
-    aspect-ratio: 40 / 71;
+    width: 60pt;
+    aspect-ratio: 16 / 9;
     margin-bottom: 0;
 }
 
@@ -127,8 +127,8 @@
 .step-image-portrait {
     flex: 0 0 30%;
     max-width: 30%;
-    height: 142pt;
-    aspect-ratio: 40 / 71;
+    height: 60pt;
+    aspect-ratio: 9 / 16;
     margin-bottom: 0;
 }
 
