@@ -292,33 +292,24 @@ async def get_status(job_id: str):
 
 @router.get("/result/{job_id}", summary="Download the generated PDF")
 async def get_result(job_id: str, request: Request):
-    job = jobs.get(job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found.")
-    
-    if job.get("status") != "completed":
-        raise HTTPException(status_code=400, detail="Job not completed yet.")
-    
-    # Look for PDF files in the output directory that match the job_id
+    # Search for the PDF file on disk first to make downloads robust against server restarts.
     output_dir = Path("output")
-    pdf_files = list(output_dir.glob(f"*{job_id}*.pdf")) + list(output_dir.glob(f"{job_id}.pdf"))
+    # Search for any PDF file that contains the job_id in its name.
+    pdf_files = list(output_dir.glob(f"*{job_id}*.pdf"))
     
-    if not pdf_files:
-        # Try to find any PDF file that might have been generated with video title
-        pdf_files = list(output_dir.glob("*-recipe-guide.pdf"))
-        if pdf_files:
-            # Sort by modification time to get the most recent one
-            pdf_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-    
-    if not pdf_files:
-        raise HTTPException(status_code=404, detail="PDF file not found.")
-    
-    pdf_path = pdf_files[0]  # Use the first (most recent) matching file
-    
-    # Extract filename for download
-    download_filename = pdf_path.name
-    
-    return FileResponse(str(pdf_path), media_type="application/pdf", filename=download_filename)
+    if pdf_files:
+        # If a matching file is found on disk, serve it immediately.
+        pdf_path = pdf_files[0]
+        download_filename = pdf_path.name
+        return FileResponse(str(pdf_path), media_type="application/pdf", filename=download_filename)
+    else:
+        # If no file is found, check the in-memory job status for running or failed jobs.
+        job = jobs.get(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found. It may have failed, expired, or the ID is incorrect.")
+        else:
+            # The job is known, but the PDF is not ready or has been removed.
+            raise HTTPException(status_code=400, detail=f"Job not completed yet. Current status: {job.get('status')}")
 
 @router.post("/search", summary="Search for videos on YouTube")
 async def search_videos(request: YouTubeSearchRequest):
