@@ -262,43 +262,39 @@ def download_video(video_url: str, job_id: str) -> Optional[Tuple[str, str, dict
     if output_path.exists():
         output_path.unlink()
 
-    # Optimized format selection: prioritize smaller, faster downloads
-    # 480p is a good balance of quality for OCR and speed.
-    format_options = [
-        'best[height<=480][ext=mp4]',  # Best quality up to 480p (ideal)
-        'worst[ext=mp4]',              # Smallest MP4 as a fallback
-        'best[ext=mp4]',               # Best MP4 if others fail
-    ]
+    # Optimized format selection to prioritize the absolute smallest video file to minimize download time.
+    # This directly uses the 'worst' keyword which yt-dlp uses to select the lowest quality video and audio.
+    format_option = 'worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst'
 
-    for format_option in format_options:
-        try:
-            ydl_opts = {
-                'format': format_option,
-                'outtmpl': str(output_path),
-                'noplaylist': True,
-                'quiet': True,
-            }
+    try:
+        ydl_opts = {
+            'format': format_option,
+            'outtmpl': str(output_path),
+            'noplaylist': True,
+            'quiet': True,
+            'retries': 3,  # Add retries for robustness
+            'fragment_retries': 3,
+        }
 
-            log_video_step("DOWNLOAD", f"Attempting download with format: {format_option}...")
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([video_url])
+        log_video_step("DOWNLOAD", f"Attempting download with optimized format: {format_option}...")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
 
-            if output_path.exists() and output_path.stat().st_size > 50000:
-                log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded with format '{format_option}'")
-                
-                # Extract metadata after successful download
-                metadata = extract_video_metadata(video_url)
-                video_title = sanitize_filename(metadata.get('title', 'recipe'))
-                
-                return str(output_path), video_title, metadata
-            else:
-                log_video_step("DOWNLOAD", f"Download with format '{format_option}' resulted in an empty file.")
+        if output_path.exists() and output_path.stat().st_size > 50000:
+            log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded with optimized format")
+            
+            # Extract metadata after successful download
+            metadata = extract_video_metadata(video_url)
+            video_title = sanitize_filename(metadata.get('title', 'recipe'))
+            
+            return str(output_path), video_title, metadata
+        else:
+            log_video_step("DOWNLOAD", "Download with optimized format resulted in an empty or invalid file.", error=True)
 
-        except Exception as e:
-            log_video_step("DOWNLOAD", f"❌ FAILED format '{format_option}': {e}")
-            continue
+    except Exception as e:
+        log_video_step("DOWNLOAD", f"❌ FAILED optimized download: {e}", error=True)
 
-    log_video_step("DOWNLOAD", "All download attempts failed.", error=True)
+    log_video_step("DOWNLOAD", "Download failed after all attempts.", error=True)
     return None
 
 def transcribe_audio(video_path: str, job_id: Optional[str] = None) -> str:
