@@ -262,37 +262,58 @@ def download_video(video_url: str, job_id: str) -> Optional[Tuple[str, str, dict
     if output_path.exists():
         output_path.unlink()
 
-    # Optimized format selection to prioritize the absolute smallest video file to minimize download time.
-    # This directly uses the 'worst' keyword which yt-dlp uses to select the lowest quality video and audio.
-    format_option = 'worstvideo[ext=mp4]+worstaudio[ext=m4a]/worst[ext=mp4]/worst'
-
-    try:
-        ydl_opts = {
-            'format': format_option,
-            'outtmpl': str(output_path),
-            'noplaylist': True,
-            'quiet': True,
-            'retries': 3,  # Add retries for robustness
-            'fragment_retries': 3,
+    # Optimized format selection to prioritize a pre-merged, low-quality stream.
+    # This avoids separate video/audio downloads which YouTube often throttles.
+    # 'bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360][ext=mp4]'
+    # ensures we get a good quality audio stream with a reasonably sized video.
+    
+    # --- Try multiple download strategies, prioritizing worst quality for speed and compatibility ---
+    download_strategies = [
+        {
+            'name': 'Worst Quality (Fastest & Most Compatible)',
+            'format': 'worst',
+        },
+        {
+            'name': 'Low Resolution (480p)',
+            'format': 'bestvideo[height<=480]+bestaudio/best[height<=480]',
+        },
+        {
+            'name': 'Standard Definition (720p)',
+            'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]',
         }
+    ]
 
-        log_video_step("DOWNLOAD", f"Attempting download with optimized format: {format_option}...")
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([video_url])
-
-        if output_path.exists() and output_path.stat().st_size > 50000:
-            log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded with optimized format")
+    for strategy in download_strategies:
+        try:
+            log_video_step("DOWNLOAD", f"Attempting download with '{strategy['name']}' format: {strategy['format']}...")
             
-            # Extract metadata after successful download
-            metadata = extract_video_metadata(video_url)
-            video_title = sanitize_filename(metadata.get('title', 'recipe'))
-            
-            return str(output_path), video_title, metadata
-        else:
-            log_video_step("DOWNLOAD", "Download with optimized format resulted in an empty or invalid file.", error=True)
+            ydl_opts = {
+                'format': strategy['format'],
+                'outtmpl': str(output_path),
+                'noplaylist': True,
+                'quiet': True,
+                'retries': 2,
+                'fragment_retries': 2,
+                'http_chunk_size': 10485760, # 10MB chunk size
+            }
 
-    except Exception as e:
-        log_video_step("DOWNLOAD", f"❌ FAILED optimized download: {e}", error=True)
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([video_url])
+
+            if output_path.exists() and output_path.stat().st_size > 50000:
+                log_video_step("DOWNLOAD", f"✅ SUCCESS: Downloaded with '{strategy['name']}' format")
+                
+                # Extract metadata after successful download
+                metadata = extract_video_metadata(video_url)
+                video_title = sanitize_filename(metadata.get('title', 'recipe'))
+                
+                return str(output_path), video_title, metadata
+            else:
+                log_video_step("DOWNLOAD", f"Download with '{strategy['name']}' resulted in an empty or invalid file.", error=True)
+
+        except Exception as e:
+            log_video_step("DOWNLOAD", f"❌ FAILED download with '{strategy['name']}': {e}", error=True)
+            # If this strategy failed, loop will continue to the next one
 
     log_video_step("DOWNLOAD", "Download failed after all attempts.", error=True)
     return None

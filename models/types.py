@@ -11,6 +11,7 @@ class VideoRequest(BaseModel):
     youtube_url: str = Field(..., description="The YouTube video URL.")
     language: Optional[str] = Field("en", description="Language code (e.g., 'en', 'sv').")
     job_id: Optional[str] = Field(None, description="Optional job ID for tracking.")
+    show_images: Optional[bool] = Field(True, description="Whether to include images in the PDF.")
 
 class Recipe(BaseModel):
     title: str = Field(..., description="The official title of the recipe.")
@@ -34,7 +35,7 @@ class YouTubeVideo(BaseModel):
 
 class YouTubeSearchRequest(BaseModel):
     query: str = Field(..., description="Search query for YouTube videos.")
-    max_results: Optional[int] = Field(10, description="Maximum number of results to return.")
+    page: Optional[int] = Field(1, description="Page number for pagination.")
     source: Optional[str] = Field("youtube", description="The source to search (e.g., 'youtube', 'tiktok').")
 
 # User Authentication Models

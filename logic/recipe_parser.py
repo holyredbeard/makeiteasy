@@ -127,18 +127,33 @@ def call_deepseek_api(prompt: str) -> dict:
         response_text = response.content
         
         logger.info("Received response from DeepSeek API")
-        logger.debug(f"Raw response: {response_text}")
         
-        if response_text.startswith("```json"):
-            response_text = response_text[7:-4].strip()
+        # Robustly extract JSON from the response text
+        # This regex finds a JSON block that might be wrapped in ```json ... ```
+        json_match = re.search(r'```json\s*(\{.*?\})\s*```', response_text, re.DOTALL)
         
+        json_str = ""
+        if json_match:
+            json_str = json_match.group(1)
+        else:
+            # Fallback: if no markdown block, assume the whole text might be JSON
+            # and try to find the first '{' and last '}'
+            start = response_text.find('{')
+            end = response_text.rfind('}')
+            if start != -1 and end != -1:
+                json_str = response_text[start:end+1]
+            else:
+                logger.error("No JSON object found in the response.")
+                logger.error(f"Raw response: {response_text}")
+                return {}
+
         try:
-            parsed_response = json.loads(response_text)
+            parsed_response = json.loads(json_str)
             logger.info("Successfully parsed JSON response")
             return parsed_response
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON response: {e}")
-            logger.error(f"Raw response that failed to parse: {response_text}")
+            logger.error(f"Failed to parse extracted JSON: {e}")
+            logger.error(f"Extracted JSON string that failed to parse: {json_str}")
             return {}
             
     except Exception as e:

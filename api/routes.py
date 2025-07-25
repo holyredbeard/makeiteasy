@@ -114,26 +114,40 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
     current_user = get_optional_user(request)
     client_ip = request.client.host if request.client else "unknown"
     
-    # Rate limiting for non-authenticated users
-    if not current_user:
-        if not check_rate_limit(client_ip):
-            remaining_time = 24 * 3600 - (time.time() - ip_usage[client_ip]["last_reset"])
-            hours_left = int(remaining_time // 3600)
-            raise HTTPException(
-                status_code=429, 
-                detail=f"Daily limit reached. You can create {DAILY_LIMIT_NO_AUTH} PDFs per day without an account. "
-                       f"Try again in {hours_left} hours or create a free account for unlimited access."
-            )
-        increment_ip_usage(client_ip)
-    
+    # Bypass rate limit for admin user
+    is_admin = getattr(current_user, 'is_admin', False)
+
+    # Rate limiting for non-authenticated or non-admin users
+    if not is_admin:
+        if not current_user:
+            # Non-authenticated user
+            if not check_rate_limit(client_ip):
+                remaining_time = 24 * 3600 - (time.time() - ip_usage.get(client_ip, {}).get("last_reset", time.time()))
+                hours_left = max(0, int(remaining_time // 3600))
+                raise HTTPException(
+                    status_code=429, 
+                    detail=f"Daily limit reached. You can create {DAILY_LIMIT_NO_AUTH} PDFs per day without an account. "
+                           f"Try again in {hours_left} hours or create a free account for unlimited access."
+                )
+            increment_ip_usage(client_ip)
+        else:
+            # Authenticated, non-admin user
+            if current_user.usage_count >= current_user.usage_limit:
+                raise HTTPException(
+                    status_code=429,
+                    detail="You have reached your PDF generation limit. Please contact support to upgrade your plan."
+                )
+            db.increment_user_usage(current_user.id)
+
     job_id = str(uuid.uuid4())
     session_id = str(uuid.uuid4())
     video_url = str(video_request.youtube_url)
     language = video_request.language or "en"
+    show_images = video_request.show_images
     
     update_job_status(job_id, "processing", "Job has been received and is scheduled to start.")
 
-    def process_video_task(job_id: str, video_url: str, language: str, user_id: Optional[int]):
+    def process_video_task(job_id: str, video_url: str, language: str, user_id: Optional[int], show_images: bool):
         try:
             # 1. Download Video
             # Detect platform for better user messaging
@@ -211,7 +225,14 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
             
             # 6. Generate PDF
             update_status(job_id, "generating_pdf", "Generating PDF instructions...")
-            pdf_path = generate_pdf(recipe, job_id, template_name="professional", video_url=video_url, video_title=video_title)
+            pdf_path = generate_pdf(
+                recipe, 
+                job_id, 
+                template_name="professional", 
+                video_url=video_url, 
+                video_title=video_title,
+                show_images=show_images
+            )
             if not pdf_path:
                 raise ValueError("Failed to generate PDF.")
 
@@ -232,7 +253,8 @@ async def generate_endpoint(video_request: VideoRequest, background_tasks: Backg
             logger.error(f"Job {job_id} failed: {e}")
             update_status(job_id, "failed", f"An error occurred: {e}")
 
-    background_tasks.add_task(process_video_task, job_id, video_url, language, current_user.id if current_user else None)
+    user_id = current_user.id if current_user else None
+    background_tasks.add_task(process_video_task, job_id, video_url, language, user_id, show_images)
     
     return JSONResponse(status_code=202, content={
         "job_id": job_id, 
@@ -335,16 +357,18 @@ async def get_result(job_id: str, request: Request):
 async def search_videos(request: YouTubeSearchRequest):
     """Search for videos and return a list of results."""
     query = request.query
+    page = request.page
+    results_per_page = 10
+    
     # TikTok search is currently not supported by yt-dlp's search functionality
-    # source = request.source or 'youtube' 
     source = 'youtube'
 
     if "recipe" not in query.lower():
         query = f"{query} recipe"
 
     try:
-        # TikTok search prefix is invalid, so we hardcode to YouTube for now.
-        search_prefix = "ytsearch10:"
+        # Fetch a larger batch of results at once to support pagination without re-searching
+        search_prefix = f"ytsearch{page * results_per_page}:"
         search_query = f"{search_prefix}{query}"
 
         ydl_opts = {
@@ -393,7 +417,13 @@ async def search_videos(request: YouTubeSearchRequest):
                     ))
             
             unique_videos = {v.video_id: v for v in videos}.values()
-            return JSONResponse(content={"results": [v.dict() for v in list(unique_videos)[:10]]})
+            
+            # Paginate the results
+            start_index = (page - 1) * results_per_page
+            end_index = start_index + results_per_page
+            paginated_results = list(unique_videos)[start_index:end_index]
+            
+            return JSONResponse(content={"results": [v.dict() for v in paginated_results]})
 
     except Exception as e:
         logger.error(f"General search failed for query '{query}' on source '{source}': {traceback.format_exc()}")

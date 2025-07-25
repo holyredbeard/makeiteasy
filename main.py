@@ -24,6 +24,7 @@ logging.basicConfig(
         logging.StreamHandler()
     ]
 )
+logging.info("--- SERVER RESTART - CODE VERSION 2 ---")
 
 # Create FastAPI app
 app = FastAPI(
@@ -48,11 +49,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(google_auth_router, prefix="/api/v1/auth", tags=["google-auth"])
-
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "message": "Server is running"}
 
 # Health check endpoint
 @app.get("/health")

@@ -446,13 +446,12 @@ const JobStatus = ({ job, onReset }) => {
     if (status.toLowerCase().includes('downloading') || status.toLowerCase().includes('processing')) return 1;
     if (status.toLowerCase().includes('transcribing')) return 2;
     if (status.toLowerCase().includes('analyzing')) return 3;
-    if (status.toLowerCase().includes('frames') || status.toLowerCase().includes('extracting')) return 4;
-    if (status.toLowerCase().includes('generating') || status.toLowerCase().includes('pdf')) return 5;
+    if (status.toLowerCase().includes('frames') || status.toLowerCase().includes('extracting') || status.toLowerCase().includes('generating') || status.toLowerCase().includes('pdf')) return 4;
     return 1; // Default to step 1
   };
 
   const currentStep = getCurrentStep();
-  const totalSteps = 5;
+  const totalSteps = 4;
 
   return (
     <div className="text-center">
@@ -477,16 +476,19 @@ export default function Food2Guide() {
   const [videoUrl, setVideoUrl] = useState('');
   const [searchQuery, setSearchQuery] = useState("");
   const [language, setLanguage] = useState('en');
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState([]); // Initialize as empty array
   const [selectedVideoId, setSelectedVideoId] = useState(null);
   const [job, setJob] = useState(null);
   const [authToken, setAuthToken] = useState(localStorage.getItem('authToken'));
   const [currentUser, setCurrentUser] = useState(null);
   const [authTab, setAuthTab] = useState('login');
   const [isSearching, setIsSearching] = useState(false);
+  const [searchPage, setSearchPage] = useState(1);
+  const [hasMoreResults, setHasMoreResults] = useState(true);
   const [usageStatus, setUsageStatus] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isTestPdfModalOpen, setIsTestPdfModalOpen] = useState(false);
+  const scrollContainerRef = useRef(null);
   // 1. Add state for welcome snackbar
   const [showWelcome, setShowWelcome] = useState(false);
   
@@ -503,6 +505,9 @@ export default function Food2Guide() {
   const [maxSteps, setMaxSteps] = useState(10);
   const [imageQuality, setImageQuality] = useState('high');
   const [videoSource, setVideoSource] = useState('youtube'); // youtube eller tiktok
+  const [searchAttempted, setSearchAttempted] = useState(false); // New state to track if a search has been made
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const languages = [
     { code: 'en', name: 'English' },
@@ -669,11 +674,19 @@ export default function Food2Guide() {
     }
   };
 
-  // Ändra searchYouTube så att den skickar med videoSource
-  const searchYouTube = async () => {
-    if (!searchQuery.trim()) return;
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (container) {
+      if (container.scrollTop + container.clientHeight >= container.scrollHeight - 100) {
+        loadMoreResults();
+      }
+    }
+  };
+
+  const loadMoreResults = async () => {
+    if (isSearching || !hasMoreResults) return;
+    
     setIsSearching(true);
-    setSearchResults([]); // Clear previous results
     try {
       const response = await fetch(`${API_BASE}/api/v1/search`, {
         method: 'POST',
@@ -681,16 +694,55 @@ export default function Food2Guide() {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${authToken}` 
         },
-        body: JSON.stringify({ query: searchQuery, language, source: videoSource })
+        body: JSON.stringify({ query: searchQuery, language, source: videoSource, page: searchPage + 1 })
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(prevResults => [...prevResults, ...data.results]);
+        setSearchPage(prevPage => prevPage + 1);
+        if (data.results.length < 10) {
+          setHasMoreResults(false);
+        }
+      } else {
+        setHasMoreResults(false);
+      }
+    } catch (error) {
+      setHasMoreResults(false);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Ändra searchYouTube så att den skickar med videoSource
+  const searchYouTube = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setSearchAttempted(true); // Mark that a search has been attempted
+    setSearchResults([]); // Clear previous results
+    setSearchPage(1);
+    setHasMoreResults(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/search`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}` 
+        },
+        body: JSON.stringify({ query: searchQuery, language, source: videoSource, page: 1 })
       });
       if (response.ok) {
         const data = await response.json();
         setSearchResults(data.results);
+        if (data.results.length < 10) {
+          setHasMoreResults(false);
+        }
       } else {
         alert('Search failed.');
+        setHasMoreResults(false);
       }
     } catch (error) {
       alert('An error occurred during search.');
+      setHasMoreResults(false);
     } finally {
       setIsSearching(false);
     }
@@ -807,9 +859,9 @@ export default function Food2Guide() {
                       <LinkIcon className="h-5 w-5"/>
                       <span>Paste Link</span>
                     </button>
-                    <button onClick={() => setActiveTab('search')} className={`w-full text-sm rounded-lg px-4 py-2 flex items-center justify-center gap-2 transition-colors ${activeTab === 'search' ? 'bg-green-600 text-white font-semibold shadow-sm' : 'bg-transparent text-gray-600 hover:bg-white/50'}`}>
-                      <MagnifyingGlassIcon className="h-5 w-5"/>
-                      <span>Search YouTube</span>
+                    <button onClick={() => setActiveTab('search')} className={`w-full text-sm rounded-lg px-4 py-2 flex items-center justify-center gap-2 transition-colors ${activeTab === 'search' ? 'bg-green-600 text-white font-semibold shadow-sm' : 'bg-transparent hover:bg-gray-200/50'}`}>
+                      <MagnifyingGlassIcon className="h-5 w-5" />
+                      Search Recipes
                     </button>
                   </div>
                   <div className="mt-6">
@@ -852,32 +904,50 @@ export default function Food2Guide() {
                   </div>
                 </div>
 
-                {isSearching && (
-                  <div className="flex justify-center items-center py-10">
-                    <Spinner size="h-10 w-10" color="text-green-600" />
-                  </div>
-                )}
-
-                {searchResults.length > 0 && !isSearching && (
-                  <div className="space-y-4">
-                    <h3 className="text-gray-800 text-sm font-bold tracking-tight">Search Results</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {searchResults.map((video) => (
-                        <div
-                          key={video.video_id}
-                          onClick={() => { setSelectedVideoId(video.video_id); setVideoUrl(`https://www.youtube.com/watch?v=${video.video_id}`); }}
-                          className={`cursor-pointer border-2 rounded-xl overflow-hidden transition-all duration-200 ${selectedVideoId === video.video_id ? 'border-green-500 shadow-lg scale-105' : 'border-transparent hover:border-green-400/50'}`}
-                        >
-                          <img src={video.thumbnail_url} alt={video.title} className="w-full h-28 object-cover" />
-                          <div className="p-3">
-                            <p className="font-semibold text-xs text-gray-800 line-clamp-2">{video.title}</p>
-                            <p className="text-xs text-gray-500 mt-1">{video.channel_title}</p>
-                          </div>
-                        </div>
-                      ))}
+                {/* Search Results Section */}
+                <div className="mt-8">
+                  {isSearching && searchResults.length === 0 && (
+                    <div className="flex justify-center items-center p-8">
+                      <Spinner size="h-8 w-8" color="text-green-600" />
                     </div>
-                  </div>
-                )}
+                  )}
+
+                  {searchAttempted && !isSearching && searchResults.length === 0 && (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No videos found for your search. Please try again.</p>
+                    </div>
+                  )}
+
+                  {searchResults.length > 0 && (
+                    <div className="space-y-4">
+                      <h3 className="text-gray-800 text-sm font-bold tracking-tight">Search Results</h3>
+                      <div 
+                        ref={scrollContainerRef}
+                        onScroll={handleScroll}
+                        className="max-h-[25rem] overflow-y-auto grid grid-cols-2 gap-4 p-2"
+                      >
+                        {searchResults.map((video) => (
+                          <div
+                            key={video.video_id}
+                            onClick={() => { setSelectedVideoId(video.video_id); setVideoUrl(`https://www.youtube.com/watch?v=${video.video_id}`); }}
+                            className={`cursor-pointer border-2 rounded-xl overflow-hidden transition-all duration-200 ${selectedVideoId === video.video_id ? 'border-green-500 shadow-lg scale-105' : 'border-transparent hover:border-green-400/50'}`}
+                          >
+                            <img src={video.thumbnail_url} alt={video.title} className="w-full h-28 object-cover" />
+                            <div className="p-3">
+                              <p className="font-semibold text-xs text-gray-800 line-clamp-2">{video.title}</p>
+                              <p className="text-xs text-gray-500 mt-1">{video.channel_title}</p>
+                            </div>
+                          </div>
+                        ))}
+                        {isSearching && searchResults.length > 0 && (
+                          <div className="col-span-2 flex justify-center items-center p-4">
+                            <Spinner size="h-6 w-6" color="text-green-600" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div>
                   <select
                     id="language-select"
@@ -912,11 +982,11 @@ export default function Food2Guide() {
                       <div className="mt-4 space-y-4 p-4 bg-gray-50 rounded-lg">
                         {/* 1. Show images */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Show images</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Show Images</label>
                           <div className="flex gap-4">
                             <label className="flex items-center">
                               <input type="radio" name="showImages" checked={showImages} onChange={() => setShowImages(true)} className="mr-2" />
-                              Yes (default)
+                              Yes
                             </label>
                             <label className="flex items-center">
                               <input type="radio" name="showImages" checked={!showImages} onChange={() => setShowImages(false)} className="mr-2" />

@@ -39,7 +39,8 @@ class DatabaseManager:
                     avatar_url TEXT,
                     auth_provider TEXT DEFAULT 'email',
                     is_active BOOLEAN DEFAULT TRUE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    usage_count INTEGER DEFAULT 0
                 )
             """)
             
@@ -211,6 +212,17 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error getting user by Google ID: {e}")
             return None
+
+    def increment_user_usage(self, user_id: int):
+        """Increment the usage count for a user"""
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("UPDATE users SET usage_count = usage_count + 1 WHERE id = ?", (user_id,))
+                conn.commit()
+                logger.info(f"Incremented usage count for user {user_id}")
+        except Exception as e:
+            logger.error(f"Error incrementing usage count for user {user_id}: {e}")
 
     def link_pdf_to_user(self, user_id: int, job_id: str, pdf_path: str):
         """Link a generated PDF to a user"""
