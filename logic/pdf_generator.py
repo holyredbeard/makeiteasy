@@ -1,7 +1,7 @@
 from fpdf import FPDF
 from typing import List, Optional
 import os
-from models.types import Recipe, Step
+from models.types import Recipe, Step, RecipeContent
 import logging
 import traceback
 from datetime import datetime
@@ -202,7 +202,42 @@ def get_image_style_from_orientation(orientation: str, image_type: str) -> str:
     else:
         return "step-image-landscape"  # Default fallback
 
-def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", language: str = "en", video_url: Optional[str] = None, video_title: Optional[str] = None, show_images: bool = True) -> str:
+async def convert_recipe_content_to_recipe(content: RecipeContent) -> Recipe:
+    """Converts a RecipeContent object to a Recipe object for PDF generation."""
+    
+    # Convert ingredients
+    ingredients_list = []
+    if content.ingredients:
+        for ing in content.ingredients:
+            line = f"{ing.quantity} {ing.name}"
+            if ing.notes:
+                line += f" ({ing.notes})"
+            ingredients_list.append(line)
+
+    # Convert instructions to steps
+    steps_list = []
+    if content.instructions:
+        for inst in content.instructions:
+            steps_list.append(Step(step_number=inst.step, description=inst.description, image_path=inst.image_path))
+            
+    # Add chef tips to the end of instructions, if any
+    if content.chef_tips:
+        last_step = len(steps_list)
+        for i, tip in enumerate(content.chef_tips, 1):
+            steps_list.append(Step(step_number=last_step + i, description=f"Chef's Tip: {tip}"))
+
+    return Recipe(
+        title=content.title,
+        description=content.description,
+        serves=content.servings,
+        prep_time=content.prep_time,
+        cook_time=content.cook_time,
+        ingredients=ingredients_list,
+        steps=steps_list,
+        thumbnail_path=getattr(content, 'thumbnail_path', None)
+    )
+    
+def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", language: str = "en", video_url: Optional[str] = None, video_title: Optional[str] = None, show_top_image: bool = True, show_step_images: bool = True) -> str:
     """Generate PDF from recipe content using a CSS template."""
     output_dir = Path("output")
     output_dir.mkdir(exist_ok=True)
@@ -275,7 +310,7 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
             image_height = image_width * 0.75
             
             # Left column - Image or Placeholder with text
-            if show_images and recipe.thumbnail_path and os.path.exists(recipe.thumbnail_path):
+            if show_top_image and recipe.thumbnail_path and os.path.exists(recipe.thumbnail_path):
                 # Check image orientation and get appropriate CSS style
                 orientation = get_image_orientation(recipe.thumbnail_path)
                 log_pdf_step("HEADER", f"Thumbnail orientation: {orientation}", job_id=job_id)
@@ -319,7 +354,7 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                 # Always align thumbnail top with the start position
                 pdf.image(thumbnail_path, x=pdf.l_margin, y=start_y, w=img_width, h=img_height)
                 image_height = img_height  # Update for layout calculation
-            elif show_images:
+            elif show_top_image:
                 pdf.set_fill_color(230, 230, 230) # Light gray
                 pdf.rect(pdf.l_margin, start_y, image_width, image_height, 'F')
                 pdf.set_xy(pdf.l_margin, start_y + (image_height / 2) - 5)
@@ -478,7 +513,7 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                 usable_width = pdf.w - pdf.l_margin - pdf.r_margin
                 
                 # Check if step has an image to determine layout
-                has_image = show_images and step.image_path and os.path.exists(step.image_path)
+                has_image = show_step_images and step.image_path and os.path.exists(step.image_path)
                 
                 # Parse step description
                 if ':' in step.description:

@@ -21,10 +21,10 @@ def get_google_oauth_config():
     return {
         "client_id": GOOGLE_CLIENT_ID,
         "client_secret": GOOGLE_CLIENT_SECRET,
-        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:3000"),
+        "redirect_uri": os.getenv("GOOGLE_REDIRECT_URI"),  # Läs från env, ingen fallback
         "scopes": GOOGLE_SCOPES
     }
 
 def is_google_oauth_configured() -> bool:
     """Check if Google OAuth is properly configured"""
-    return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET) 
+    return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET and os.getenv("GOOGLE_REDIRECT_URI")) 

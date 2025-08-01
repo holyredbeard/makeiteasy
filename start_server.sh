@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Activate virtual environment
+source venv/bin/activate
+
 # Load environment variables from .env file
 if [ -f .env ]; then
     source .env

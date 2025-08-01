@@ -157,8 +157,7 @@ async def google_callback(request: Request):
         
         # Create JWT token
         jwt_token = create_access_token(
-            data={"sub": user.email},
-            expires_delta=timedelta(hours=24)
+            data={"sub": user.email}
         )
         
         # Redirect to frontend with token
@@ -239,8 +238,7 @@ async def google_callback_post(request: Request):
         
         # Create JWT token
         jwt_token = create_access_token(
-            data={"sub": user.email},
-            expires_delta=timedelta(hours=24)
+            data={"sub": user.email}
         )
         
         return Token(
@@ -297,8 +295,7 @@ async def google_mobile_auth(request: Request):
         
         # Create JWT token
         jwt_token = create_access_token(
-            data={"sub": user.email},
-            expires_delta=timedelta(hours=24)
+            data={"sub": user.email}
         )
         
         return Token(

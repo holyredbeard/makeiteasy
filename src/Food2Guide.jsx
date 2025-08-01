@@ -10,6 +10,16 @@ import {
   FireIcon,
   XMarkIcon,
   WrenchScrewdriverIcon,
+  BookOpenIcon, 
+  BookmarkIcon, 
+  PlusCircleIcon,
+  ArrowLeftIcon,
+  ExclamationCircleIcon,
+  ChevronUpIcon,
+  ChevronDownIcon,
+  CogIcon,
+  DocumentIcon,
+  ArrowUturnLeftIcon
 } from '@heroicons/react/24/outline';
 
 const API_BASE = 'http://localhost:8000';
@@ -20,6 +30,364 @@ const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
   </svg>
 );
+
+// AdminLogViewer component to display detailed logs for admins
+const AdminLogViewer = ({ logs, isVisible }) => {
+  if (!isVisible) return null;
+  
+  // Auto-scroll to bottom when logs update
+  const logContainerRef = useRef(null);
+  
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [logs]);
+  
+  return (
+    <div className="fixed top-20 right-4 w-96 max-h-[80vh] bg-black bg-opacity-90 text-white p-4 rounded-lg shadow-lg z-50 font-mono text-xs border border-gray-700">
+      <div className="flex justify-between items-center sticky top-0 bg-black pb-2 mb-2 border-b border-gray-700">
+        <h3 className="text-sm font-bold text-green-400">Admin Debug Console</h3>
+        <div className="text-xs text-gray-400">{logs.length} events</div>
+      </div>
+      <div 
+        ref={logContainerRef}
+        className="space-y-1 overflow-y-auto max-h-[calc(80vh-3rem)]"
+      >
+        {logs.map((log, index) => (
+          <div 
+            key={index} 
+            className={`py-1 border-b border-gray-800 ${log.isError ? 'text-red-400' : 'text-white'}`}
+          >
+            <span className="text-gray-400 mr-2">[{log.timestamp}]</span> 
+            {log.message && log.message.includes('Raw data:') 
+              ? <details>
+                  <summary className="cursor-pointer hover:text-green-300">Raw data</summary>
+                  <pre className="mt-1 pl-2 text-gray-400 border-l-2 border-gray-700 overflow-x-auto">
+                    {log.message.replace('Raw data: ', '')}
+                  </pre>
+                </details>
+              : log.message
+            }
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// RecipeStreamViewer component to display the recipe and buttons
+const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, adminLogs = [] }) => {
+  // Visa receptet direkt istället för knappar
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  
+  // Handle PDF download
+  const handleDownloadPdf = async (recipeData) => {
+    try {
+      // Convert instructions format if needed
+      const formattedInstructions = recipeData.instructions.map((instruction, idx) => {
+        if (typeof instruction === 'string') {
+          return { step: idx + 1, description: instruction };
+        } else if (typeof instruction === 'object') {
+          return { 
+            step: instruction.step || idx + 1, 
+            description: instruction.description || `Step ${idx + 1}`
+          };
+        }
+        return { step: idx + 1, description: `Step ${idx + 1}` };
+      });
+
+      // Format ingredients if needed
+      const formattedIngredients = recipeData.ingredients.map(ingredient => {
+        if (typeof ingredient === 'string') {
+          return { name: ingredient, quantity: '' };
+        }
+        return ingredient;
+      });
+
+      // Create properly formatted request
+      const formattedRequest = {
+        ...recipeData,
+        ingredients: formattedIngredients,
+        instructions: formattedInstructions,
+        template_name: "professional",
+        image_orientation: "landscape",
+        show_top_image: showTopImage,
+        show_step_images: showStepImages
+      };
+
+      const response = await fetch(`${API_BASE}/api/v1/generate-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formattedRequest),
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+      
+      // Create a blob from the PDF stream
+      const blob = await response.blob();
+      
+      // Create a link element and trigger download
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = `${formattedRequest.title.replace(/\s+/g, '_')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error('Failed to download PDF:', err);
+      alert('Failed to download PDF. Please try again.');
+    }
+  };
+  
+  // Handle saving recipe (for logged in users)
+  const handleSaveRecipe = async (recipeData) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/recipes/save`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          recipe_content: recipeData,
+          source_url: '' // We don't have this in this context
+        }),
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Error: ${response.status}`);
+      }
+      
+      alert('Recipe saved successfully!');
+    } catch (err) {
+      console.error('Failed to save recipe:', err);
+      alert('Failed to save recipe. Please try again.');
+    }
+  };
+  
+  // If still streaming or error occurred
+  if (Object.keys(data).length === 0) {
+    return (
+      <div className="text-center">
+        {error ? (
+          <div className="text-red-500 mb-4">
+            <ExclamationCircleIcon className="h-12 w-12 mx-auto mb-2 text-red-500" />
+            <h3 className="text-xl font-bold mb-2">Error</h3>
+            <p>{error}</p>
+            <button
+              onClick={onReset}
+              className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        ) : (
+          <div>
+            <div className="flex justify-center mb-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+            <h3 className="text-xl font-bold mb-2">Processing</h3>
+            <p className="text-gray-600">{status}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+  
+  // Recipe is ready, show recipe content directly
+  return (
+    <div>
+      {/* Admin Log Viewer - Only visible for admins */}
+      <AdminLogViewer logs={adminLogs} isVisible={currentUser?.is_admin === true} />
+      
+      {/* Recipe display view - A4 width optimized */}
+      <div className="recipe-display a4-format">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-3xl font-bold">{data.title}</h2>
+        </div>
+        
+        <p className="text-gray-600 mb-6">{data.description}</p>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <p className="text-sm text-gray-500">Servings</p>
+            <p className="font-medium">{data.servings}</p>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <p className="text-sm text-gray-500">Prep Time</p>
+            <p className="font-medium">{data.prep_time}</p>
+          </div>
+          <div className="bg-gray-50 p-3 rounded-lg">
+            <p className="text-sm text-gray-500">Cook Time</p>
+            <p className="font-medium">{data.cook_time}</p>
+          </div>
+        </div>
+        
+        <div className="flex flex-col md:flex-row gap-8 mb-8">
+          <div className="md:w-1/3">
+            <h3 className="text-2xl font-semibold mb-4">Ingredients</h3>
+            <ul className="list-disc pl-5 space-y-2">
+              {data.ingredients && data.ingredients.map((ing, idx) => (
+                <li key={idx} className="text-gray-700">
+                  {ing.quantity} {ing.name} {ing.notes && <span className="text-gray-500">({ing.notes})</span>}
+                </li>
+              ))}
+            </ul>
+          </div>
+          
+          <div className="md:w-2/3">
+            <h3 className="text-2xl font-semibold mb-4">Instructions</h3>
+            <ol className="list-decimal pl-5 space-y-4">
+              {data.instructions && data.instructions.length > 0 ? (
+                data.instructions.map((step, idx) => (
+                  <li key={idx} className="text-gray-700">
+                    {typeof step === 'string' ? step : step.description || `Steg ${idx + 1}`}
+                  </li>
+                ))
+              ) : (
+                <div className="text-red-500 font-medium">Instruktioner saknas</div>
+              )}
+            </ol>
+          </div>
+        </div>
+        
+        {data.chef_tips && data.chef_tips.length > 0 && (
+          <div className="mb-8 bg-amber-50 p-4 rounded-lg">
+            <h3 className="text-xl font-semibold mb-2">Chef Tips</h3>
+            <ul className="list-disc pl-5 space-y-2">
+              {data.chef_tips.map((tip, idx) => (
+                <li key={idx} className="text-gray-700">{tip}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        
+        {data.nutritional_information && (
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-lg font-semibold mb-2">Nutritional Information</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {data.nutritional_information.calories && (
+                <div>
+                  <p className="text-sm text-gray-500">Calories</p>
+                  <p>{data.nutritional_information.calories}</p>
+                </div>
+              )}
+              {data.nutritional_information.protein && (
+                <div>
+                  <p className="text-sm text-gray-500">Protein</p>
+                  <p>{data.nutritional_information.protein}</p>
+                </div>
+              )}
+              {data.nutritional_information.carbohydrates && (
+                <div>
+                  <p className="text-sm text-gray-500">Carbs</p>
+                  <p>{data.nutritional_information.carbohydrates}</p>
+                </div>
+              )}
+              {data.nutritional_information.fat && (
+                <div>
+                  <p className="text-sm text-gray-500">Fat</p>
+                  <p>{data.nutritional_information.fat}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {/* Admin settings */}
+        {currentUser?.is_admin && (
+          <div className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50 mt-8">
+            <button 
+              onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+              className="flex items-center justify-between w-full text-left text-sm font-medium text-gray-700 mb-2"
+            >
+              <span className="flex items-center gap-2">
+                <CogIcon className="h-5 w-5 text-gray-500" />
+                Admin Settings
+              </span>
+              <ChevronDownIcon className={`h-5 w-5 transition-transform ${showAdvancedSettings ? 'rotate-180' : ''}`} />
+            </button>
+            
+            {showAdvancedSettings && (
+              <div className="pt-2 space-y-3 border-t border-gray-200">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Show Images in PDF</label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center">
+                      <input 
+                        type="radio" 
+                        name="showImages" 
+                        checked={showImages} 
+                        onChange={() => setShowImages(true)} 
+                        className="mr-2" 
+                      />
+                      Yes
+                    </label>
+                    <label className="flex items-center">
+                      <input 
+                        type="radio" 
+                        name="showImages" 
+                        checked={!showImages} 
+                        onChange={() => setShowImages(false)} 
+                        className="mr-2" 
+                      />
+                      No
+                    </label>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={showTestPdfModal}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <DocumentIcon className="h-5 w-5" />
+                  Test PDF Templates
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* Action buttons at the bottom */}
+        <div className="flex flex-wrap justify-center gap-4 mt-8 pt-6 border-t border-gray-200">
+          <button
+            onClick={() => handleDownloadPdf(data)}
+            className="flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <ArrowDownTrayIcon className="h-5 w-5" />
+            <span>Download PDF</span>
+          </button>
+          
+          {currentUser && (
+            <button
+              onClick={() => handleSaveRecipe(data)}
+              className="flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <BookmarkIcon className="h-5 w-5" />
+              <span>Save to Recipes</span>
+            </button>
+          )}
+          
+          <button
+            onClick={onReset}
+            className="flex items-center justify-center gap-2 bg-amber-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-amber-700 transition-colors"
+          >
+            <PlusCircleIcon className="h-5 w-5" />
+            <span>Create New Recipe</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 
 const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => (
   <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">
@@ -233,47 +601,56 @@ const AuthModal = ({ isOpen, onClose, handleLogin, handleRegister, initiateGoogl
 };
 
 const TestPdfModal = ({ isOpen, onClose, currentUser }) => {
-  const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState('professional');
   const [selectedOrientation, setSelectedOrientation] = useState('landscape');
   const [isGenerating, setIsGenerating] = useState(false);
   
-  // Fetch available templates when modal opens
-  useEffect(() => {
-    if (isOpen && currentUser?.is_admin) {
-      fetchTemplates();
-    }
-  }, [isOpen, currentUser]);
-
-  const fetchTemplates = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/templates`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setTemplates(data.templates || []);
-      }
-    } catch (error) {
-      console.error('Error fetching templates:', error);
-    }
+  // Define available templates
+  const templates = ['default', 'modern', 'professional'];
+  
+  // Add CSS template selection to the PDF generation
+  const handleTemplateChange = (e) => {
+    setSelectedTemplate(e.target.value);
   };
+  
 
   const generateTestPdf = async () => {
     setIsGenerating(true);
     try {
-      const formData = new FormData();
-      formData.append('template_name', selectedTemplate);
-      formData.append('image_orientation', selectedOrientation);
+      // Create test recipe data
+      const testRecipe = {
+        title: "Test Recipe for Template Preview",
+        description: "This is a test recipe to preview the selected template style.",
+        ingredients: [
+          { name: "Ingredient 1", quantity: "100g" },
+          { name: "Ingredient 2", quantity: "2 tbsp" },
+          { name: "Ingredient 3", quantity: "1 cup" },
+        ],
+        instructions: [
+          { step: 1, description: "Step 1: Do something with the ingredients" },
+          { step: 2, description: "Step 2: Mix everything together" },
+          { step: 3, description: "Step 3: Cook for 10 minutes" }
+        ],
+        prep_time: "10 min",
+        cook_time: "20 min",
+        servings: 4,
+        difficulty: "Easy"
+      };
       
-      const response = await fetch(`${API_BASE}/api/v1/test-pdf`, {
+      // Add template and orientation to the request
+      const requestData = {
+        ...testRecipe,
+        template_name: selectedTemplate,
+        image_orientation: selectedOrientation
+      };
+      
+      const response = await fetch(`${API_BASE}/api/v1/generate-pdf`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          'Content-Type': 'application/json',
         },
-        body: formData
+        body: JSON.stringify(requestData),
+        credentials: 'include'
       });
       
       if (response.ok) {
@@ -338,6 +715,21 @@ const TestPdfModal = ({ isOpen, onClose, currentUser }) => {
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
+                CSS Template
+              </label>
+              <select 
+                value={selectedTemplate}
+                onChange={handleTemplateChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                {templates.map(template => (
+                  <option key={template} value={template}>{template.charAt(0).toUpperCase() + template.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
                 Image Orientation
               </label>
               <select 
@@ -393,7 +785,7 @@ const JobStatus = ({ job, onReset }) => {
 
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/v1/status/${job.job_id}`);
+        const response = await fetch(`${API_BASE}/api/v1/status/${job.job_id}`, { credentials: 'include' });
         if (!response.ok) throw new Error('Network response was not ok');
         
         const data = await response.json();
@@ -479,7 +871,6 @@ export default function Food2Guide() {
   const [searchResults, setSearchResults] = useState([]); // Initialize as empty array
   const [selectedVideoId, setSelectedVideoId] = useState(null);
   const [job, setJob] = useState(null);
-  const [authToken, setAuthToken] = useState(localStorage.getItem('authToken'));
   const [currentUser, setCurrentUser] = useState(null);
   const [authTab, setAuthTab] = useState('login');
   const [isSearching, setIsSearching] = useState(false);
@@ -494,7 +885,9 @@ export default function Food2Guide() {
   
   // Advanced Settings state
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
-  const [showImages, setShowImages] = useState(true); // Yes (default)
+  const [showTopImage, setShowTopImage] = useState(true);
+  const [showStepImages, setShowStepImages] = useState(true);
+
   const [dietPreference, setDietPreference] = useState('regular'); // regular, vegetarian, vegan
   const [allergies, setAllergies] = useState({ gluten: false, nuts: false, eggs: false, dairy: false, shellfish: false });
   const [instructionLevel, setInstructionLevel] = useState('intermediate'); // beginner, intermediate (default), expert
@@ -509,6 +902,13 @@ export default function Food2Guide() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  // States for streaming
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [recipeData, setRecipeData] = useState({});
+  const [streamError, setStreamError] = useState(null);
+  const [streamStatus, setStreamStatus] = useState('');
+  const [adminLogs, setAdminLogs] = useState([]);
+
   const languages = [
     { code: 'en', name: 'English' },
     { code: 'sv', name: 'Svenska' },
@@ -520,20 +920,8 @@ export default function Food2Guide() {
   ];
 
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    if (token) {
-      setAuthToken(token);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (authToken) {
-      checkAuthStatus();
-    } else {
-      setCurrentUser(null);
-    }
-
-    // Always check usage status
+    // Check auth status on initial load to see if a cookie session exists
+    checkAuthStatus();
     checkUsageStatus();
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -542,36 +930,29 @@ export default function Food2Guide() {
         handleGoogleOAuthCallback(code);
         window.history.replaceState({}, document.title, window.location.pathname);
     }
-  }, [authToken]);
+  }, []); // Run only once on mount
 
   const checkAuthStatus = async () => {
-    if (authToken) {
-      try {
-        const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
-          headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        
-        if (response.ok) {
-          const user = await response.json();
-          setCurrentUser(user);
-        } else {
-          handleLogout();
-        }
-      } catch (error) {
-        console.error('Auth check error:', error);
-        handleLogout();
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const user = await response.json();
+        setCurrentUser(user);
+      } else {
+        setCurrentUser(null);
       }
+    } catch (error) {
+      console.error('Auth check error:', error);
+      setCurrentUser(null);
     }
   };
 
   const checkUsageStatus = async () => {
     try {
-      const headers = {};
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
-      
-      const response = await fetch(`${API_BASE}/api/v1/usage-status`, { headers });
+      const response = await fetch(`${API_BASE}/api/v1/usage-status`, { credentials: 'include' });
       if (response.ok) {
         const status = await response.json();
         setUsageStatus(status);
@@ -589,16 +970,15 @@ export default function Food2Guide() {
         body: JSON.stringify(body)
       });
       
+      const data = await response.json();
+
       if (response.ok) {
-        const data = await response.json();
-        localStorage.setItem('authToken', data.access_token);
-        setAuthToken(data.access_token);
-        setIsAuthModalOpen(false); // Close modal on successful auth
+        setCurrentUser(data.user); // The user object is now returned directly
+        setIsAuthModalOpen(false);
         setShowWelcome(true);
         setTimeout(() => setShowWelcome(false), 4000);
       } else {
-        const error = await response.json();
-        alert(error.detail || 'Action failed');
+        alert(data.detail || 'Action failed');
       }
     } catch (error) {
       alert('An error occurred. Please try again.');
@@ -627,17 +1007,19 @@ export default function Food2Guide() {
     handleAuthAction(`${API_BASE}/api/v1/auth/register`, body);
   };
 
-
-
-  const handleLogout = () => {
-    setAuthToken(null);
-    setCurrentUser(null);
-    localStorage.removeItem('authToken');
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API_BASE}/api/v1/auth/logout`, { method: 'POST', credentials: 'include' });
+    } catch (error) {
+      console.error("Logout failed", error);
+    } finally {
+      setCurrentUser(null);
+    }
   };
 
   const initiateGoogleSignIn = async () => {
     try {
-      const urlResponse = await fetch(`${API_BASE}/api/v1/auth/google/url`);
+      const urlResponse = await fetch(`${API_BASE}/api/v1/auth/google/url`, { credentials: 'include' });
       if (!urlResponse.ok) throw new Error('Failed to get Google OAuth URL');
       const urlData = await urlResponse.json();
       if (!urlData.auth_url) {
@@ -656,14 +1038,18 @@ export default function Food2Guide() {
     try {
       const authResponse = await fetch(`${API_BASE}/api/v1/auth/google/callback`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
       });
       if (authResponse.ok) {
         const data = await authResponse.json();
-            localStorage.setItem('authToken', data.access_token);
-        setAuthToken(data.access_token);
-        setIsAuthModalOpen(false); // Close modal on successful auth
+        // The cookie is set, and we have the user data and token directly.
+        // We can set the user state immediately without a second fetch.
+        setCurrentUser(data.user);
+        setIsAuthModalOpen(false);
+        setShowWelcome(true);
+        setTimeout(() => setShowWelcome(false), 4000);
       } else {
         const error = await authResponse.json();
         alert(error.detail || 'Google Sign-In failed');
@@ -690,9 +1076,9 @@ export default function Food2Guide() {
     try {
       const response = await fetch(`${API_BASE}/api/v1/search`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}` 
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({ query: searchQuery, language, source: videoSource, page: searchPage + 1 })
       });
@@ -724,9 +1110,9 @@ export default function Food2Guide() {
     try {
       const response = await fetch(`${API_BASE}/api/v1/search`, {
         method: 'POST',
+        credentials: 'include',
         headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${authToken}` 
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify({ query: searchQuery, language, source: videoSource, page: 1 })
       });
@@ -749,59 +1135,150 @@ export default function Food2Guide() {
   };
 
   const processVideo = async () => {
-    if (!videoUrl && !selectedVideoId) {
-      alert('Please provide a video URL or select a video.');
-        return;
-      }
-      
-    setJob(null);
-    
-    try {
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      
-      // Add auth header only if user is logged in
-      if (authToken) {
-        headers['Authorization'] = `Bearer ${authToken}`;
-      }
-
-      const response = await fetch(`${API_BASE}/api/v1/generate`, {
-        method: 'POST',
-        headers: headers,
-        body: JSON.stringify({
-          youtube_url: videoUrl,
-          video_id: selectedVideoId,
-          language: language,
-          pdf_style: pdfStyle,
-          include_nutrition: includeNutrition,
-          include_tips: includeTips,
-          max_steps: maxSteps,
-          image_quality: imageQuality,
-          // Advanced Settings
-          show_images: showImages,
-          diet_preference: dietPreference,
-          allergies: Object.keys(allergies).filter(a => allergies[a]),
-          instruction_level: instructionLevel,
-          show_calories: showCalories,
-        }),
-      });
-
-      if (response.status === 202) {
-        const jobData = await response.json();
-        setJob(jobData);
-      
-        // Update usage status after successful job creation
-        setTimeout(() => {
-          checkUsageStatus();
-      }, 1000);
-      } else {
-        const error = await response.json();
-        alert(`Error: ${error.detail}`);
-      }
-    } catch (error) {
-      alert('An unexpected error occurred.');
+    if (!videoUrl) {
+      alert('Please provide a video URL.');
+      return;
     }
+    
+    setIsStreaming(true);
+    setRecipeData({});
+    setStreamError(null);
+    setStreamStatus('Initializing stream...');
+
+    const url = `${API_BASE}/api/v1/generate-stream?video_url=${encodeURIComponent(videoUrl)}&language=${language}`;
+    
+    const eventSource = new EventSource(url, { withCredentials: true });
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.status === 'error') {
+          setStreamError(data.message);
+          setStreamStatus('Error occurred.');
+          setIsStreaming(false);
+          eventSource.close();
+        } else if (data.status === 'done') {
+          // This assumes the final recipe is sent with the 'done' status.
+          // If not, we might need to adjust the backend.
+          setRecipeData(data.recipe || recipeData); // Use final recipe or accumulated one.
+          setStreamStatus('Recipe generation complete!');
+          setIsStreaming(false); // Stop streaming view
+          eventSource.close();
+        } else if (data.status) {
+          // It's a status update
+          setStreamStatus(data.message);
+        }
+        
+        // This handles the recipe data chunk. Since we send the full recipe at the end,
+        // we can just update the state with the latest complete recipe object.
+        if (data.recipe) {
+          // Check if it's a complete recipe object, not a partial string
+          if (typeof data.recipe === 'object' && data.recipe.title) {
+            setRecipeData(data.recipe);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse stream data:', e, 'Raw data:', event.data);
+      }
+    };
+
+    eventSource.onerror = (err) => {
+      console.error('EventSource failed:', err);
+      setStreamError('Failed to connect to the server. Please check your connection and try again.');
+      setStreamStatus('Connection error.');
+      setIsStreaming(false);
+      eventSource.close();
+    };
+  };
+
+  const handleStreamResponse = (url) => {
+    setIsStreaming(true);
+    setStreamStatus('Initializing stream...');
+    setStreamError('');
+    setRecipeData({});
+    setAdminLogs([{ 
+      timestamp: new Date().toISOString().substring(11, 19), 
+      message: `Starting stream for URL: ${url}` 
+    }]);
+    
+    // Add showImages parameter to the URL if the user is an admin
+    let streamUrl = `${API_BASE}/api/v1/generate-stream?video_url=${encodeURIComponent(url)}&language=${language}`;
+    if (currentUser?.is_admin) {
+      streamUrl += `&show_top_image=${showTopImage}&show_step_images=${showStepImages}`;
+    }
+    
+    const eventSource = new EventSource(streamUrl);
+    // EventSource stödjer inte withCredentials som en inställning
+    // eventSource.withCredentials = true;
+    
+    // Helper function to add admin logs
+    const addAdminLog = (message, isError = false) => {
+      const timestamp = new Date().toISOString().substring(11, 19);
+      setAdminLogs(prevLogs => [...prevLogs, { 
+        timestamp, 
+        message,
+        isError
+      }]);
+    };
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        // Add raw data to admin logs
+        addAdminLog(`Raw data: ${JSON.stringify(data)}`);
+
+        if (data.status === 'error') {
+          setStreamError(data.message);
+          setStreamStatus('Error occurred.');
+          setIsStreaming(false);
+          addAdminLog(`Error: ${data.message}`, true);
+          eventSource.close();
+        } else if (data.status === 'done') {
+          // This handles the final recipe data
+          if (data.recipe) {
+            setRecipeData(data.recipe);
+            addAdminLog(`Recipe received: ${data.recipe.title || 'Untitled'}`);
+            
+            // Log recipe details for admin
+            if (data.recipe.ingredients) {
+              addAdminLog(`Ingredients count: ${data.recipe.ingredients.length}`);
+            }
+            if (data.recipe.instructions) {
+              addAdminLog(`Instructions count: ${data.recipe.instructions.length}`);
+            }
+          }
+          setStreamStatus('Recipe generation complete!');
+          addAdminLog('Generation process completed');
+          setIsStreaming(false); // Stop streaming view
+          eventSource.close();
+        } else if (data.status) {
+          // It's a status update
+          const statusMessage = data.message || data.status;
+          setStreamStatus(statusMessage);
+          addAdminLog(`Status update: ${statusMessage}`);
+          
+          // Log detailed information if available
+          if (data.details) {
+            addAdminLog(`Details: ${data.details}`);
+          }
+        }
+      } catch (err) {
+        console.error('Error parsing event data:', err);
+        setStreamError('Failed to parse server response.');
+        setIsStreaming(false);
+        addAdminLog(`Parse error: ${err.message}`, true);
+        eventSource.close();
+      }
+    };
+    
+    eventSource.onerror = (err) => {
+      console.error('EventSource failed:', err);
+      setStreamError('Connection to server failed. Please try again.');
+      setIsStreaming(false);
+      addAdminLog(`EventSource error: ${err}`, true);
+      eventSource.close();
+    };
   };
   
   const resetAll = () => {
@@ -810,10 +1287,41 @@ export default function Food2Guide() {
     setSearchResults([]);
     setSelectedVideoId(null);
     setJob(null);
+    setIsStreaming(false);
+    setRecipeData({});
+    setStreamError(null);
+    setStreamStatus('');
+    setAdminLogs([]); // Rensa admin-loggar
   };
   
   // Show login screen only if explicitly requested, not by default
   const showLoginScreen = false; // Changed from requiring login to allowing anonymous usage
+  
+  // Function to show the Test PDF modal for admin users
+  const showTestPdfModal = () => {
+    if (currentUser?.is_admin) {
+      setIsTestPdfModalOpen(true);
+    }
+  };
+
+  // Handle generating a recipe from a video URL
+  const handleGenerateRecipe = () => {
+    if (!videoUrl) return;
+    
+    // Reset any previous data
+    setJob(null);
+    setRecipeData({});
+    setStreamError('');
+    
+    // Start the streaming process
+    handleStreamResponse(videoUrl);
+  };
+  
+  // Handle video selection from search
+  const handleVideoSelect = (video) => {
+    setSelectedVideoId(video.video_id);
+    setVideoUrl(`https://www.youtube.com/watch?v=${video.video_id}`);
+  };
 
   return (
     <div className="font-poppins bg-gradient-to-br from-[#d6e5dd] to-[#eaf3ef] min-h-screen">
@@ -840,11 +1348,20 @@ export default function Food2Guide() {
         </div>
       )}
       
-      <main className="max-w-xl mx-auto py-10 px-8">
+      <main className="max-w-3xl mx-auto py-10 px-8">
         <div className="relative bg-white shadow-xl rounded-2xl p-10">
           <SparklesIcon className="absolute top-0 right-0 h-32 w-32 text-amber-300/30 -translate-y-1/3 translate-x-1/4" />
           
-          {job ? (
+          {isStreaming || Object.keys(recipeData).length > 0 || streamError ? (
+            <RecipeStreamViewer 
+              status={streamStatus}
+              error={streamError}
+              data={recipeData}
+              onReset={resetAll}
+              currentUser={currentUser}
+              adminLogs={adminLogs}
+            />
+          ) : job ? (
              <JobStatus job={job} onReset={resetAll} />
           ) : (
             <>
@@ -920,7 +1437,20 @@ export default function Food2Guide() {
 
                   {searchResults.length > 0 && (
                     <div className="space-y-4">
-                      <h3 className="text-gray-800 text-sm font-bold tracking-tight">Search Results</h3>
+                      <div className="flex justify-between items-center">
+                        <h3 className="text-gray-800 text-sm font-bold tracking-tight">Search Results</h3>
+                        <button 
+                          onClick={() => {
+                            setSearchResults([]);
+                            setSearchAttempted(false);
+                            setActiveTab('paste');
+                          }}
+                          className="flex items-center text-gray-500 hover:text-gray-700 text-sm"
+                        >
+                          <ArrowLeftIcon className="h-4 w-4 mr-1" />
+                          <span>Back</span>
+                        </button>
+                      </div>
                       <div 
                         ref={scrollContainerRef}
                         onScroll={handleScroll}
@@ -929,7 +1459,7 @@ export default function Food2Guide() {
                         {searchResults.map((video) => (
                           <div
                             key={video.video_id}
-                            onClick={() => { setSelectedVideoId(video.video_id); setVideoUrl(`https://www.youtube.com/watch?v=${video.video_id}`); }}
+                            onClick={() => handleVideoSelect(video)}
                             className={`cursor-pointer border-2 rounded-xl overflow-hidden transition-all duration-200 ${selectedVideoId === video.video_id ? 'border-green-500 shadow-lg scale-105' : 'border-transparent hover:border-green-400/50'}`}
                           >
                             <img src={video.thumbnail_url} alt={video.title} className="w-full h-28 object-cover" />
@@ -982,14 +1512,28 @@ export default function Food2Guide() {
                       <div className="mt-4 space-y-4 p-4 bg-gray-50 rounded-lg">
                         {/* 1. Show images */}
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Show Images</label>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Top image (dish preview under title)</label>
                           <div className="flex gap-4">
                             <label className="flex items-center">
-                              <input type="radio" name="showImages" checked={showImages} onChange={() => setShowImages(true)} className="mr-2" />
+                              <input type="radio" name="showTopImage" checked={showTopImage} onChange={() => setShowTopImage(true)} className="mr-2" />
                               Yes
                             </label>
                             <label className="flex items-center">
-                              <input type="radio" name="showImages" checked={!showImages} onChange={() => setShowImages(false)} className="mr-2" />
+                              <input type="radio" name="showTopImage" checked={!showTopImage} onChange={() => setShowTopImage(false)} className="mr-2" />
+                              No
+                            </label>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Step-by-step images</label>
+                          <div className="flex gap-4">
+                            <label className="flex items-center">
+                              <input type="radio" name="showStepImages" checked={showStepImages} onChange={() => setShowStepImages(true)} className="mr-2" />
+                              Yes
+                            </label>
+                            <label className="flex items-center">
+                              <input type="radio" name="showStepImages" checked={!showStepImages} onChange={() => setShowStepImages(false)} className="mr-2" />
                               No
                             </label>
                           </div>
@@ -1082,7 +1626,7 @@ export default function Food2Guide() {
 
                 
                 <div className="pt-6 border-t border-gray-200 flex flex-col items-center gap-6">
-                  <button onClick={processVideo} className="flex items-center gap-2 w-full justify-center bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md px-6 py-3 transition-transform hover:scale-[1.02]">
+                  <button onClick={handleGenerateRecipe} className="flex items-center gap-2 w-full justify-center bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-md px-6 py-3 transition-transform hover:scale-[1.02]">
                     <SparklesIcon className="h-6 w-6 mr-2" />
                     <span>Generate Recipe</span>
                   </button>

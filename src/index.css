@@ -1,3 +1,31 @@
 @tailwind base;
 @tailwind components;
-@tailwind utilities; 
+@tailwind utilities;
+
+body {
+    background-image: url('bg.png');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: repeat;
+}
+
+
+/* A4 format styling */
+@layer components {
+  .a4-format {
+    width: 100%;
+    max-width: 100%;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  
+  @media print {
+    .a4-format {
+      width: 210mm;
+      padding: 20mm;
+      margin: 0;
+      box-shadow: none;
+    }
+  }
+} 

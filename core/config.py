@@ -183,6 +183,11 @@ schedule_cleanup()
 CLIP_MODEL = None
 CLIP_PROCESSOR = None
 
-# TODO: Add API keys and other sensitive information here,
-# preferably loaded from environment variables using a library like python-dotenv.
-# Example: DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY") 
+# API keys and other sensitive information loaded from environment variables
+class Settings:
+    deepseek_api_key: str = os.getenv("DEEPSEEK_API_KEY", "")
+    youtube_api_key: str = os.getenv("YOUTUBE_API_KEY", "")
+    google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
+    google_client_secret: str = os.getenv("GOOGLE_CLIENT_SECRET", "")
+
+settings = Settings() 

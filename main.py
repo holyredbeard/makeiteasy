@@ -1,7 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from core.limiter import limiter # Import the limiter instance
 import os
 import logging
 import signal
@@ -12,6 +15,7 @@ from api.routes import router
 from api.auth_routes import router as auth_router
 from api.google_auth import router as google_auth_router
 
+# --- App Initialization ---
 # Load environment variables
 load_dotenv()
 
@@ -33,10 +37,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Add state for the limiter
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Add CORS middleware to allow React frontend to communicate with backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:8001"],  # React development server and frontend
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:8001"],  # React development server and frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
