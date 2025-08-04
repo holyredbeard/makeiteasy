@@ -1,6 +1,9 @@
 import uuid
 import traceback
 import logging
+import requests
+import tempfile
+import time
 from typing import Optional, List
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, BackgroundTasks, Body
@@ -103,231 +106,249 @@ def is_transcript_sufficient(transcript: Optional[str]) -> bool:
     return True
 
 # --- Background Task for PDF Generation ---
-async def stream_recipe_generation(video_url: str, language: str, show_top_image: bool, show_step_images: bool):
-    job_id = str(uuid.uuid4())
-
-    async def send_event(status: str, message: str = None, recipe: dict = None, is_error: bool = False):
-        data = {"status": status, "message": message}
-        if recipe:
-            data["recipe"] = recipe
-        if is_error:
-            data["status"] = "error"
-        return f"data: {json.dumps(data)}\n\n"
-
-    try:
-        yield await send_event("processing", "Extracting video metadata...")
-        metadata = await asyncio.to_thread(extract_video_metadata, video_url)
-        if not metadata:
-            yield await send_event("error", "Could not retrieve video metadata. URL might be invalid.", is_error=True)
-            return
-
-        yield await send_event("processing", f'Processing: {metadata.get("title", "video")[:50]}...')
-        
-        thumbnail_path = await asyncio.to_thread(download_thumbnail, video_url, job_id)
-        
-        yield await send_event("downloading", "Downloading audio...")
-        audio_file_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=True)
-        if not audio_file_path:
-            yield await send_event("error", "Failed to download audio from video.", is_error=True)
-            return
-
-        yield await send_event("transcribing", "Transcribing audio...")
-        transcript = await asyncio.to_thread(transcribe_audio, audio_file_path, language)
-        transcript = transcript or ""
-
-        final_transcript = transcript
-        if not is_transcript_sufficient(transcript):
-            yield await send_event("analyzing", "Audio unclear, analyzing video frames for text...")
-            video_file_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=False)
-            
-            frame_paths = []
-            if video_file_path:
-                # Always extract OCR for recipe text
-                ocr_text = await asyncio.to_thread(extract_text_from_frames, video_file_path, job_id)
-                
-                # Extract frames for images if requested
-                if show_step_images:
-                    frame_paths = await asyncio.to_thread(extract_and_save_frames, video_file_path, job_id)
-                
-                if ocr_text:
-                    # Combine transcripts manually
-                    description = metadata.get('description', '')
-                    combined = []
-                    if description and len(description) > 50:
-                        combined.append(f"Video Description:\n{description}")
-                    if ocr_text and len(ocr_text) > 20:
-                        combined.append(f"Text found in video (OCR):\n{ocr_text}")
-                    if transcript and len(transcript) > 20:
-                        combined.append(f"Audio Transcript:\n{transcript}")
-                    final_transcript = "\n\n---\n\n".join(combined)
-                
-                Path(video_file_path).unlink(missing_ok=True)
-            else:
-                yield await send_event("warning", "Could not download video for frame analysis.")
-        
-        if len(final_transcript.strip()) < 50:
-            yield await send_event("error", "Could not find enough text in the video to create a recipe.", is_error=True)
-            return
-
-        yield await send_event("generating_recipe", "Generating recipe with AI...")
-        
-        # Pass frame_paths to the recipe generator
-        recipe_data = await asyncio.to_thread(
-            analyze_video_content, 
-            final_transcript, 
-            language, 
-            stream=True, 
-            thumbnail_path=thumbnail_path,
-            frame_paths=frame_paths
-        )
-
-        async for chunk in recipe_data:
-            yield await send_event("streaming_recipe", "Receiving recipe data...", recipe=chunk)
-
-        # The analyze_video_content should yield a final 'done' message with the full recipe.
-        # Assuming the last chunk is the full recipe.
-        
-        # Let's get the final recipe from the last yielded data if it's not passed explicitly
-        # This part is a bit tricky without knowing the exact output of analyze_video_content
-        # For now, let's assume the frontend aggregates the chunks.
-        
-        yield await send_event("done", "Recipe generation complete.")
-
-    except Exception as e:
-        logger.error(f"Error in stream for job {job_id}: {e}\n{traceback.format_exc()}")
-        yield await send_event("error", f"An unexpected server error occurred: {e}", is_error=True)
-    finally:
-        # Cleanup temp files
-        if 'audio_file_path' in locals() and audio_file_path: 
-            Path(audio_file_path).unlink(missing_ok=True)
-        logger.info(f"Stream finished for job {job_id}")
 
 @router.get("/generate-stream")
-async def generate_stream_endpoint(video_url: str, language: str = "en", show_top_image: bool = True, show_step_images: bool = True):
-    """
-    Streams the recipe generation process from a video URL.
-    Returns server-sent events with status updates and the final recipe.
-    """
-    async def stream_recipe_generation(video_url: str, language: str, show_top_image: bool, show_step_images: bool):
-        job_id = str(uuid.uuid4())
+async def generate_stream_endpoint(request: Request, video_url: str, language: str = "en", show_top_image: bool = True, show_step_images: bool = True):
+    job_id = str(uuid.uuid4())
+    base_url = str(request.base_url)
+
+    async def send_event(status: str, message: str = None, recipe: dict = None, is_error: bool = False, debug_info: dict = None):
+        data = {"status": status, "message": message, "timestamp": int(time.time() * 1000)}
+        if recipe: data["recipe"] = recipe
+        if is_error: data["status"] = "error"
+        if debug_info: data["debug_info"] = debug_info
         
-        async def send_event(status: str, message: str = None, recipe: dict = None, is_error: bool = False):
-            data = {"status": status, "message": message}
-            if recipe:
-                data["recipe"] = recipe
-            if is_error:
-                data["status"] = "error"
-            return f"data: {json.dumps(data)}\n\n"
+        # Logga alltid vad som skickas till frontend
+        log_message = f"Sending to frontend: {status}"
+        if message: log_message += f" - {message}"
+        logger.info(f"[FRONTEND_EVENT] {log_message}", extra={"data": data})
         
+        return f"data: {json.dumps(data)}\n\n"
+
+    async def generator():
+        temp_files = []
+        thumbnail_url = None
         try:
-            # Extract metadata
-            yield await send_event("processing", "Extracting video metadata...")
+            logger.info(f"[JOB {job_id}] ===== STARTAR RECEPTGENERERING =====")
+            logger.info(f"[JOB {job_id}] Video URL: {video_url}")
+            logger.info(f"[JOB {job_id}] Språk: {language}")
+            logger.info(f"[JOB {job_id}] Visa toppbild: {show_top_image}")
+            logger.info(f"[JOB {job_id}] Visa stegbilder: {show_step_images}")
+            
+            # Metadata and Thumbnail
+            yield await send_event("processing", "Extracting video metadata...", debug_info={"step": "metadata_extraction", "job_id": job_id})
+            logger.info(f"[JOB {job_id}] Extraherar metadata...")
+            
             metadata = await asyncio.to_thread(extract_video_metadata, video_url)
             if not metadata:
-                yield await send_event("error", "Could not retrieve video metadata. URL might be invalid.", is_error=True)
+                logger.error(f"[JOB {job_id}] Misslyckades att hämta metadata")
+                yield await send_event("error", "Could not retrieve video metadata.", is_error=True, debug_info={"step": "metadata_extraction", "error": "no_metadata"})
                 return
                 
-            yield await send_event("processing", f'Processing: {metadata.get("title", "video")[:50]}...')
-            
-            thumbnail_path = await asyncio.to_thread(download_thumbnail, video_url, job_id)
-            
-            # Download audio
-            yield await send_event("downloading", "Downloading audio...")
-            audio_path = await asyncio.to_thread(
-                download_video, 
-                video_url=video_url, 
-                job_id=job_id, 
-                audio_only=True
-            )
-            
-            frame_paths = []
-            text_for_analysis = ""
-
-            if audio_path:
-                # Transcribe audio
-                yield await send_event("transcribing", "Transcribing audio...")
-                transcript = await asyncio.to_thread(transcribe_audio, audio_path, job_id, language)
-                
-                if is_transcript_sufficient(transcript):
-                    description = metadata.get("description", "")
-                    text_for_analysis = f"Video Title: {metadata.get('title', '')}\n\n"
-                    if description:
-                        text_for_analysis += f"Video Description: {description}\n\n"
-                    text_for_analysis += f"Transcript: {transcript}"
+            logger.info(f"[JOB {job_id}] Metadata hämtad: {metadata.get('title', 'Okänd titel')[:100]}")
+            yield await send_event("processing", f'Processing: {metadata.get("title", "video")[:50]}...', debug_info={"metadata": metadata})
+            if show_top_image:
+                logger.info(f"[JOB {job_id}] Laddar ner thumbnail...")
+                yield await send_event("processing", "Downloading thumbnail...", debug_info={"step": "thumbnail_download"})
+                thumbnail_path = await asyncio.to_thread(download_thumbnail, video_url, job_id)
+                if thumbnail_path:
+                    temp_files.append(thumbnail_path)
+                    thumbnail_url = f"{base_url.strip('/')}/{thumbnail_path.strip('/')}"
+                    logger.info(f"[JOB {job_id}] Thumbnail nedladdad: {thumbnail_url}")
                 else:
-                    yield await send_event("processing", "Audio transcription insufficient. Trying video frames...")
-                    audio_path = None # Force video download path
+                    logger.warn(f"[JOB {job_id}] Kunde inte ladda ner thumbnail")
+            else:
+                logger.info(f"[JOB {job_id}] Hoppar över thumbnail (show_top_image=False)")
 
-            if not audio_path:
-                # Try video download if audio failed or was insufficient
-                video_path = await asyncio.to_thread(
-                    download_video, 
-                    video_url=video_url, 
-                    job_id=job_id, 
-                    audio_only=False
-                )
+            # Content Extraction
+            logger.info(f"[JOB {job_id}] ===== CONTENT EXTRACTION PHASE =====")
+            text_for_analysis, frame_paths = "", []
+            description = metadata.get("description", "")
+            description_length = len(description) if description else 0
+            
+            logger.info(f"[JOB {job_id}] Videobeskrivning längd: {description_length} tecken")
+            
+            if contains_ingredients(description):
+                logger.info(f"[JOB {job_id}] ✅ Beskrivning innehåller ingredienser - använder den direkt")
+                yield await send_event("processing", "Description contains recipe. Using it.", debug_info={"step": "using_description", "description_length": description_length})
+                text_for_analysis = description
+            else:
+                logger.info(f"[JOB {job_id}] ❌ Beskrivning innehåller inte ingredienser - använder ljud/video")
+                yield await send_event("downloading", "Downloading audio...", debug_info={"step": "audio_download"})
+                logger.info(f"[JOB {job_id}] Laddar ner ljud...")
                 
-                if not video_path:
-                    yield await send_event("error", "Failed to download video content.", is_error=True)
-                    return
-                
-                if show_step_images:
-                    frame_paths = await asyncio.to_thread(extract_and_save_frames, video_path, job_id)
+                audio_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=True)
+                if audio_path:
+                    temp_files.append(audio_path)
+                    logger.info(f"[JOB {job_id}] Ljud nedladdat: {audio_path}")
                     
-                # Extract text from video frames
-                yield await send_event("processing", "Analyzing video frames...")
-                ocr_text = await asyncio.to_thread(extract_text_from_frames, video_path, job_id)
-                
-                # Use video description if OCR fails
-                if not ocr_text or len(ocr_text) < 50:
-                    description = metadata.get("description", "")
-                    if len(description) > 100:
-                        yield await send_event("processing", "Using video description...")
-                        text_for_analysis = description
+                    yield await send_event("transcribing", "Transcribing audio...", debug_info={"step": "transcription", "audio_file": audio_path})
+                    logger.info(f"[JOB {job_id}] Transkriberar ljud...")
+                    
+                    transcript = await asyncio.to_thread(transcribe_audio, audio_path, job_id, language)
+                    transcript_length = len(transcript) if transcript else 0
+                    logger.info(f"[JOB {job_id}] Transkription klar: {transcript_length} tecken")
+                    
+                    if is_transcript_sufficient(transcript):
+                        logger.info(f"[JOB {job_id}] ✅ Transkription godkänd")
+                        text_for_analysis = f"Title: {metadata.get('title', '')}\nDescription: {description}\nTranscript: {transcript}"
                     else:
-                        yield await send_event("error", "Could not extract enough text from the video.", is_error=True)
-                        return
-                else:
-                    text_for_analysis = ocr_text
-
-            # Generate recipe
-            yield await send_event("generating", "Generating recipe with AI...")
+                        logger.warn(f"[JOB {job_id}] ❌ Transkription otillräcklig - behöver video")
+                if not text_for_analysis:
+                     yield await send_event("warning", "Audio analysis insufficient. Switching to video.")
+                     yield await send_event("downloading", "Downloading video...")
+                     video_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=False)
+                     if not video_path:
+                         yield await send_event("error", "Failed to download video.", is_error=True)
+                         return
+                     temp_files.append(video_path)
+                     yield await send_event("analyzing", "Analyzing video frames...")
+                     ocr_text = await asyncio.to_thread(extract_text_from_frames, video_path, job_id)
+                     text_for_analysis = ocr_text or ""
+                     if show_step_images:
+                         yield await send_event("processing", "Extracting key frames...")
+                         frame_paths = await asyncio.to_thread(extract_and_save_frames, video_path, job_id)
+                         temp_files.extend(frame_paths)
             
-            # Process with AI
-            recipe_generator = analyze_video_content(text_for_analysis, language, stream=True, thumbnail_path=thumbnail_path, frame_paths=frame_paths)
-            async for recipe_data in recipe_generator:
-                if "error" in recipe_data:
-                    yield await send_event("error", recipe_data["error"], is_error=True)
+            if len(text_for_analysis.strip()) < 100:
+                yield await send_event("error", "Could not extract enough information for a recipe.", is_error=True)
+                return
+
+            # AI Generation with detailed status updates
+            logger.info(f"[JOB {job_id}] Starting recipe generation with status updates")
+            yield await send_event("generating", "Starting AI recipe generation...")
+            
+            # Create a task for the recipe generation
+            logger.info(f"[JOB {job_id}] Creating async task for analyze_video_content")
+            recipe_task = asyncio.create_task(
+                analyze_video_content(
+                    text_for_analysis, 
+                    language, 
+                    stream=False,  # We want the complete recipe
+                    thumbnail_path=thumbnail_url if show_top_image else None,
+                    frame_paths=[f"{base_url.strip('/')}/{p.strip('/')}" for p in frame_paths] if frame_paths else None
+                )
+            )
+            logger.info(f"[JOB {job_id}] Async task created, will now send status updates while waiting")
+            
+            # Send status updates while waiting for the recipe
+            status_steps = [
+                {"status": "analyzing", "message": "Analyzing ingredients..."},
+                {"status": "generating", "message": "Creating recipe structure..."},
+                {"status": "generating", "message": "Generating title..."},
+                {"status": "generating", "message": "Creating ingredient list..."},
+                {"status": "generating", "message": "Writing cooking instructions..."},
+                {"status": "generating", "message": "Adding chef tips..."},
+                {"status": "generating", "message": "Finalizing recipe..."}
+            ]
+            
+            for i, step in enumerate(status_steps):
+                # Check if recipe is done
+                if recipe_task.done():
+                    logger.info(f"[JOB {job_id}] Recipe task completed before all status steps were shown")
+                    break
+                    
+                # Send status update and wait a bit
+                logger.info(f"[JOB {job_id}] Sending status update {i+1}/{len(status_steps)}: {step['status']} - {step['message']}")
+                yield await send_event(step["status"], step["message"])
+                await asyncio.sleep(1.5)  # Wait between status updates
+                
+                # If recipe still not done, send a keep-alive
+                if not recipe_task.done():
+                    logger.info(f"[JOB {job_id}] Recipe still processing, sending keep-alive for step {i+1}")
+                    yield await send_event(step["status"], f"{step['message']} (still working...)")
+                    await asyncio.sleep(1.5)
+            
+            # If recipe still not done after all steps, send generic updates
+            logger.info(f"[JOB {job_id}] All status steps shown but recipe task still running, entering keep-alive loop")
+            dot_count = 1
+            loop_count = 0
+            while not recipe_task.done():
+                message = f"AI is finalizing your recipe...{'.' * dot_count}"
+                loop_count += 1
+                logger.info(f"[JOB {job_id}] Keep-alive loop iteration {loop_count}: {message}")
+                yield await send_event("generating", message)
+                dot_count = (dot_count % 3) + 1
+                await asyncio.sleep(2)
+                
+            # Get the result
+            try:
+                logger.info(f"[JOB {job_id}] Recipe task completed, retrieving results")
+                final_recipe = await recipe_task
+                if not final_recipe:
+                    logger.error(f"[JOB {job_id}] Recipe task returned empty result")
+                    yield await send_event("error", "Recipe generation failed - empty result", is_error=True)
+                    return
+                elif "error" in final_recipe:
+                    error_msg = final_recipe.get("error", "Failed to generate recipe")
+                    logger.error(f"[JOB {job_id}] Recipe task returned error: {error_msg}")
+                    yield await send_event("error", error_msg, is_error=True)
                     return
                 else:
-                    # Send the complete recipe
-                    yield await send_event("done", "Recipe generation complete!", recipe=recipe_data)
-                    logger.info(f"Stream finished for job {job_id}")
-                    return
-                    
+                    logger.info(f"[JOB {job_id}] Recipe successfully generated with {len(final_recipe.get('ingredients', []))} ingredients and {len(final_recipe.get('instructions', []))} steps")
+            except Exception as e:
+                logger.error(f"[JOB {job_id}] Recipe task failed with exception: {e}\n{traceback.format_exc()}")
+                yield await send_event("error", f"Recipe generation failed: {str(e)}", is_error=True)
+                return
+
+            # This condition is now handled above
+
+            if not show_top_image:
+                logger.info(f"[JOB {job_id}] show_top_image is false, removing thumbnail_path")
+                final_recipe['thumbnail_path'] = None
+            elif 'thumbnail_path' in final_recipe:
+                logger.info(f"[JOB {job_id}] Recipe includes thumbnail: {final_recipe['thumbnail_path']}")
+            else:
+                logger.info(f"[JOB {job_id}] Recipe does not include a thumbnail")
+            
+            logger.info(f"[JOB {job_id}] Sending completed event with recipe")
+            yield await send_event("completed", "Recipe generation complete!", recipe=final_recipe)
+
         except Exception as e:
-            logger.error(f"Error in stream: {str(e)}")
-            yield await send_event("error", f"An error occurred: {str(e)}", is_error=True)
-    
-    return StreamingResponse(stream_recipe_generation(video_url, language, show_top_image, show_step_images), media_type="text/event-stream")
+            logger.error(f"Error in stream for job {job_id}: {e}\n{traceback.format_exc()}")
+            yield await send_event("error", f"An unexpected server error occurred: {e}", is_error=True)
+        finally:
+            logger.info(f"Stream finished for job {job_id}")
+
+    return StreamingResponse(generator(), media_type="text/event-stream")
+
 
 @router.post("/generate-pdf")
 @limiter.limit("10/minute")
 async def generate_pdf_endpoint(request: Request, recipe_content: RecipeContent):
     """
     Generates a PDF from the provided recipe content.
+    It can now handle a thumbnail URL by downloading it temporarily.
     """
+    job_id = str(uuid.uuid4())
+    temp_thumbnail_path = None
+
     try:
-        job_id = str(uuid.uuid4())
-        
-        # Import the convert_recipe_content_to_recipe function from pdf_generator
+        # If a thumbnail_url is provided, download it to a temporary file
+        if recipe_content.thumbnail_path and recipe_content.thumbnail_path.startswith('http'):
+            try:
+                response = requests.get(recipe_content.thumbnail_path, stream=True)
+                response.raise_for_status()
+                
+                # Create a temporary file to store the image
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        temp_file.write(chunk)
+                    temp_thumbnail_path = temp_file.name
+                
+                # Update the recipe content to use the local temporary path
+                recipe_content.thumbnail_path = temp_thumbnail_path
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to download thumbnail from {recipe_content.thumbnail_path}: {e}")
+                recipe_content.thumbnail_path = None # Set to None if download fails
+
+        # The rest of the function remains the same, using the local path
         from logic.pdf_generator import convert_recipe_content_to_recipe
         
         recipe_for_pdf = await convert_recipe_content_to_recipe(recipe_content)
 
-        # Get template parameters from request if available
         template_name = getattr(recipe_content, 'template_name', "modern")
-        image_orientation = getattr(recipe_content, 'image_orientation', "landscape")
         show_top_image = getattr(recipe_content, 'show_top_image', True)
         show_step_images = getattr(recipe_content, 'show_step_images', True)
         
@@ -353,6 +374,11 @@ async def generate_pdf_endpoint(request: Request, recipe_content: RecipeContent)
     except Exception as e:
         logger.error(f"Error generating PDF: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to generate PDF: {str(e)}")
+    finally:
+        # Clean up the temporary file if it was created
+        if temp_thumbnail_path and os.path.exists(temp_thumbnail_path):
+            os.unlink(temp_thumbnail_path)
+
 
 
 # --- API Endpoints ---
@@ -379,8 +405,12 @@ async def save_user_recipe(request: Request, payload: SaveRecipeRequest, current
 @router.get("/recipes", response_model=List[SavedRecipe], tags=["Recipes"])
 @limiter.limit("60/minute")
 async def get_user_recipes(request: Request, current_user: User = Depends(get_current_active_user)):
-    # This remains as is
-    pass
+    try:
+        recipes = db.get_user_saved_recipes(current_user.id)
+        return recipes
+    except Exception as e:
+        logger.error(f"Failed to get recipes for user {current_user.email}: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch recipes.")
 
 @router.post("/search")
 @limiter.limit("20/minute")

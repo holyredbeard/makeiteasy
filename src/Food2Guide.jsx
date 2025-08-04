@@ -364,7 +364,76 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser }) => {
 };
 
 
-const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => (
+const MyRecipesViewer = ({ onBack, currentUser }) => {
+  const [recipes, setRecipes] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchRecipes = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/recipes`, { credentials: 'include' });
+        if (!response.ok) {
+          throw new Error('Failed to fetch recipes');
+        }
+        const data = await response.json();
+        setRecipes(data);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchRecipes();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="text-center">
+        <Spinner size="h-8 w-8" color="text-green-600" />
+        <p className="mt-2">Loading your recipes...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center text-red-500">
+        <p>Error: {error}</p>
+        <button onClick={onBack} className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md">Back</button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-3xl font-bold">My Saved Recipes</h2>
+        <button onClick={onBack} className="flex items-center text-gray-500 hover:text-gray-700 text-sm">
+          <ArrowLeftIcon className="h-4 w-4 mr-1" />
+          <span>Back to Generator</span>
+        </button>
+      </div>
+      {recipes.length === 0 ? (
+        <p>You haven't saved any recipes yet.</p>
+      ) : (
+        <div className="space-y-4">
+          {recipes.map(recipe => (
+            <div key={recipe.id} className="bg-white p-4 rounded-lg shadow-md border border-gray-200">
+              <h3 className="font-bold text-lg">{recipe.recipe_content.title}</h3>
+              <p className="text-sm text-gray-600">Saved on: {new Date(recipe.created_at).toLocaleDateString()}</p>
+              <a href={recipe.source_url} target="_blank" rel="noopener noreferrer" className="text-blue-500 text-sm hover:underline">
+                {recipe.source_url}
+              </a>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal, showMyRecipes }) => (
   <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">
     <div className="max-w-7xl mx-auto px-6">
       <div className="flex justify-between items-center py-3">
@@ -379,6 +448,10 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
                 <UserCircleIcon className="h-6 w-6 text-gray-500" />
                 <span className="text-sm text-gray-700 font-medium hidden sm:block">{currentUser.full_name || currentUser.email}</span>
             </div>
+            <button onClick={showMyRecipes} className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors">
+              <BookOpenIcon className="h-5 w-5" />
+              <span className="hidden sm:block">My Recipes</span>
+            </button>
             {currentUser.is_admin && (
               <button 
                 onClick={showTestPdfModal}
@@ -877,6 +950,8 @@ export default function Food2Guide() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
+  const [showMyRecipes, setShowMyRecipes] = useState(false);
+
   // States for streaming
   const [isStreaming, setIsStreaming] = useState(false);
   const [recipeData, setRecipeData] = useState({});
@@ -1324,7 +1399,8 @@ useEffect(() => {
 
   return (
     <div className="font-poppins bg-gradient-to-br from-[#d6e5dd] to-[#eaf3ef] min-h-screen">
-      <Header currentUser={currentUser} handleLogout={handleLogout} showAuthModal={() => setIsAuthModalOpen(true)} usageStatus={usageStatus} showTestPdfModal={() => setIsTestPdfModalOpen(true)} />
+      <Header currentUser={currentUser} handleLogout={handleLogout} showAuthModal={() => setIsAuthModalOpen(true)} usageStatus={usageStatus} showTestPdfModal={() => setIsTestPdfModalOpen(true)} showMyRecipes={() => setShowMyRecipes(true)} />
+
       
       {/* LOGGPANEL - Alltid synlig för alla användare */}
       <LogPanel 
@@ -1364,7 +1440,9 @@ useEffect(() => {
         <div className="relative bg-white shadow-xl rounded-2xl p-10">
           <SparklesIcon className="absolute top-0 right-0 h-32 w-32 text-amber-300/30 -translate-y-1/3 translate-x-1/4" />
           
-          {isStreaming || Object.keys(recipeData).length > 0 || streamError ? (
+          {showMyRecipes ? (
+            <MyRecipesViewer onBack={() => setShowMyRecipes(false)} currentUser={currentUser} />
+          ) : isStreaming || Object.keys(recipeData).length > 0 || streamError ? (
             <RecipeStreamViewer 
               status={streamStatus}
               error={streamError}
