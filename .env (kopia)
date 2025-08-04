@@ -1,0 +1,24 @@
+# Environment Variables Template
+# Copy this file to .env and fill in your actual values
+
+# Database
+DATABASE_URL=sqlite:///users.db
+
+#   Secret (generate a random string)
+JWT_SECRET=8c7290df0e52436092f6c680e45a7b6e2018032d5dc8d221c0c6e5ff154ae0e3
+
+# Google OAuth Configuration
+GOOGLE_CLIENT_ID=568199774089-mrtlrhkcb7sr3j2nhebk4dhq3odu9ud9.apps.googleusercontent.com 
+GOOGLE_CLIENT_SECRET=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
+GOOGLE_REDIRECT_URI=http://localhost:3000
+
+# API Keys
+DEEPSEEK_API_KEY=sk-a534e76cdc8242eca2adb8af2d0ff78e
+
+# Server Configuration
+HOST=127.0.0.1
+PORT=8000
+DEBUG=True
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=60 

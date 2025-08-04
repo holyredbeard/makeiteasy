@@ -20,7 +20,8 @@ from logic.video_processing import (
     contains_ingredients,
     extract_video_metadata,
     download_thumbnail,
-    extract_and_save_frames
+    extract_and_save_frames,
+    analyze_frames_with_blip
 )
 from logic.recipe_parser import analyze_video_content
 from logic.pdf_generator import generate_pdf
@@ -205,12 +206,26 @@ async def generate_stream_endpoint(request: Request, video_url: str, language: s
                      yield await send_event("analyzing", "Analyzing video frames...")
                      ocr_text = await asyncio.to_thread(extract_text_from_frames, video_path, job_id)
                      text_for_analysis = ocr_text or ""
+                     
+                     # Extract frames for both step images and BLIP analysis
                      if show_step_images:
                          yield await send_event("processing", "Extracting key frames...")
                          frame_paths = await asyncio.to_thread(extract_and_save_frames, video_path, job_id)
                          temp_files.extend(frame_paths)
+                     else:
+                         # Still extract frames for BLIP analysis even if step images are disabled
+                         frame_paths = await asyncio.to_thread(extract_and_save_frames, video_path, job_id)
+                         temp_files.extend(frame_paths)
+                     
+                     # If OCR didn't give enough information, try BLIP analysis
+                     if len(text_for_analysis.strip()) < 50 and frame_paths:
+                         yield await send_event("analyzing", "Using AI to analyze video content...")
+                         blip_analysis = await asyncio.to_thread(analyze_frames_with_blip, frame_paths, job_id)
+                         if blip_analysis:
+                             text_for_analysis = f"Title: {metadata.get('title', '')}\nDescription: {description}\nVideo Analysis: {blip_analysis}"
+                             logger.info(f"[JOB {job_id}] BLIP analysis provided {len(blip_analysis)} characters of content")
             
-            if len(text_for_analysis.strip()) < 100:
+            if len(text_for_analysis.strip()) < 30:  # Lowered threshold since BLIP can provide more context
                 yield await send_event("error", "Could not extract enough information for a recipe.", is_error=True)
                 return
 
@@ -399,8 +414,18 @@ async def check_usage_status(request: Request, current_user: User = Depends(get_
 @router.post("/recipes/save", response_model=SavedRecipe, tags=["Recipes"])
 @limiter.limit("30/minute")
 async def save_user_recipe(request: Request, payload: SaveRecipeRequest, current_user: User = Depends(get_current_active_user)):
-    # This remains as is
-    pass
+    try:
+        saved_recipe = db.save_recipe(
+            user_id=current_user.id,
+            source_url=payload.source_url,
+            recipe_content=payload.recipe_content
+        )
+        if not saved_recipe:
+            raise HTTPException(status_code=500, detail="Failed to save recipe.")
+        return saved_recipe
+    except Exception as e:
+        logger.error(f"Failed to save recipe for user {current_user.email}: {e}")
+        raise HTTPException(status_code=500, detail="Could not save recipe.")
 
 @router.get("/recipes", response_model=List[SavedRecipe], tags=["Recipes"])
 @limiter.limit("60/minute")

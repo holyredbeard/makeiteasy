@@ -16,6 +16,7 @@ import cv2
 import pytesseract
 import re
 import mutagen
+from transformers import BlipProcessor, BlipForConditionalGeneration
 
 # --- Tesseract Configuration ---
 try:
@@ -42,6 +43,11 @@ logger.info(f"Using device: {device}")
 whisper_model = None
 model_lock = threading.Lock()
 
+# BLIP model for image analysis
+blip_processor = None
+blip_model = None
+blip_lock = threading.Lock()
+
 def get_whisper_model(model_size="tiny"):
     global whisper_model
     with model_lock:
@@ -50,6 +56,17 @@ def get_whisper_model(model_size="tiny"):
             whisper_model = whisper.load_model(model_size, device=device)
             logger.info("Whisper model loaded.")
         return whisper_model
+
+def get_blip_model():
+    global blip_processor, blip_model
+    with blip_lock:
+        if blip_processor is None or blip_model is None:
+            logger.info("Initializing BLIP model for image analysis...")
+            blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+            blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+            blip_model.to(device)
+            logger.info("BLIP model loaded.")
+        return blip_processor, blip_model
 
 # --- Utility Functions ---
 def get_video_id(url: str) -> Optional[str]:
@@ -328,6 +345,68 @@ def extract_text_from_frames(video_file: str, job_id: str) -> Optional[str]:
     full_text = "\n".join(unique_text)
     logger.info(f"[OCR] OCR completed. Found {len(unique_text)} unique text blocks.")
     return full_text
+
+def analyze_frames_with_blip(frame_paths: List[str], job_id: str) -> Optional[str]:
+    """
+    Analyzes video frames using BLIP to describe cooking actions and ingredients.
+    """
+    if not frame_paths:
+        logger.info("[BLIP] No frames to analyze.")
+        return None
+    
+    logger.info(f"[BLIP] Starting BLIP analysis on {len(frame_paths)} frames...")
+    
+    try:
+        processor, model = get_blip_model()
+        descriptions = []
+        
+        for i, frame_path in enumerate(frame_paths):
+            try:
+                # Load and preprocess image
+                image = Image.open(frame_path).convert('RGB')
+                
+                # Generate caption
+                inputs = processor(image, return_tensors="pt").to(device)
+                out = model.generate(**inputs, max_length=50, num_beams=5)
+                caption = processor.decode(out[0], skip_special_tokens=True)
+                
+                # Add cooking-specific prompts to get better descriptions
+                cooking_prompts = [
+                    "cooking food",
+                    "preparing ingredients", 
+                    "kitchen cooking",
+                    "food preparation"
+                ]
+                
+                cooking_descriptions = []
+                for prompt in cooking_prompts:
+                    inputs = processor(image, text=prompt, return_tensors="pt").to(device)
+                    out = model.generate(**inputs, max_length=50, num_beams=5)
+                    cooking_desc = processor.decode(out[0], skip_special_tokens=True)
+                    cooking_descriptions.append(cooking_desc)
+                
+                # Combine descriptions
+                frame_description = f"Frame {i+1}: {caption}. Cooking context: {'; '.join(cooking_descriptions[:2])}"
+                descriptions.append(frame_description)
+                
+                logger.info(f"[BLIP] Frame {i+1}: {caption[:100]}...")
+                
+            except Exception as e:
+                logger.warning(f"[BLIP] Could not analyze frame {i+1}: {e}")
+                continue
+        
+        if not descriptions:
+            logger.info("[BLIP] No frames could be analyzed.")
+            return None
+        
+        # Combine all descriptions
+        full_description = "\n".join(descriptions)
+        logger.info(f"[BLIP] Analysis completed. Generated {len(descriptions)} frame descriptions.")
+        return full_description
+        
+    except Exception as e:
+        logger.error(f"[BLIP] Error during frame analysis: {e}")
+        return None
 
 def contains_ingredients(text: Optional[str]) -> bool:
     if not text:

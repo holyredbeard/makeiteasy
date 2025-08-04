@@ -252,7 +252,6 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
     
     log_pdf_step("START", "Starting PDF generation", job_id=job_id)
     log_pdf_step("CONFIG", f"Using template: {template_name}, language: {language}", job_id=job_id)
-    log_pdf_step("DEBUG", f"Recipe content: {recipe.model_dump()}", job_id=job_id)
     
     try:
         # Initialize style manager and PDF
@@ -311,6 +310,7 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
             
             # Left column - Image or Placeholder with text
             if show_top_image and recipe.thumbnail_path and os.path.exists(recipe.thumbnail_path):
+                log_pdf_step("HEADER", f"✅ Found thumbnail: {recipe.thumbnail_path}", job_id=job_id)
                 # Check image orientation and get appropriate CSS style
                 orientation = get_image_orientation(recipe.thumbnail_path)
                 log_pdf_step("HEADER", f"Thumbnail orientation: {orientation}", job_id=job_id)
@@ -355,6 +355,7 @@ def generate_pdf(recipe: Recipe, job_id: str, template_name: str = "default", la
                 pdf.image(thumbnail_path, x=pdf.l_margin, y=start_y, w=img_width, h=img_height)
                 image_height = img_height  # Update for layout calculation
             elif show_top_image:
+                log_pdf_step("HEADER", "Thumbnail not found or path is invalid.", job_id=job_id)
                 pdf.set_fill_color(230, 230, 230) # Light gray
                 pdf.rect(pdf.l_margin, start_y, image_width, image_height, 'F')
                 pdf.set_xy(pdf.l_margin, start_y + (image_height / 2) - 5)

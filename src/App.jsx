@@ -1,5 +1,18 @@
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
 import Food2Guide from './Food2Guide';
+import MyRecipes from './MyRecipes';
+import Layout from './Layout';
 
-export default function App() {
-  return <Food2Guide />;
-} 
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Layout />}>
+        <Route index element={<Food2Guide />} />
+        <Route path="my-recipes" element={<MyRecipes />} />
+      </Route>
+    </Routes>
+  );
+}
+
+export default App;
