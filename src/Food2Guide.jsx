@@ -438,7 +438,7 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
   </header>
 );
 
-const AuthModal = ({ isOpen, onClose, handleLogin, handleRegister, initiateGoogleSignIn, authTab, setAuthTab }) => {
+const AuthModal = ({ isOpen, onClose, initiateGoogleSignIn, authTab, setAuthTab }) => {
   if (!isOpen) return null;
 
   return (
@@ -476,7 +476,7 @@ const AuthModal = ({ isOpen, onClose, handleLogin, handleRegister, initiateGoogl
 
           {authTab === 'login' ? (
             <div className="space-y-6">
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form className="space-y-4">
                 <div>
                   <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input 
@@ -529,7 +529,7 @@ const AuthModal = ({ isOpen, onClose, handleLogin, handleRegister, initiateGoogl
             </div>
           ) : (
             <div className="space-y-6">
-              <form onSubmit={handleRegister} className="space-y-4">
+              <form className="space-y-4">
                 <div>
                   <label htmlFor="register-name" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                   <input 
@@ -919,36 +919,35 @@ export default function Food2Guide() {
     { code: 'es', name: 'Español' },
   ];
 
-  useEffect(() => {
-    // Check auth status on initial load to see if a cookie session exists
-    checkAuthStatus();
-    checkUsageStatus();
-
+useEffect(() => {
+    // Försök att hämta användarinfo från backend via cookies
+    const fetchUser = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
+          credentials: 'include' // Viktigt: skicka cookies
+        });
+        if (response.ok) {
+          const user = await response.json();
+          setCurrentUser(user);
+        }
+      } catch (error) {
+        console.error('Failed to fetch user:', error);
+      }
+    };
+    
+    fetchUser();
+    
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     if (code) {
-        handleGoogleOAuthCallback(code);
-        window.history.replaceState({}, document.title, window.location.pathname);
+      handleGoogleOAuthCallback(code);
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else {
+      checkUsageStatus();
     }
-  }, []); // Run only once on mount
+  }, []);
 
-  const checkAuthStatus = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const user = await response.json();
-        setCurrentUser(user);
-      } else {
-        setCurrentUser(null);
-      }
-    } catch (error) {
-      console.error('Auth check error:', error);
-      setCurrentUser(null);
-    }
-  };
+
 
   const checkUsageStatus = async () => {
     try {
@@ -962,50 +961,37 @@ export default function Food2Guide() {
     }
   };
 
-  const handleAuthAction = async (url, body) => {
+
+  const handleGoogleOAuthCallback = async (code) => {
     try {
-      const response = await fetch(url, {
+      const authResponse = await fetch(`${API_BASE}/api/v1/auth/google/callback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify({ code }),
+        credentials: 'include' // Viktigt: för att cookies ska sättas
       });
-      
-      const data = await response.json();
 
-      if (response.ok) {
-        setCurrentUser(data.user); // The user object is now returned directly
-        setIsAuthModalOpen(false);
-        setShowWelcome(true);
-        setTimeout(() => setShowWelcome(false), 4000);
+      if (authResponse.ok) {
+        const data = await authResponse.json();
+        if (data.user) {
+          setCurrentUser(data.user);
+          setIsAuthModalOpen(false);
+          setShowWelcome(true);
+          setTimeout(() => setShowWelcome(false), 4000);
+        } else {
+          alert('User data was not found in the response.');
+        }
       } else {
-        alert(data.detail || 'Action failed');
+        const error = await authResponse.json();
+        alert(error.detail || 'Google Sign-In failed');
       }
     } catch (error) {
-      alert('An error occurred. Please try again.');
+      console.error('Google OAuth callback error:', error);
+      alert('Google Sign-In failed.');
     }
   };
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const email = formData.get('email');
-    const password = formData.get('password');
-    
-    // Use regular login endpoint for both admin and regular users
-    const body = { email, password };
-    handleAuthAction(`${API_BASE}/api/v1/auth/login`, body);
-  };
 
-  const handleRegister = (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-    const body = {
-      full_name: formData.get('name'),
-      email: formData.get('email'),
-      password: formData.get('password')
-    };
-    handleAuthAction(`${API_BASE}/api/v1/auth/register`, body);
-  };
 
   const handleLogout = async () => {
     try {
@@ -1034,31 +1020,7 @@ export default function Food2Guide() {
     }
   };
 
-  const handleGoogleOAuthCallback = async (code) => {
-    try {
-      const authResponse = await fetch(`${API_BASE}/api/v1/auth/google/callback`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-      });
-      if (authResponse.ok) {
-        const data = await authResponse.json();
-        // The cookie is set, and we have the user data and token directly.
-        // We can set the user state immediately without a second fetch.
-        setCurrentUser(data.user);
-        setIsAuthModalOpen(false);
-        setShowWelcome(true);
-        setTimeout(() => setShowWelcome(false), 4000);
-      } else {
-        const error = await authResponse.json();
-        alert(error.detail || 'Google Sign-In failed');
-      }
-    } catch (error) {
-      console.error('Google OAuth callback error:', error);
-        alert('Google Sign-In failed.');
-    }
-  };
+
 
   const handleScroll = () => {
     const container = scrollContainerRef.current;
@@ -1329,8 +1291,6 @@ export default function Food2Guide() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        handleLogin={handleLogin}
-        handleRegister={handleRegister}
         initiateGoogleSignIn={initiateGoogleSignIn}
         authTab={authTab}
         setAuthTab={setAuthTab}

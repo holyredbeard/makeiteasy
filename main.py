@@ -44,7 +44,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Add CORS middleware to allow React frontend to communicate with backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:8001"],  # React development server and frontend
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://localhost:8001"],  # React development server and frontend
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -37,7 +37,7 @@ class SavedRecipe(BaseModel):
     recipe_content: RecipeContent
 
 class Step(BaseModel):
-    step_number: int = Field(..., description="The step number in the recipe.")
+    number: int = Field(..., description="The step number in the recipe.")
     description: str = Field(..., description="Detailed description of the cooking step.")
     image_path: Optional[str] = Field(None, description="Path to the image for this step.")
 

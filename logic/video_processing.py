@@ -201,6 +201,13 @@ def download_video(video_url: str, job_id: str, audio_only: bool = False) -> Opt
                     # Fallback scan if the extension is different
                     for file in download_path.iterdir():
                         if file.stem == job_id:
+                            # Correct the extension for audio files
+                            if audio_only and not file.suffix in ['.mp3', '.m4a']:
+                                corrected_path = file.with_suffix(f'.{final_ext}')
+                                file.rename(corrected_path)
+                                logger.info(f"[DOWNLOAD] ✅ SUCCESS (Fallback Scan): Renamed to {corrected_path} and downloaded with '{f_info['format_name']}' format.")
+                                return str(corrected_path)
+                            
                             logger.info(f"[DOWNLOAD] ✅ SUCCESS (Fallback Scan): Downloaded with '{f_info['format_name']}' format to {file}")
                             return str(file)
                     

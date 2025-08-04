@@ -126,11 +126,12 @@ async def stream_recipe_from_text(text: str, language: str, thumbnail_path: Opti
             formatted_instructions = []
             for i, instruction in enumerate(recipe_json['instructions']):
                 if isinstance(instruction, str):
-                    formatted_instructions.append({"description": instruction})
+                    formatted_instructions.append({"step": i + 1, "description": instruction})
                 elif isinstance(instruction, dict) and 'description' in instruction:
+                    instruction['step'] = i + 1
                     formatted_instructions.append(instruction)
                 else:
-                    formatted_instructions.append({"description": f"Steg {i+1}"})
+                    formatted_instructions.append({"step": i + 1, "description": f"Steg {i+1}"})
             recipe_json['instructions'] = formatted_instructions
             
         if frame_paths:

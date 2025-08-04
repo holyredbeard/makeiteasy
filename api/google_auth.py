@@ -55,7 +55,7 @@ async def get_google_auth_url():
     # Build OAuth URL
     params = {
         "client_id": config["client_id"],
-        "redirect_uri": config["redirect_uri"],
+        "redirect_uri": "http://localhost:3000",
         "scope": " ".join(config["scopes"]),
         "response_type": "code",
         "state": state,
@@ -170,7 +170,7 @@ async def google_callback(request: Request):
         return RedirectResponse(url="/?error=oauth_error&message=internal_error")
 
 @router.post("/google/callback")
-async def google_callback_post(request: Request):
+async def google_callback_post(request: Request, response: Response):
     """Handle Google OAuth callback from frontend (POST method)"""
     try:
         data = await request.json()
@@ -241,11 +241,16 @@ async def google_callback_post(request: Request):
             data={"sub": user.email}
         )
         
-        return Token(
-            access_token=jwt_token,
-            token_type="bearer",
-            user=user
+        # Sätt HTTP-only cookie
+        response.set_cookie(
+            key="access_token",
+            value=jwt_token,
+            httponly=True,
+            samesite="lax",
+            secure=False  # Set to True in production with HTTPS
         )
+        
+        return {"message": "Login successful", "user": user.dict()}
         
     except HTTPException:
         raise

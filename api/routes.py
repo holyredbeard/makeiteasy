@@ -56,6 +56,52 @@ class Job:
         self.details = reason
         logger.error(f"[Job {self.job_id}] Failed: {reason}")
 
+def is_transcript_sufficient(transcript: Optional[str]) -> bool:
+    """
+    Validerar om en transkribering är tillräckligt bra för att fortsätta.
+    Returnerar True om transkriberingen är godkänd, annars False.
+    """
+    if not transcript or not isinstance(transcript, str):
+        logger.warning("[VALIDATION] Ingen transkribering tillgänglig.")
+        return False
+
+    # 1. Längdkontroll (grundläggande)
+    # En rimlig transkribering bör ha minst 50 tecken.
+    if len(transcript.strip()) < 50:
+        logger.warning(f"[VALIDATION] Transkribering för kort ({len(transcript.strip())} tecken).")
+        return False
+
+    # 2. Kontroll av upprepande mönster (indikerar ofta fel)
+    # Ser efter mönster som "....." eller "Thank you for watching..." som upprepas.
+    # Denna regex letar efter en kort sekvens av tecken som upprepas många gånger.
+    if re.search(r'(.+?)\1{4,}', transcript):
+        logger.warning("[VALIDATION] Transkribering innehåller repetitiva mönster.")
+        return False
+
+    # 3. Kontroll av nonsens-ord (indikerar ofta dålig ljudkvalitet)
+    # Räknar andelen ord som är väldigt korta (mindre än 3 tecken), vilket kan tyda på brus.
+    words = transcript.strip().split()
+    if len(words) > 10:  # Undvik delning med noll och kör bara på längre texter
+        short_words = [word for word in words if len(word) < 3]
+        if (len(short_words) / len(words)) > 0.6:  # Mer än 60% korta ord
+            logger.warning("[VALIDATION] Transkribering har hög andel korta ord, kan vara brus.")
+            return False
+
+    # 4. Sök efter nyckelord relaterade till matlagning (BORTTAGEN)
+    # En bra transkribering av ett recept bör innehålla några vanliga matlagningstermer.
+    # cooking_keywords = [
+    #     'recipe', 'ingredients', 'instructions', 'cup', 'teaspoon', 'tablespoon',
+    #     'oven', 'bake', 'cook', 'mix', 'stir', 'fry', 'boil', 'chop', 'slice',
+    #     'salt', 'pepper', 'sugar', 'flour', 'water', 'oil', 'onion', 'garlic'
+    # ]
+    # found_keywords = [word for word in cooking_keywords if word in transcript.lower()]
+    # if len(found_keywords) < 2:  # Kräver minst två nyckelord
+    #     logger.warning(f"[VALIDATION] Få matlagningsrelaterade nyckelord hittades ({len(found_keywords)} st).")
+    #     return False
+
+    logger.info("[VALIDATION] Transkribering bedöms vara tillräcklig.")
+    return True
+
 # --- Background Task for PDF Generation ---
 async def stream_recipe_generation(video_url: str, language: str, show_top_image: bool, show_step_images: bool):
     job_id = str(uuid.uuid4())
@@ -86,11 +132,11 @@ async def stream_recipe_generation(video_url: str, language: str, show_top_image
             return
 
         yield await send_event("transcribing", "Transcribing audio...")
-        transcript = await asyncio.to_thread(transcribe_audio, audio_file_path, job_id, language)
+        transcript = await asyncio.to_thread(transcribe_audio, audio_file_path, language)
         transcript = transcript or ""
 
         final_transcript = transcript
-        if len(transcript) < 100 or not await asyncio.to_thread(contains_ingredients, transcript):
+        if not is_transcript_sufficient(transcript):
             yield await send_event("analyzing", "Audio unclear, analyzing video frames for text...")
             video_file_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=False)
             
@@ -194,9 +240,26 @@ async def generate_stream_endpoint(video_url: str, language: str = "en", show_to
                 audio_only=True
             )
             
+            frame_paths = []
+            text_for_analysis = ""
+
+            if audio_path:
+                # Transcribe audio
+                yield await send_event("transcribing", "Transcribing audio...")
+                transcript = await asyncio.to_thread(transcribe_audio, audio_path, job_id, language)
+                
+                if is_transcript_sufficient(transcript):
+                    description = metadata.get("description", "")
+                    text_for_analysis = f"Video Title: {metadata.get('title', '')}\n\n"
+                    if description:
+                        text_for_analysis += f"Video Description: {description}\n\n"
+                    text_for_analysis += f"Transcript: {transcript}"
+                else:
+                    yield await send_event("processing", "Audio transcription insufficient. Trying video frames...")
+                    audio_path = None # Force video download path
+
             if not audio_path:
-                # Try video download if audio fails
-                yield await send_event("downloading", "Audio download failed. Trying video download...")
+                # Try video download if audio failed or was insufficient
                 video_path = await asyncio.to_thread(
                     download_video, 
                     video_url=video_url, 
@@ -208,7 +271,6 @@ async def generate_stream_endpoint(video_url: str, language: str = "en", show_to
                     yield await send_event("error", "Failed to download video content.", is_error=True)
                     return
                 
-                frame_paths = []
                 if show_step_images:
                     frame_paths = await asyncio.to_thread(extract_and_save_frames, video_path, job_id)
                     
@@ -227,53 +289,12 @@ async def generate_stream_endpoint(video_url: str, language: str = "en", show_to
                         return
                 else:
                     text_for_analysis = ocr_text
-            else:
-                # Transcribe audio
-                yield await send_event("transcribing", "Transcribing audio...")
-                transcript = await asyncio.to_thread(transcribe_audio, audio_path, job_id, language)
-                
-                if not transcript or len(transcript) < 50:
-                    yield await send_event("processing", "Audio transcription insufficient. Trying video frames...")
-                    # Try video download as fallback
-                    video_path = await asyncio.to_thread(
-                        download_video, 
-                        video_url=video_url, 
-                        job_id=job_id, 
-                        audio_only=False
-                    )
-                    
-                    if video_path:
-                        frame_paths = []
-                        if show_step_images:
-                            frame_paths = await asyncio.to_thread(extract_and_save_frames, video_path, job_id)
-                        
-                        ocr_text = await asyncio.to_thread(extract_text_from_frames, video_path, job_id)
-                        if ocr_text and len(ocr_text) > 50:
-                            text_for_analysis = ocr_text
-                        else:
-                            # Use description as last resort
-                            description = metadata.get("description", "")
-                            if len(description) > 100:
-                                text_for_analysis = description
-                            else:
-                                yield await send_event("error", "Could not extract enough text from the video.", is_error=True)
-                                return
-                    else:
-                        yield await send_event("error", "Failed to process video content.", is_error=True)
-                        return
-                else:
-                    # Combine transcript with metadata
-                    description = metadata.get("description", "")
-                    text_for_analysis = f"Video Title: {metadata.get('title', '')}\n\n"
-                    if description:
-                        text_for_analysis += f"Video Description: {description}\n\n"
-                    text_for_analysis += f"Transcript: {transcript}"
-            
+
             # Generate recipe
             yield await send_event("generating", "Generating recipe with AI...")
             
             # Process with AI
-            recipe_generator = analyze_video_content(text_for_analysis, language, stream=True, thumbnail_path=thumbnail_path)
+            recipe_generator = analyze_video_content(text_for_analysis, language, stream=True, thumbnail_path=thumbnail_path, frame_paths=frame_paths)
             async for recipe_data in recipe_generator:
                 if "error" in recipe_data:
                     yield await send_event("error", recipe_data["error"], is_error=True)
