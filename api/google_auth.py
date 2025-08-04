@@ -55,7 +55,7 @@ async def get_google_auth_url():
     # Build OAuth URL
     params = {
         "client_id": config["client_id"],
-        "redirect_uri": "http://localhost:3000",
+        "redirect_uri": config["redirect_uri"],
         "scope": " ".join(config["scopes"]),
         "response_type": "code",
         "state": state,

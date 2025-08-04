@@ -19,10 +19,13 @@ import {
   ChevronDownIcon,
   CogIcon,
   DocumentIcon,
-  ArrowUturnLeftIcon
+  ArrowUturnLeftIcon,
+  BugAntIcon
 } from '@heroicons/react/24/outline';
+import logger from './Logger';
+import LogPanel from './LogPanel';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://localhost:8001';
 
 const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
   <svg className={`animate-spin ${size} ${color}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -31,59 +34,20 @@ const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
   </svg>
 );
 
-// AdminLogViewer component to display detailed logs for admins
-const AdminLogViewer = ({ logs, isVisible }) => {
-  if (!isVisible) return null;
-  
-  // Auto-scroll to bottom when logs update
-  const logContainerRef = useRef(null);
-  
-  useEffect(() => {
-    if (logContainerRef.current) {
-      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
-    }
-  }, [logs]);
-  
-  return (
-    <div className="fixed top-20 right-4 w-96 max-h-[80vh] bg-black bg-opacity-90 text-white p-4 rounded-lg shadow-lg z-50 font-mono text-xs border border-gray-700">
-      <div className="flex justify-between items-center sticky top-0 bg-black pb-2 mb-2 border-b border-gray-700">
-        <h3 className="text-sm font-bold text-green-400">Admin Debug Console</h3>
-        <div className="text-xs text-gray-400">{logs.length} events</div>
-      </div>
-      <div 
-        ref={logContainerRef}
-        className="space-y-1 overflow-y-auto max-h-[calc(80vh-3rem)]"
-      >
-        {logs.map((log, index) => (
-          <div 
-            key={index} 
-            className={`py-1 border-b border-gray-800 ${log.isError ? 'text-red-400' : 'text-white'}`}
-          >
-            <span className="text-gray-400 mr-2">[{log.timestamp}]</span> 
-            {log.message && log.message.includes('Raw data:') 
-              ? <details>
-                  <summary className="cursor-pointer hover:text-green-300">Raw data</summary>
-                  <pre className="mt-1 pl-2 text-gray-400 border-l-2 border-gray-700 overflow-x-auto">
-                    {log.message.replace('Raw data: ', '')}
-                  </pre>
-                </details>
-              : log.message
-            }
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
+
 
 // RecipeStreamViewer component to display the recipe and buttons
-const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, adminLogs = [] }) => {
+const RecipeStreamViewer = ({ status, error, data, onReset, currentUser }) => {
   // Visa receptet direkt istället för knappar
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   
   // Handle PDF download
   const handleDownloadPdf = async (recipeData) => {
     try {
+      // Debug: Log recipeData to see if thumbnail_path is present
+      console.log('Recipe data for PDF generation:', recipeData);
+      console.log('Thumbnail path in recipeData:', recipeData.thumbnail_path);
+      
       // Convert instructions format if needed
       const formattedInstructions = recipeData.instructions.map((instruction, idx) => {
         if (typeof instruction === 'string') {
@@ -115,6 +79,10 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, adminLo
         show_top_image: showTopImage,
         show_step_images: showStepImages
       };
+
+      // Debug: Log formatted request to see if thumbnail_path is included
+      console.log('Formatted request for PDF generation:', formattedRequest);
+      console.log('Thumbnail path in formatted request:', formattedRequest.thumbnail_path);
 
       const response = await fetch(`${API_BASE}/api/v1/generate-pdf`, {
         method: 'POST',
@@ -204,14 +172,21 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, adminLo
   // Recipe is ready, show recipe content directly
   return (
     <div>
-      {/* Admin Log Viewer - Only visible for admins */}
-      <AdminLogViewer logs={adminLogs} isVisible={currentUser?.is_admin === true} />
-      
       {/* Recipe display view - A4 width optimized */}
       <div className="recipe-display a4-format">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-3xl font-bold">{data.title}</h2>
         </div>
+        
+        {data.thumbnail_path && (
+          <div className="mb-6">
+            <img 
+              src={data.thumbnail_path} 
+              alt={data.title} 
+              className="w-full h-auto object-cover rounded-lg shadow-md" 
+            />
+          </div>
+        )}
         
         <p className="text-gray-600 mb-6">{data.description}</p>
         
@@ -258,7 +233,7 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, adminLo
           </div>
         </div>
         
-        {data.chef_tips && data.chef_tips.length > 0 && (
+        {Array.isArray(data.chef_tips) && data.chef_tips.length > 0 && (
           <div className="mb-8 bg-amber-50 p-4 rounded-lg">
             <h3 className="text-xl font-semibold mb-2">Chef Tips</h3>
             <ul className="list-disc pl-5 space-y-2">
@@ -907,7 +882,9 @@ export default function Food2Guide() {
   const [recipeData, setRecipeData] = useState({});
   const [streamError, setStreamError] = useState(null);
   const [streamStatus, setStreamStatus] = useState('');
-  const [adminLogs, setAdminLogs] = useState([]);
+    
+  // States for logging
+  const [showLogPanel, setShowLogPanel] = useState(true); // Visa alltid som standard
 
   const languages = [
     { code: 'en', name: 'English' },
@@ -920,18 +897,29 @@ export default function Food2Guide() {
   ];
 
 useEffect(() => {
+    logger.info('🚀 Food2Guide-komponenten initialiseras');
+    
     // Försök att hämta användarinfo från backend via cookies
     const fetchUser = async () => {
       try {
+        logger.info('👤 Hämtar användarinformation...');
+        logger.apiCall('GET', '/api/v1/auth/me');
+        
         const response = await fetch(`${API_BASE}/api/v1/auth/me`, {
           credentials: 'include' // Viktigt: skicka cookies
         });
+        
+        logger.apiResponse('GET', '/api/v1/auth/me', response.status);
+        
         if (response.ok) {
           const user = await response.json();
+          logger.success('✅ Användare inloggad', { user: user.email, admin: user.is_admin });
           setCurrentUser(user);
+        } else {
+          logger.info('ℹ️ Ingen inloggad användare (förväntat)');
         }
       } catch (error) {
-        console.error('Failed to fetch user:', error);
+        logger.error('❌ Misslyckades att hämta användare', error);
       }
     };
     
@@ -940,6 +928,7 @@ useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
     if (code) {
+      logger.info('🔗 OAuth-kod hittad i URL, hanterar callback...');
       handleGoogleOAuthCallback(code);
       window.history.replaceState({}, document.title, window.location.pathname);
     } else {
@@ -951,13 +940,22 @@ useEffect(() => {
 
   const checkUsageStatus = async () => {
     try {
+      logger.info('📊 Kontrollerar användningsstatus...');
+      logger.apiCall('GET', '/api/v1/usage-status');
+      
       const response = await fetch(`${API_BASE}/api/v1/usage-status`, { credentials: 'include' });
+      
+      logger.apiResponse('GET', '/api/v1/usage-status', response.status);
+      
       if (response.ok) {
         const status = await response.json();
+        logger.success('📊 Användningsstatus hämtad', status);
         setUsageStatus(status);
+      } else {
+        logger.warn('⚠️ Kunde inte hämta användningsstatus');
       }
     } catch (error) {
-      console.error('Usage status check error:', error);
+      logger.error('❌ Fel vid kontroll av användningsstatus', error);
     }
   };
 
@@ -1063,13 +1061,22 @@ useEffect(() => {
 
   // Ändra searchYouTube så att den skickar med videoSource
   const searchYouTube = async () => {
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim()) {
+      logger.warn('⚠️ Tomt sökfält - avbryter sökning');
+      return;
+    }
+    
+    logger.info('🔍 STARTAR VIDEOSÖKNING', { query: searchQuery, language, source: videoSource });
+    logger.apiCall('POST', '/api/v1/search', { query: searchQuery, language, source: videoSource, page: 1 });
+    
     setIsSearching(true);
     setSearchAttempted(true); // Mark that a search has been attempted
     setSearchResults([]); // Clear previous results
     setSearchPage(1);
     setHasMoreResults(true);
+    
     try {
+      const startTime = Date.now();
       const response = await fetch(`${API_BASE}/api/v1/search`, {
         method: 'POST',
         credentials: 'include',
@@ -1078,21 +1085,32 @@ useEffect(() => {
         },
         body: JSON.stringify({ query: searchQuery, language, source: videoSource, page: 1 })
       });
+      
+      const duration = Date.now() - startTime;
+      logger.performance('Sökning', duration);
+      
+      logger.apiResponse('POST', '/api/v1/search', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        logger.success(`✅ ${data.results.length} videor hittade`, { count: data.results.length });
         setSearchResults(data.results);
         if (data.results.length < 10) {
           setHasMoreResults(false);
+          logger.info('ℹ️ Inga fler resultat att ladda');
         }
       } else {
+        logger.error('❌ Sökning misslyckades', null, { status: response.status });
         alert('Search failed.');
         setHasMoreResults(false);
       }
     } catch (error) {
+      logger.error('❌ Fel vid sökning', error);
       alert('An error occurred during search.');
       setHasMoreResults(false);
     } finally {
       setIsSearching(false);
+      logger.info('🔍 Sökning avslutad');
     }
   };
 
@@ -1155,95 +1173,91 @@ useEffect(() => {
   };
 
   const handleStreamResponse = (url) => {
+    logger.info('🌊 STARTAR STREAMING-PROCESS', { url, language });
+    logger.stream('📡 Initialiserar EventSource-anslutning...');
+    
     setIsStreaming(true);
     setStreamStatus('Initializing stream...');
     setStreamError('');
     setRecipeData({});
-    setAdminLogs([{ 
-      timestamp: new Date().toISOString().substring(11, 19), 
-      message: `Starting stream for URL: ${url}` 
-    }]);
+    logger.stream(`Startar stream för URL: ${url}`);
+
     
     // Add showImages parameter to the URL if the user is an admin
     let streamUrl = `${API_BASE}/api/v1/generate-stream?video_url=${encodeURIComponent(url)}&language=${language}`;
     if (currentUser?.is_admin) {
       streamUrl += `&show_top_image=${showTopImage}&show_step_images=${showStepImages}`;
+      logger.info('👑 Admin-inställningar tillagda', { showTopImage, showStepImages });
     }
+    
+    logger.info('🔗 EventSource URL skapad', { streamUrl });
     
     const eventSource = new EventSource(streamUrl);
     // EventSource stödjer inte withCredentials som en inställning
     // eventSource.withCredentials = true;
     
-    // Helper function to add admin logs
-    const addAdminLog = (message, isError = false) => {
-      const timestamp = new Date().toISOString().substring(11, 19);
-      setAdminLogs(prevLogs => [...prevLogs, { 
-        timestamp, 
-        message,
-        isError
-      }]);
+    
+    
+    eventSource.onopen = () => {
+      logger.success('✅ EventSource-anslutning öppnad');
     };
     
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        // Add raw data to admin logs
-        addAdminLog(`Raw data: ${JSON.stringify(data)}`);
+        
+        // Logga alltid rådata för felsökning
+        logger.debug('📨 Mottaget EventSource-meddelande', { eventData: event.data });
+        logger.stream('📦 Parsed stream data', data);
+
+        // Skicka vidare backend-loggar till frontend-loggern
+        if (data.log) {
+            logger.info(`[BACKEND] ${data.log.message}`, data.log.extra);
+        }
 
         if (data.status === 'error') {
+          logger.error('❌ Stream-fel mottaget', null, data);
           setStreamError(data.message);
           setStreamStatus('Error occurred.');
           setIsStreaming(false);
-          addAdminLog(`Error: ${data.message}`, true);
           eventSource.close();
-        } else if (data.status === 'done') {
-          // This handles the final recipe data
+        } else if (data.status === 'completed') {
+          logger.success('🎉 Stream avslutad!');
           if (data.recipe) {
+            logger.success('📄 Recept mottaget', { 
+              title: data.recipe.title,
+              ingredientCount: data.recipe.ingredients?.length,
+              instructionCount: data.recipe.instructions?.length
+            });
             setRecipeData(data.recipe);
-            addAdminLog(`Recipe received: ${data.recipe.title || 'Untitled'}`);
-            
-            // Log recipe details for admin
-            if (data.recipe.ingredients) {
-              addAdminLog(`Ingredients count: ${data.recipe.ingredients.length}`);
-            }
-            if (data.recipe.instructions) {
-              addAdminLog(`Instructions count: ${data.recipe.instructions.length}`);
-            }
           }
           setStreamStatus('Recipe generation complete!');
-          addAdminLog('Generation process completed');
-          setIsStreaming(false); // Stop streaming view
+          setIsStreaming(false); 
           eventSource.close();
         } else if (data.status) {
-          // It's a status update
           const statusMessage = data.message || data.status;
+          logger.stream(`📡 Status: ${data.status}`, { message: statusMessage, debug: data.debug_info });
           setStreamStatus(statusMessage);
-          addAdminLog(`Status update: ${statusMessage}`);
-          
-          // Log detailed information if available
-          if (data.details) {
-            addAdminLog(`Details: ${data.details}`);
-          }
         }
       } catch (err) {
-        console.error('Error parsing event data:', err);
+        logger.error('❌ Fel vid parsing av EventSource-data', err, { eventData: event.data });
         setStreamError('Failed to parse server response.');
         setIsStreaming(false);
-        addAdminLog(`Parse error: ${err.message}`, true);
         eventSource.close();
       }
     };
     
     eventSource.onerror = (err) => {
-      console.error('EventSource failed:', err);
+      logger.error('❌ EventSource-fel', err);
       setStreamError('Connection to server failed. Please try again.');
       setIsStreaming(false);
-      addAdminLog(`EventSource error: ${err}`, true);
+      
       eventSource.close();
     };
   };
   
   const resetAll = () => {
+    logger.info('🔄 Återställer all data...');
     setVideoUrl('');
     setSearchQuery('recipe');
     setSearchResults([]);
@@ -1253,7 +1267,7 @@ useEffect(() => {
     setRecipeData({});
     setStreamError(null);
     setStreamStatus('');
-    setAdminLogs([]); // Rensa admin-loggar
+    logger.success('✅ All data återställd');
   };
   
   // Show login screen only if explicitly requested, not by default
@@ -1268,12 +1282,26 @@ useEffect(() => {
 
   // Handle generating a recipe from a video URL
   const handleGenerateRecipe = () => {
-    if (!videoUrl) return;
+    if (!videoUrl) {
+      logger.warn('⚠️ Ingen video-URL angiven');
+      return;
+    }
+    
+    logger.info('🚀 STARTAR RECEPTGENERERING', { 
+      videoUrl, 
+      language, 
+      isAdmin: currentUser?.is_admin,
+      showTopImage,
+      showStepImages 
+    });
+    logger.event('GENERATE_RECIPE_STARTED', { videoUrl, language });
     
     // Reset any previous data
     setJob(null);
     setRecipeData({});
     setStreamError('');
+    
+    logger.debug('🧹 Föregående data rensad');
     
     // Start the streaming process
     handleStreamResponse(videoUrl);
@@ -1281,13 +1309,37 @@ useEffect(() => {
   
   // Handle video selection from search
   const handleVideoSelect = (video) => {
+    logger.info('🎥 Video vald från sökresultat', { 
+      videoId: video.video_id, 
+      title: video.title,
+      channel: video.channel_title 
+    });
+    logger.event('VIDEO_SELECTED', { video });
+    
     setSelectedVideoId(video.video_id);
     setVideoUrl(`https://www.youtube.com/watch?v=${video.video_id}`);
+    
+    logger.success('✅ Video URL satt', { url: `https://www.youtube.com/watch?v=${video.video_id}` });
   };
 
   return (
     <div className="font-poppins bg-gradient-to-br from-[#d6e5dd] to-[#eaf3ef] min-h-screen">
       <Header currentUser={currentUser} handleLogout={handleLogout} showAuthModal={() => setIsAuthModalOpen(true)} usageStatus={usageStatus} showTestPdfModal={() => setIsTestPdfModalOpen(true)} />
+      
+      {/* LOGGPANEL - Alltid synlig för alla användare */}
+      <LogPanel 
+        isVisible={showLogPanel} 
+        onToggle={() => setShowLogPanel(!showLogPanel)} 
+      />
+      
+      {/* Knapp för att visa/dölja loggar - fast position */}
+      <button
+        onClick={() => setShowLogPanel(!showLogPanel)}
+        className="fixed bottom-4 left-4 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-full shadow-lg z-40 transition-all duration-300"
+        title={showLogPanel ? 'Dölj loggar' : 'Visa loggar'}
+      >
+        <BugAntIcon className="h-6 w-6" />
+      </button>
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
@@ -1319,7 +1371,6 @@ useEffect(() => {
               data={recipeData}
               onReset={resetAll}
               currentUser={currentUser}
-              adminLogs={adminLogs}
             />
           ) : job ? (
              <JobStatus job={job} onReset={resetAll} />
