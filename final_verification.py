@@ -1,62 +1,65 @@
 import asyncio
-import os
-import logging
-from api.routes import process_video_request
-from models.types import VideoRequest
+import json
+from logic.web_scraper import scrape_recipe_from_url
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
-log = logging.getLogger(__name__)
-
-async def main():
+def verify_scraper():
     """
-    Runs a full end-to-end verification of the video processing pipeline.
+    This script will test the web scraper functionality by fetching a recipe 
+    from a hardcoded URL and printing the structured JSON result.
+    This helps to verify that the data extraction for all required fields 
+    (title, description, image, times, nutrition, etc.) works as expected 
+    before running the full application.
     """
-    log.info("--- Starting Final Verification ---")
+    test_url = "https://www.ica.se/recept/kramig-kycklinggryta-med-soltorkade-tomater-729340/"
     
-    # 1. Define the test request
-    # This URL is for a short, simple recipe video.
-    test_request = VideoRequest(
-        youtube_url="https://www.youtube.com/watch?v=FgYkBfV_adw",
-        job_id="final_verification_test"
-    )
+    print(f"--- Starting Scraper Verification ---")
+    print(f"Testing with URL: {test_url}")
     
-    log.info(f"Test URL: {test_request.youtube_url}")
-    log.info(f"Job ID: {test_request.job_id}")
-    
-    # 2. Clean up previous run files
-    output_pdf = f"output/{test_request.job_id}.pdf"
-    if os.path.exists(output_pdf):
-        os.remove(output_pdf)
-        log.info(f"Removed old PDF: {output_pdf}")
-    
-    # 3. Execute the main processing function
     try:
-        log.info("Calling process_video_request...")
-        pdf_path = await process_video_request(test_request)
+        recipe_data = scrape_recipe_from_url(test_url, download_image=False)
         
-        # 4. Verify the result
-        if pdf_path and os.path.exists(pdf_path) and os.path.getsize(pdf_path) > 1000:
-            log.info("--- ✅ VERIFICATION SUCCESS ---")
-            log.info(f"PDF generated successfully at: {pdf_path}")
-            log.info("The file is valid and not empty.")
-        else:
-            log.error("--- ❌ VERIFICATION FAILED ---")
-            log.error("The process completed, but the final PDF was not created or is empty.")
+        if recipe_data:
+            print("\n--- SCRAPER RESULT (Structured JSON) ---")
+            # Use json.dumps for pretty printing the dictionary
+            print(json.dumps(recipe_data, indent=2, ensure_ascii=False))
+            print("\n--- VERIFICATION CHECKLIST ---")
             
+            checks = {
+                "Title": "title" in recipe_data and recipe_data["title"],
+                "Description": "description" in recipe_data and recipe_data["description"],
+                "Image URL": "image_url" in recipe_data and recipe_data["image_url"],
+                "Ingredients": "ingredients" in recipe_data and len(recipe_data["ingredients"]) > 0,
+                "Instructions": "instructions" in recipe_data and len(recipe_data["instructions"]) > 0,
+                "Servings": "servings" in recipe_data and recipe_data["servings"],
+                "Prep Time": "prep_time" in recipe_data and recipe_data["prep_time"],
+                "Cook Time": "cook_time" in recipe_data and recipe_data["cook_time"],
+                "Nutritional Info": "nutritional_information" in recipe_data and recipe_data["nutritional_information"],
+                "  - Calories": "nutritional_information" in recipe_data and "calories" in recipe_data.get("nutritional_information", {}),
+                "  - Protein": "nutritional_information" in recipe_data and "proteinContent" in recipe_data.get("nutritional_information", {}),
+                "  - Fat": "nutritional_information" in recipe_data and "fatContent" in recipe_data.get("nutritional_information", {}),
+                "  - Carbs": "nutritional_information" in recipe_data and "carbohydrateContent" in recipe_data.get("nutritional_information", {}),
+            }
+            
+            all_passed = True
+            for name, passed in checks.items():
+                status = "✅ PASSED" if passed else "❌ FAILED"
+                if not passed:
+                    all_passed = False
+                print(f"{name.ljust(20)}: {status}")
+                
+            print("\n--- VERIFICATION SUMMARY ---")
+            if all_passed:
+                print("✅ All fields extracted successfully.")
+            else:
+                print("❌ Some fields failed extraction. Review the JSON output above.")
+        else:
+            print("\n--- SCRAPER RESULT ---")
+            print("❌ FAILED: Scraper returned no data.")
+
     except Exception as e:
-        log.error("--- ❌ VERIFICATION FAILED ---")
-        log.error(f"An unexpected error occurred during the process: {e}", exc_info=True)
+        print(f"\n--- An error occurred during verification ---")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    # Ensure the output directory exists
-    if not os.path.exists("output"):
-        os.makedirs("output")
-    
-    asyncio.run(main())
+    verify_scraper()

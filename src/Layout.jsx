@@ -11,7 +11,7 @@ import {
 import logger from './Logger';
 import LogPanel from './LogPanel';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = 'http://localhost:8001/api/v1';
 
 const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => (
   <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">

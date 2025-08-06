@@ -73,37 +73,43 @@ async def serve_pdf(filename: str):
     else:
         return {"error": "PDF not found"}, 404
 
-def cleanup_multiprocessing():
-    try:
-        multiprocessing.current_process()._cleanup()
-        import multiprocessing.resource_tracker
-        if hasattr(multiprocessing.resource_tracker, '_CLEANUP_CALLBACKS'):
-            for callback in multiprocessing.resource_tracker._CLEANUP_CALLBACKS:
-                try:
-                    callback()
-                except:
-                    pass
-    except Exception as e:
-        logging.warning(f"Error during multiprocessing cleanup: {e}")
 
-def signal_handler(signum, frame):
-    logging.info(f"Received signal {signum}, shutting down gracefully...")
-    cleanup_multiprocessing()
-    sys.exit(0)
+
+import psutil
+
+def find_and_kill_process_on_port(port):
+    """Find and kill a process that is listening on the given port."""
+    for proc in psutil.process_iter(['pid', 'name']):
+        try:
+            for conn in proc.connections(kind='inet'):
+                if conn.laddr.port == port:
+                    logging.info(f"Found process {proc.info['name']} (PID {proc.info['pid']}) on port {port}. Terminating.")
+                    proc.terminate()
+                    proc.wait(timeout=3)
+        except psutil.NoSuchProcess:
+            continue
+        except psutil.AccessDenied:
+            continue
+        except Exception as e:
+            logging.error(f"Error while trying to kill process on port {port}: {e}")
 
 if __name__ == "__main__":
     import uvicorn
     
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    PORT = 8001
     
+    # Ensure the port is free before starting the server
+    find_and_kill_process_on_port(PORT)
+    
+    # Set multiprocessing start method
+    # This is important for compatibility, especially on macOS and Windows
     multiprocessing.set_start_method('spawn', force=True)
     
     try:
-        uvicorn.run(app, host="127.0.0.1", port=8000)
-    except KeyboardInterrupt:
-        logging.info("Server stopped by user")
+        uvicorn.run("main:app", host="127.0.0.1", port=PORT, reload=True)
     except Exception as e:
-        logging.error(f"Server error: {e}")
+        logging.error(f"Server failed to start: {e}")
     finally:
-        cleanup_multiprocessing()
+        # Final cleanup attempt
+        find_and_kill_process_on_port(PORT)
+        logging.info("Server shutdown complete.")

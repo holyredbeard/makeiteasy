@@ -20,13 +20,20 @@ import {
 } from '@heroicons/react/24/outline';
 import logger from './Logger';
 
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = 'http://localhost:8001/api/v1';
 
 const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
   <svg className={`animate-spin ${size} ${color}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
   </svg>
+);
+
+const InfoCard = ({ label, value }) => (
+    <div className="bg-gray-50 p-3 rounded-lg">
+        <p className="text-sm text-gray-500">{label}</p>
+        <p className="font-medium">{value}</p>
+    </div>
 );
 
 const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUrl }) => {
@@ -38,9 +45,9 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   const [imageOrientation, setImageOrientation] = useState('landscape');
 
   useEffect(() => {
-    if (data.thumbnail_path) {
+    if (data.thumbnail_path || data.image_url) {
       const img = new window.Image();
-      img.src = data.thumbnail_path;
+      img.src = data.thumbnail_path || data.image_url;
       img.onload = () => {
         if (img.height > img.width) {
           setImageOrientation('portrait');
@@ -49,7 +56,7 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
         }
       };
     }
-  }, [data.thumbnail_path]);
+  }, [data.thumbnail_path, data.image_url]);
 
   const handleDownloadPdf = async (recipeData) => {
     try {
@@ -237,58 +244,51 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
           <h2 className="text-3xl font-bold">{data.title}</h2>
         </div>
         
-        <div className={`flex ${imageOrientation === 'portrait' ? 'flex-row items-start gap-8' : 'flex-col'} mb-6`}>
-          {data.thumbnail_path && (
-            <div className={`${imageOrientation === 'portrait' ? 'w-2/5' : 'w-full'} mb-0`}>
-              <img 
-                src={data.thumbnail_path} 
-                alt={data.title} 
-                className="w-full h-auto object-contain rounded-lg shadow-md"
-              />
+        {/* Top section: Image and Description */}
+        <div className="flex flex-col md:flex-row gap-8 mb-6">
+            <div className="md:w-1/3">
+                {(data.thumbnail_path || data.image_url) && (
+                    <img 
+                        src={data.thumbnail_path || data.image_url} 
+                        alt={data.title} 
+                        className="w-full h-auto object-cover rounded-lg shadow-md"
+                    />
+                )}
             </div>
-          )}
-          <div className={`${imageOrientation === 'portrait' ? 'w-3/5' : 'w-full'}`}>
-            <p className="text-gray-600">{data.description}</p>
-          </div>
+            <div className="md:w-2/3">
+                <p className="text-gray-600">{data.description}</p>
+            </div>
+        </div>
+
+        {/* Info Cards Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            {data.servings && <InfoCard label="Servings" value={data.servings} />}
+            {data.prep_time && <InfoCard label="Prep Time" value={data.prep_time} />}
+            {data.cook_time && <InfoCard label="Cook Time" value={data.cook_time} />}
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm text-gray-500">Servings</p>
-            <p className="font-medium">{data.servings}</p>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm text-gray-500">Prep Time</p>
-            <p className="font-medium">{data.prep_time}</p>
-          </div>
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-sm text-gray-500">Cook Time</p>
-            <p className="font-medium">{data.cook_time}</p>
-          </div>
-        </div>
-        
-        <div className="flex flex-col md:flex-row gap-8 mb-8">
-          <div className="md:w-1/3">
-            <h3 className="text-2xl font-semibold mb-4">Ingredients</h3>
-            <ul className="list-disc pl-5 space-y-2">
-              {data.ingredients && data.ingredients.map((ing, idx) => (
-                <li key={idx} className="text-gray-700">
-                  {ing.quantity} {ing.name} {ing.notes && <span className="text-gray-500">({ing.notes})</span>}
-                </li>
-              ))}
-            </ul>
-          </div>
-          
-          <div className="md:w-2/3">
-            <h3 className="text-2xl font-semibold mb-4">Instructions</h3>
-            <ol className="list-decimal pl-5 space-y-4">
-              {data.instructions && data.instructions.map((step, idx) => (
-                <li key={idx} className="text-gray-700">
-                  {typeof step === 'string' ? step : step.description || `Step ${idx + 1}`}
-                </li>
-              ))}
-            </ol>
-          </div>
+        {/* Main Content: Ingredients and Instructions */}
+        <div className="flex flex-col md:flex-row gap-8">
+            <div className="md:w-1/3">
+                <h3 className="text-2xl font-semibold mb-4">Ingredients</h3>
+                <ul className="list-disc pl-5 space-y-2">
+                    {data.ingredients && data.ingredients.map((ing, idx) => (
+                        <li key={idx} className="text-gray-700">
+                            {typeof ing === 'string' ? ing : `${ing.quantity || ''} ${ing.name || ing} ${ing.notes ? `(${ing.notes})` : ''}`}
+                        </li>
+                    ))}
+                </ul>
+            </div>
+            <div className="md:w-2/3">
+                <h3 className="text-2xl font-semibold mb-4">Instructions</h3>
+                <ol className="list-decimal pl-5 space-y-4">
+                    {data.instructions && data.instructions.map((step, idx) => (
+                        <li key={idx} className="text-gray-700">
+                            {typeof step === 'string' ? step : step.description || `Step ${idx + 1}`}
+                        </li>
+                    ))}
+                </ol>
+            </div>
         </div>
         
         {data.chef_tips && data.chef_tips.length > 0 && (
@@ -334,7 +334,7 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
 
         {videoUrl && (
           <div className="mt-8">
-            <h3 className="text-2xl font-semibold mb-4">Source Video</h3>
+            <h3 className="text-2xl font-semibold mb-4">Source</h3>
             <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-3">
               <LinkIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
               <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
@@ -515,9 +515,48 @@ export default function Food2Guide() {
     setStreamStatus('');
   };
 
-  const handleGenerateRecipe = () => {
+  const handleGenerateRecipe = async () => {
     if (!videoUrl) return;
-    handleStreamResponse(videoUrl);
+
+    const isVideo = /youtube\.com|youtu\.be|tiktok\.com/.test(videoUrl);
+
+    setIsStreaming(true);
+    setStreamStatus('Initializing...');
+    setStreamError(null);
+    setRecipeData({});
+
+    if (isVideo) {
+      handleStreamResponse(videoUrl);
+    } else {
+      // It's a website URL, so scrape it
+      setStreamStatus('Scraping recipe from website...');
+      try {
+        const response = await fetch(`${API_BASE}/scrape-recipe`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify({ url: videoUrl })
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ detail: 'An unknown error occurred during scraping.' }));
+          throw new Error(errorData.detail || 'Failed to scrape recipe. The website might be using anti-scraping technologies.');
+        }
+
+        const result = await response.json();
+        if (result && result.recipe) {
+          setRecipeData(result.recipe);
+        } else {
+          throw new Error('Scraper returned no recipe data. The website structure might not be supported.');
+        }
+      } catch (err) {
+        setStreamError(err.message);
+      } finally {
+        setIsStreaming(false);
+      }
+    }
   };
   
   const handleVideoSelect = (video) => {
@@ -564,7 +603,7 @@ export default function Food2Guide() {
                       type="text"
                       value={videoUrl}
                       onChange={(e) => { setVideoUrl(e.target.value); setSelectedVideoId(null); }}
-                      placeholder="Paste a YouTube or TikTok recipe video…"
+                      placeholder="Paste a recipe link from YouTube, TikTok, or any website..."
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 text-sm"
                     />
                   </div>
