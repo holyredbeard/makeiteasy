@@ -590,26 +590,28 @@ export default function Food2Guide() {
   };
 
   return (
-    <div className="relative bg-white shadow-xl rounded-2xl p-10">
-      <SparklesIcon className="absolute top-0 right-0 h-32 w-32 text-amber-300/30 -translate-y-1/3 translate-x-1/4" />
-      
-      {isStreaming || Object.keys(recipeData).length > 0 || streamError ? (
-        <RecipeStreamViewer 
-          status={streamStatus}
-          error={streamError}
-          data={recipeData}
-          onReset={resetAll}
-          currentUser={currentUser}
-          videoUrl={videoUrl}
-          isScraping={isScraping}
-        />
-      ) : (
-        <>
-          <h1 className="text-xl font-bold tracking-tight text-gray-800 text-center">
-            Turn cooking videos into step-by-step recipes.
-          </h1>
+    <div className="space-y-8">
+      {/* Main Input Card */}
+      <div className="relative bg-white shadow-xl rounded-2xl p-10">
+        <SparklesIcon className="absolute top-0 right-0 h-32 w-32 text-amber-300/30 -translate-y-1/3 translate-x-1/4" />
+        
+        {isStreaming || Object.keys(recipeData).length > 0 || streamError ? (
+          <RecipeStreamViewer 
+            status={streamStatus}
+            error={streamError}
+            data={recipeData}
+            onReset={resetAll}
+            currentUser={currentUser}
+            videoUrl={videoUrl}
+            isScraping={isScraping}
+          />
+        ) : (
+          <>
+            <h1 className="text-xl font-bold tracking-tight text-gray-800 text-center">
+              Turn cooking videos into step-by-step recipes.
+            </h1>
 
-          <div className="mt-8 space-y-8">
+            <div className="mt-8 space-y-8">
             <div>
                <div className="flex gap-2 bg-gray-100 p-1 rounded-xl shadow-inner justify-center">
                 <button onClick={() => setActiveTab('paste')} className={`w-full text-sm rounded-lg px-4 py-2 flex items-center justify-center gap-2 transition-colors ${activeTab === 'paste' ? 'bg-green-600 text-white font-semibold shadow-sm' : 'bg-transparent text-gray-600 hover:bg-white/50'}`}>
@@ -676,50 +678,6 @@ export default function Food2Guide() {
                 </div>
               </div>
             )}
-
-            {/* Information Section */}
-            <div className="mt-8 animate-fade-in">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Structured Recipes Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mb-4">
-                      <ClipboardDocumentListIcon className="h-6 w-6 text-white" />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-800 mb-2">Structured Recipes</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">
-                      Get clean, organized recipes with ingredients and step-by-step instructions extracted from videos and food blogs.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Nutrition Info Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mb-4">
-                      <ChartPieIcon className="h-6 w-6 text-white" />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-800 mb-2">Nutrition Info</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">
-                      Automatic nutrition facts including calories, protein, fat, and carbs for each recipe.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Save & Export Card */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
-                  <div className="flex flex-col items-center text-center">
-                    <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mb-4">
-                      <CloudArrowDownIcon className="h-6 w-6 text-white" />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-800 mb-2">Save & Export</h3>
-                    <p className="text-gray-600 text-sm leading-relaxed">
-                      Save your favorite recipes or export them as PDF for easy access anytime.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
             
             <div className="pt-6 border-t border-gray-200 flex flex-col items-center gap-6">
               {currentUser && (
@@ -729,7 +687,7 @@ export default function Food2Guide() {
                     className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-800 transition-colors"
                   >
                     <WrenchScrewdriverIcon className="h-4 w-4" />
-                    <span>Advanced Settings</span>
+                    <span>Customize Recipe</span>
                     <svg
                       className={`h-4 w-4 transition-transform ${showAdvancedSettings ? 'rotate-180' : ''}`}
                       fill="none"
@@ -741,112 +699,127 @@ export default function Food2Guide() {
                   </button>
                   
                   {showAdvancedSettings && (
-                    <div className="mt-4 space-y-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="mt-4 max-w-2xl mx-auto rounded-xl bg-gray-50 p-6 shadow-sm">
+                      <h3 className="text-base font-semibold mb-4">Customize your recipe</h3>
+                      
                       {/* 1. Show images */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Top image (dish preview under title)</label>
-                        <div className="flex gap-4">
+                        <label className="block text-xs uppercase font-medium text-gray-500 tracking-wide mb-1 mt-5">Top image (dish preview under title)</label>
+                        <div className="flex flex-col space-y-1 mt-2">
                           <label className="flex items-center">
                             <input type="radio" name="showTopImage" checked={showTopImage} onChange={() => setShowTopImage(true)} className="mr-2" />
-                            Yes
+                            <span className="ml-2">Yes</span>
                           </label>
                           <label className="flex items-center">
                             <input type="radio" name="showTopImage" checked={!showTopImage} onChange={() => setShowTopImage(false)} className="mr-2" />
-                            No
+                            <span className="ml-2">No</span>
                           </label>
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Step-by-step images</label>
-                        <div className="flex gap-4">
+                        <label className="block text-xs uppercase font-medium text-gray-500 tracking-wide mb-1 mt-5">Step-by-step images</label>
+                        <div className="flex flex-col space-y-1 mt-2">
                           <label className="flex items-center">
                             <input type="radio" name="showStepImages" checked={showStepImages} onChange={() => setShowStepImages(true)} className="mr-2" />
-                            Yes
+                            <span className="ml-2">Yes</span>
                           </label>
                           <label className="flex items-center">
                             <input type="radio" name="showStepImages" checked={!showStepImages} onChange={() => setShowStepImages(false)} className="mr-2" />
-                            No
+                            <span className="ml-2">No</span>
                           </label>
                         </div>
                       </div>
                       
+                      <hr className="border-t border-gray-200 my-5" />
+                      
                       {/* 2. Diet preference */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Diet preference</label>
-                        <div className="flex gap-4">
+                        <label className="block text-xs uppercase font-medium text-gray-500 tracking-wide mb-1 mt-5">Diet preference</label>
+                        <div className="flex flex-col space-y-1 mt-2">
                           <label className="flex items-center">
                             <input type="radio" name="dietPreference" value="regular" checked={dietPreference === 'regular'} onChange={() => setDietPreference('regular')} className="mr-2" />
-                            Regular (default)
+                            <span className="ml-2">
+                              Regular
+                              <span className="text-xs text-gray-400 ml-1">(default)</span>
+                            </span>
                           </label>
                           <label className="flex items-center">
                             <input type="radio" name="dietPreference" value="vegetarian" checked={dietPreference === 'vegetarian'} onChange={() => setDietPreference('vegetarian')} className="mr-2" />
-                            Vegetarian
+                            <span className="ml-2">Vegetarian</span>
                           </label>
                           <label className="flex items-center">
                             <input type="radio" name="dietPreference" value="vegan" checked={dietPreference === 'vegan'} onChange={() => setDietPreference('vegan')} className="mr-2" />
-                            Vegan
+                            <span className="ml-2">Vegan</span>
                           </label>
                         </div>
                       </div>
                       
                       {/* 3. Allergies */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Allergies</label>
-                        <div className="flex flex-wrap gap-4">
+                        <label className="block text-xs uppercase font-medium text-gray-500 tracking-wide mb-1 mt-5">Allergies</label>
+                        <div className="flex flex-wrap gap-x-4 gap-y-2 mt-2">
                           <label className="flex items-center">
                             <input type="checkbox" checked={allergies.gluten} onChange={() => setAllergies(a => ({ ...a, gluten: !a.gluten }))} className="mr-2" />
-                            Gluten
+                            <span className="ml-2">Gluten</span>
                           </label>
                           <label className="flex items-center">
                             <input type="checkbox" checked={allergies.nuts} onChange={() => setAllergies(a => ({ ...a, nuts: !a.nuts }))} className="mr-2" />
-                            Nuts
+                            <span className="ml-2">Nuts</span>
                           </label>
                           <label className="flex items-center">
                             <input type="checkbox" checked={allergies.eggs} onChange={() => setAllergies(a => ({ ...a, eggs: !a.eggs }))} className="mr-2" />
-                            Eggs
+                            <span className="ml-2">Eggs</span>
                           </label>
                           <label className="flex items-center">
                             <input type="checkbox" checked={allergies.dairy} onChange={() => setAllergies(a => ({ ...a, dairy: !a.dairy }))} className="mr-2" />
-                            Dairy
+                            <span className="ml-2">Dairy</span>
                           </label>
                           <label className="flex items-center">
                             <input type="checkbox" checked={allergies.shellfish} onChange={() => setAllergies(a => ({ ...a, shellfish: !a.shellfish }))} className="mr-2" />
-                            Shellfish
+                            <span className="ml-2">Shellfish</span>
                           </label>
                         </div>
                       </div>
                       
+                      <hr className="border-t border-gray-200 my-5" />
+                      
                       {/* 4. Instruction detail level */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Instruction detail level</label>
-                        <div className="flex gap-4">
+                        <label className="block text-xs uppercase font-medium text-gray-500 tracking-wide mb-1 mt-5">Instruction detail level</label>
+                        <div className="flex flex-col space-y-1 mt-2">
                           <label className="flex items-center">
                             <input type="radio" name="instructionLevel" value="beginner" checked={instructionLevel === 'beginner'} onChange={() => setInstructionLevel('beginner')} className="mr-2" />
-                            Beginner
+                            <span className="ml-2">Beginner</span>
                           </label>
                           <label className="flex items-center">
                             <input type="radio" name="instructionLevel" value="intermediate" checked={instructionLevel === 'intermediate'} onChange={() => setInstructionLevel('intermediate')} className="mr-2" />
-                            Intermediate (default)
+                            <span className="ml-2">
+                              Intermediate
+                              <span className="text-xs text-gray-400 ml-1">(default)</span>
+                            </span>
                           </label>
                           <label className="flex items-center">
                             <input type="radio" name="instructionLevel" value="expert" checked={instructionLevel === 'expert'} onChange={() => setInstructionLevel('expert')} className="mr-2" />
-                            Expert
+                            <span className="ml-2">Expert</span>
                           </label>
                         </div>
                       </div>
                       
                       {/* 5. Show calories / nutrition info */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Show calories / nutrition info</label>
-                        <div className="flex gap-4">
+                        <label className="block text-xs uppercase font-medium text-gray-500 tracking-wide mb-1 mt-5">Show calories / nutrition info</label>
+                        <div className="flex flex-col space-y-1 mt-2">
                           <label className="flex items-center">
                             <input type="radio" name="showCalories" checked={showCalories} onChange={() => setShowCalories(true)} className="mr-2" />
-                            Yes
+                            <span className="ml-2">Yes</span>
                           </label>
                           <label className="flex items-center">
                             <input type="radio" name="showCalories" checked={!showCalories} onChange={() => setShowCalories(false)} className="mr-2" />
-                            No (default)
+                            <span className="ml-2">
+                              No
+                              <span className="text-xs text-gray-400 ml-1">(default)</span>
+                            </span>
                           </label>
                         </div>
                       </div>
@@ -861,6 +834,53 @@ export default function Food2Guide() {
             </div>
           </div>
         </>
+      )}
+      </div>
+
+      {/* Information Section - Freestanding Cards */}
+      {!isStreaming && Object.keys(recipeData).length === 0 && !streamError && (
+        <div className="animate-fade-in mt-10">
+          <div className="max-w-[900px] mx-auto px-4 mt-10 flex flex-col md:flex-row gap-6 justify-between">
+            {/* Structured Recipes Card */}
+            <div className="bg-white p-6 rounded-xl shadow-sm w-full min-h-[220px] text-left">
+              <div className="flex flex-col">
+                <div className="w-5 h-5 text-green-600 mb-2">
+                  <ClipboardDocumentListIcon className="w-full h-full" />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Structured Recipes</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Get clean recipes with ingredients and steps from videos and blogs.
+                </p>
+              </div>
+            </div>
+
+            {/* Nutrition Info Card */}
+            <div className="bg-white p-6 rounded-xl shadow-sm w-full min-h-[220px] text-left">
+              <div className="flex flex-col">
+                <div className="w-5 h-5 text-green-600 mb-2">
+                  <ChartPieIcon className="w-full h-full" />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Nutrition Info</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Automatic nutrition facts including calories, protein, fat, and carbs for each recipe.
+                </p>
+              </div>
+            </div>
+
+            {/* Save & Export Card */}
+            <div className="bg-white p-6 rounded-xl shadow-sm w-full min-h-[220px] text-left">
+              <div className="flex flex-col">
+                <div className="w-5 h-5 text-green-600 mb-2">
+                  <CloudArrowDownIcon className="w-full h-full" />
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-2">Save & Export</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Save your favorite recipes or export them as PDF for easy access anytime.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
