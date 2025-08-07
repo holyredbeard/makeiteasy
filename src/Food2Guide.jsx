@@ -17,6 +17,9 @@ import {
   DocumentIcon,
   ArrowDownTrayIcon,
   CheckIcon,
+  ClipboardDocumentListIcon,
+  ChartPieIcon,
+  CloudArrowDownIcon,
 } from '@heroicons/react/24/outline';
 import logger from './Logger';
 import ScrapingStatus from './ScrapingStatus';
@@ -673,6 +676,50 @@ export default function Food2Guide() {
                 </div>
               </div>
             )}
+
+            {/* Information Section */}
+            <div className="mt-8 animate-fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Structured Recipes Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mb-4">
+                      <ClipboardDocumentListIcon className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">Structured Recipes</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Get clean, organized recipes with ingredients and step-by-step instructions extracted from videos and food blogs.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Nutrition Info Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mb-4">
+                      <ChartPieIcon className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">Nutrition Info</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Automatic nutrition facts including calories, protein, fat, and carbs for each recipe.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Save & Export Card */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition-shadow">
+                  <div className="flex flex-col items-center text-center">
+                    <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mb-4">
+                      <CloudArrowDownIcon className="h-6 w-6 text-white" />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-800 mb-2">Save & Export</h3>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      Save your favorite recipes or export them as PDF for easy access anytime.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
             
             <div className="pt-6 border-t border-gray-200 flex flex-col items-center gap-6">
               {currentUser && (
