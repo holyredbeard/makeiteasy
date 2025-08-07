@@ -1,3 +1,4 @@
+
 # Python
 __pycache__/
 *.py[cod]
@@ -52,6 +53,14 @@ downloads/*.mp4
 frames/*.jpg
 output/*.pdf
 *.log
+crawler_cache.db
+users.db
+*.db
+debug_*.txt
+crawler_test_results.json
+
+# Node.js cache
+node_modules/.cache/
 
 # Environment variables
 .env

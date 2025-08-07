@@ -251,9 +251,18 @@ async def check_usage_status(request: Request, current_user: User = Depends(get_
 
 @router.post("/recipes/save", response_model=SavedRecipe, tags=["Recipes"])
 @limiter.limit("30/minute")
-async def save_user_recipe(request: Request, payload: SaveRecipeRequest, current_user: User = Depends(get_current_active_user)):
+async def save_user_recipe(request: Request, payload: SaveRecipeRequest, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        saved_recipe = db.save_recipe(user_id=current_user.id, source_url=payload.source_url, recipe_content=payload.recipe_content)
+        # The recipe_content is now expected as a dict, not a Pydantic model instance
+        recipe_dict = payload.recipe_content if isinstance(payload.recipe_content, dict) else payload.recipe_content.dict()
+        
+        saved_recipe = db.save_recipe(
+            user_id=current_user.id, 
+            source_url=payload.source_url, 
+            recipe_content=recipe_dict
+        )
         if not saved_recipe:
             raise HTTPException(status_code=500, detail="Failed to save recipe.")
         return saved_recipe
@@ -263,7 +272,9 @@ async def save_user_recipe(request: Request, payload: SaveRecipeRequest, current
 
 @router.get("/recipes", response_model=List[SavedRecipe], tags=["Recipes"])
 @limiter.limit("60/minute")
-async def get_user_recipes(request: Request, current_user: User = Depends(get_current_active_user)):
+async def get_user_recipes(request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        return []
     try:
         recipes = db.get_user_saved_recipes(current_user.id)
         return recipes

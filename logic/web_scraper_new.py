@@ -26,6 +26,45 @@ from core.config import settings
 
 logger = logging.getLogger(__name__)
 
+def download_image(image_url: str, job_id: str) -> Optional[str]:
+    """Laddar ner bild från URL och sparar lokalt"""
+    if not image_url:
+        return None
+    
+    try:
+        # Skapa downloads-katalog om den inte finns
+        downloads_dir = Path("downloads")
+        downloads_dir.mkdir(exist_ok=True)
+        
+        # Ladda ner bilden
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.get(image_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        # Bestäm filändelse
+        content_type = response.headers.get('content-type', '')
+        if 'jpeg' in content_type or 'jpg' in content_type:
+            ext = '.jpg'
+        elif 'png' in content_type:
+            ext = '.png'
+        elif 'webp' in content_type:
+            ext = '.webp'
+        else:
+            ext = '.image'
+        
+        # Spara bilden
+        image_path = downloads_dir / f"{job_id}{ext}"
+        with open(image_path, 'wb') as f:
+            f.write(response.content)
+        
+        logger.info(f"Downloaded image: {image_path}")
+        # Returnera relativ sökväg för frontend
+        return f"/downloads/{job_id}{ext}"
+        
+    except Exception as e:
+        logger.warning(f"Failed to download image {image_url}: {e}")
+        return image_url  # Returnera original URL som fallback
+
 class CrawlerException(Exception):
     """Anpassat undantag för crawler-fel"""
     pass
@@ -155,7 +194,50 @@ class ContentExtractor:
         
         logger.info("DOM cleaning completed")
         return soup
-    
+    def find_image_url(self, soup: BeautifulSoup, base_url: str) -> Optional[str]:
+        """Hittar den bästa bild-URLen från sidan"""
+        # Prioritera Open Graph och Twitter-bilder
+        og_image = soup.find('meta', attrs={'property': 'og:image'})
+        if og_image and og_image.get('content'):
+            return urljoin(base_url, og_image['content'])
+
+        twitter_image = soup.find('meta', attrs={'name': 'twitter:image'})
+        if twitter_image and twitter_image.get('content'):
+            return urljoin(base_url, twitter_image['content'])
+
+        # Hitta bilder inom recept-relaterade element
+        for selector in self.recipe_selectors:
+            try:
+                recipe_element = soup.select_one(selector)
+                if recipe_element:
+                    img = recipe_element.find('img', {'src': True})
+                    if img:
+                        return urljoin(base_url, img['src'])
+            except Exception:
+                continue
+        
+        # Sista fallback: hitta största bilden på sidan
+        largest_image = None
+        max_size = 0
+        for img in soup.find_all('img', {'src': True}):
+            src = img.get('src')
+            if not src.startswith('data:'): # Ignorera inline-bilder
+                try:
+                    # Försök få bildstorlek från width/height attribut
+                    width = int(img.get('width', 0))
+                    height = int(img.get('height', 0))
+                    size = width * height
+                    if size > max_size:
+                        max_size = size
+                        largest_image = img['src']
+                except (ValueError, TypeError):
+                    continue
+        
+        if largest_image:
+            return urljoin(base_url, largest_image)
+
+        return None
+
     def find_main_content(self, soup: BeautifulSoup) -> BeautifulSoup:
         """
         Implementerar Readability-liknande heuristik för att hitta huvudinnehåll
@@ -187,7 +269,7 @@ class ContentExtractor:
         
         # Fallback: Använd textdensitetsanalys
         return self._find_content_by_density(soup)
-    
+
     def _calculate_content_score(self, element: Tag, text: str) -> int:
         """Beräknar innehållspoäng för ett element"""
         score = len(text)
@@ -258,7 +340,7 @@ class AIProcessor:
             temperature=0.1
         )
     
-    def extract_recipe_with_ai(self, content_text: str) -> Dict[str, Any]:
+    def extract_recipe_with_ai(self, content_text: str, image_url: Optional[str]) -> Dict[str, Any]:
         """
         Använder språkmodell för att extrahera receptinnehåll enligt kravspecifikation
         """
@@ -268,26 +350,47 @@ class AIProcessor:
         # Begränsa text till rimlig storlek för AI
         content_text = content_text[:12000]
         
-        prompt = f"""Du är en expert på att extrahera receptinformation från webbinnehåll. 
+        image_part = f'"img": "{image_url}",' if image_url else """"img_fallback_category": "t.ex. 'pasta', 'soup', 'meat' etc.", """
 
-Analysera följande text och extrahera receptinformation. Du ska ENDAST returnera JSON i exakt detta format:
+        prompt = f"""Du är en expert på att extrahera och strukturera receptinformation från webbinnehåll.
+Analysera texten och returnera ett komplett JSON-objekt i exakt denna ordning.
+Fyll i alla fält. Om information saknas, gör en rimlig uppskattning baserat på innehållet.
 
+JSON-format:
 {{
-    "title": "receptets titel",
-    "ingredients": ["ingrediens 1", "ingrediens 2", "ingrediens 3"],
-    "instructions": ["steg 1", "steg 2", "steg 3"]
+    "title": "Receptets titel",
+    {image_part}
+    "description": "En kort, lockande beskrivning av rätten (max 3 meningar).",
+    "servings": "Antal portioner (t.ex. '4' eller '6-8')",
+    "prep_time_minutes": "Förberedelsetid i minuter (endast siffra)",
+    "cook_time_minutes": "Tillagningstid i minuter (endast siffra)",
+    "ingredients": [
+        "Ingrediens 1",
+        "Ingrediens 2"
+    ],
+    "instructions": [
+        "Steg 1",
+        "Steg 2"
+    ],
+    "nutrition": {{
+        "kcal": "Uppskattat antal kalorier per portion",
+        "protein_g": "Uppskattat protein i gram per portion",
+        "fat_g": "Uppskattat fett i gram per portion",
+        "carbs_g": "Uppskattade kolhydrater i gram per portion"
+    }}
 }}
 
 VIKTIGA INSTRUKTIONER:
-- Extrahera ENDAST receptinformation, inget annat
-- Titel ska vara kort och beskrivande
-- Ingredienser ska vara en lista med varje ingrediens som separat sträng
-- Instruktioner ska vara sekventiella steg, varje steg som separat sträng
-- Om ingen tydlig receptinformation finns, returnera tomt resultat
-- Returnera ENDAST JSON, ingen annan text
+- Returnera ENDAST JSON.
+- Om en bild-URL finns (`img`), använd den. Annars, ange en `img_fallback_category`.
+- Alla tidsfält ska vara heltal (minuter).
+- Näringsinformation ska vara en uppskattning per portion.
+- Om texten är på ett annat språk, översätt titel och beskrivning till svenska.
 
 TEXT ATT ANALYSERA:
+---
 {content_text}
+---
 
 JSON:"""
 
@@ -324,46 +427,54 @@ class RecipeValidator:
     
     @staticmethod
     def validate_recipe(recipe_data: Dict[str, Any]) -> bool:
-        """
-        Validerar att receptdatan uppfyller kraven:
-        - Titel måste finnas
-        - Ingredienslista måste innehålla flera rader  
-        - Instruktioner ska vara sekventiella och tydliga
-        """
+        """Validerar att receptdatan uppfyller de nya, utökade kraven."""
         try:
-            # Kontrollera titel
-            title = recipe_data.get('title', '').strip()
-            if not title or len(title) < 3:
-                logger.warning("Validation failed: Titel saknas eller för kort")
+            # 1. Titel
+            title = recipe_data.get('title')
+            if not title or not isinstance(title, str) or len(title.strip()) < 3:
+                logger.warning("Validation failed: Ogiltig eller saknad titel.")
+                return False
+
+            # 2. Bild eller fallback-kategori
+            has_img = 'img' in recipe_data and isinstance(recipe_data.get('img'), str)
+            has_fallback = 'img_fallback_category' in recipe_data and isinstance(recipe_data.get('img_fallback_category'), str)
+            if not has_img and not has_fallback:
+                logger.warning("Validation failed: Varken 'img' eller 'img_fallback_category' hittades.")
+                return False
+
+            # 3. Beskrivning
+            description = recipe_data.get('description')
+            if not description or not isinstance(description, str) or len(description.strip()) < 10:
+                logger.warning("Validation failed: Ogiltig eller saknad beskrivning.")
+                return False
+
+            # 4. Ingredienser
+            ingredients = recipe_data.get('ingredients')
+            if not ingredients or not isinstance(ingredients, list) or len(ingredients) < 2:
+                logger.warning("Validation failed: Ogiltig eller saknad ingredienslista.")
+                return False
+
+            # 5. Instruktioner
+            instructions = recipe_data.get('instructions')
+            if not instructions or not isinstance(instructions, list) or len(instructions) < 1:
+                logger.warning("Validation failed: Ogiltig eller saknad instruktionslista.")
+                return False
+
+            # 6. Näringsinformation (valfri men måste vara en dict om den finns)
+            nutrition = recipe_data.get('nutrition')
+            if nutrition and not isinstance(nutrition, dict):
+                logger.warning("Validation failed: Näringsinformation är inte en dict.")
                 return False
             
-            # Kontrollera ingredienser
-            ingredients = recipe_data.get('ingredients', [])
-            if not isinstance(ingredients, list) or len(ingredients) < 2:
-                logger.warning("Validation failed: Otillräckliga ingredienser")
-                return False
-            
-            # Kontrollera att ingredienserna inte är tomma
-            valid_ingredients = [ing.strip() for ing in ingredients if ing.strip()]
-            if len(valid_ingredients) < 2:
-                logger.warning("Validation failed: Inga giltiga ingredienser")
-                return False
-            
-            # Kontrollera instruktioner
-            instructions = recipe_data.get('instructions', [])
-            if not isinstance(instructions, list) or len(instructions) < 2:
-                logger.warning("Validation failed: Otillräckliga instruktioner")
-                return False
-            
-            # Kontrollera att instruktionerna inte är tomma
-            valid_instructions = [inst.strip() for inst in instructions if inst.strip()]
-            if len(valid_instructions) < 2:
-                logger.warning("Validation failed: Inga giltiga instruktioner")
-                return False
-            
+            if nutrition:
+                required_keys = ['kcal', 'protein_g', 'fat_g', 'carbs_g']
+                if not all(key in nutrition for key in required_keys):
+                    logger.warning("Validation failed: Näringsinformation saknar nycklar.")
+                    return False
+
             logger.info("Recipe validation successful")
             return True
-            
+
         except Exception as e:
             logger.error(f"Validation error: {e}")
             return False
@@ -467,10 +578,13 @@ class FlexibleWebCrawler:
             # 1. Rensa DOM från brus
             cleaned_soup = self.content_extractor.clean_dom(soup)
             
-            # 2. Hitta huvudinnehåll
+            # 2. Hitta bild-URL
+            image_url = self.content_extractor.find_image_url(cleaned_soup, url)
+
+            # 3. Hitta huvudinnehåll
             main_content = self.content_extractor.find_main_content(cleaned_soup)
             
-            # 3. Extrahera text för AI-analys
+            # 4. Extrahera text för AI-analys
             content_text = main_content.get_text(separator=' ', strip=True)
             content_text = re.sub(r'\s+', ' ', content_text)  # Normalisera whitespace
             
@@ -481,15 +595,30 @@ class FlexibleWebCrawler:
                 logger.warning("Otillräckligt textinnehåll efter extraktion")
                 return None
             
-            # 4. Använd AI för att extrahera receptdata
-            recipe_data = self.ai_processor.extract_recipe_with_ai(content_text)
+            # 5. Använd AI för att extrahera receptdata
+            recipe_data = self.ai_processor.extract_recipe_with_ai(content_text, image_url)
             
-            # 5. Validera resultatet
+            # 6. Validera resultatet
             if not self.validator.validate_recipe(recipe_data):
                 logger.warning("Recipe validation failed")
                 return None
             
-            # 6. Lägg till metadata
+            # 7. Ladda ner bild om den finns
+            if image_url:
+                job_id = str(uuid.uuid4())
+                downloaded_image_path = download_image(image_url, job_id)
+                recipe_data['image_url'] = downloaded_image_path
+                # Ta bort img fältet från AI-svaret eftersom vi använder image_url
+                if 'img' in recipe_data:
+                    del recipe_data['img']
+                logger.info(f"Image downloaded: {downloaded_image_path}")
+            else:
+                recipe_data['image_url'] = None
+                # Ta bort img fältet från AI-svaret
+                if 'img' in recipe_data:
+                    del recipe_data['img']
+            
+            # 8. Lägg till metadata
             recipe_data['id'] = str(uuid.uuid4())
             recipe_data['source_url'] = url
             recipe_data['extracted_at'] = datetime.now().isoformat()

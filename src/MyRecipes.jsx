@@ -3,10 +3,12 @@ import {
   LinkIcon, 
   XMarkIcon, 
   ArrowDownTrayIcon, 
-  BookmarkIcon
+  BookmarkIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 
 const API_BASE = 'http://localhost:8001/api/v1';
+const STATIC_BASE = 'http://localhost:8001';
 
 // --- Reusable Sub-components ---
 const InfoCard = ({ label, value }) => (
@@ -26,12 +28,16 @@ const Section = ({ title, children }) => (
 const InstructionSection = ({ items }) => (
     <Section title="Instructions">
         <div className="space-y-4">
-            {items.map((instruction, index) => (
-                <div key={index} className="flex items-start">
-                    <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-4">{index + 1}</div>
-                    <p className="flex-1 text-gray-700 leading-relaxed pt-1">{instruction}</p>
-                </div>
-            ))}
+            {items.map((instruction, index) => {
+                const displayText = typeof instruction === 'string' ? instruction : 
+                    instruction.description || instruction.step || `Step ${index + 1}`;
+                return (
+                    <div key={index} className="flex items-start">
+                        <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-4">{index + 1}</div>
+                        <p className="flex-1 text-gray-700 leading-relaxed pt-1">{displayText}</p>
+                    </div>
+                );
+            })}
         </div>
     </Section>
 );
@@ -40,12 +46,17 @@ const IngredientSection = ({ items }) => (
      <Section title="Ingredients">
         <div className="bg-gray-50 p-6 rounded-lg">
             <ul className="space-y-2">
-                {items.map((item, index) => (
-                    <li key={index} className="flex items-start">
-                        <span className="text-green-600 mr-3 mt-1 flex-shrink-0">•</span>
-                        <span className="text-gray-700">{item}</span>
-                    </li>
-                ))}
+                {items.map((item, index) => {
+                    const displayText = typeof item === 'string' ? item : 
+                        item.name ? `${item.quantity || ''} ${item.name} ${item.notes ? `(${item.notes})` : ''}`.trim() : 
+                        'Unknown ingredient';
+                    return (
+                        <li key={index} className="flex items-start">
+                            <span className="text-green-600 mr-3 mt-1 flex-shrink-0">•</span>
+                            <span className="text-gray-700">{displayText}</span>
+                        </li>
+                    );
+                })}
             </ul>
         </div>
     </Section>
@@ -83,6 +94,36 @@ const SourceSection = ({ url }) => (
     </Section>
 );
 
+// --- Dropdown Components ---
+const Dropdown = ({ label, value, options, onChange, isOpen, onToggle }) => (
+    <div className="relative">
+        <button
+            onClick={onToggle}
+            className="flex items-center justify-between w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        >
+            <span>{options.find(opt => opt.value === value)?.label || label}</span>
+            <ChevronDownIcon className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {isOpen && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
+                {options.map((option) => (
+                    <button
+                        key={option.value}
+                        onClick={() => {
+                            onChange(option.value);
+                            onToggle();
+                        }}
+                        className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
+                            value === option.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
+                        }`}
+                    >
+                        {option.label}
+                    </button>
+                ))}
+            </div>
+        )}
+    </div>
+);
 
 // --- Main Modal Component ---
 const RecipeModal = ({ recipe, onClose }) => {
@@ -111,7 +152,18 @@ const RecipeModal = ({ recipe, onClose }) => {
                     <div className="flex flex-col md:flex-row gap-8">
                         {/* Left Column */}
                         <div className="md:w-1/3">
-                            {image_url && <img src={API_BASE + image_url} alt={title} className="w-full h-auto object-cover rounded-lg shadow-md mb-6" />}
+                            {image_url && <img 
+                                src={image_url.startsWith('http') ? image_url : STATIC_BASE + image_url}
+                                alt={title} 
+                                className="w-full h-auto object-cover rounded-lg shadow-md mb-6" 
+                                onError={(e) => { 
+                                    console.log('Modal image failed to load:', e.target.src);
+                                    e.target.style.display = 'none'; 
+                                }}
+                                onLoad={(e) => {
+                                    console.log('Modal image loaded successfully:', e.target.src);
+                                }}
+                            />}
                             <div className="space-y-4">
                                 {servings && <InfoCard label="Servings" value={servings} />}
                                 {prep_time && <InfoCard label="Prep Time" value={prep_time} />}
@@ -140,12 +192,127 @@ const RecipeModal = ({ recipe, onClose }) => {
     );
 };
 
+// --- Recipe Card Component ---
+const RecipeCard = ({ recipe, viewMode, onClick }) => {
+    const { title, description, image_url, ingredients } = recipe.recipe_content;
+    
+    const renderContent = () => {
+        switch (viewMode) {
+            case 'title_only':
+                return (
+                    <div className="p-5">
+                        <h2 className="font-semibold text-lg text-gray-800">{title}</h2>
+                    </div>
+                );
+            case 'title_image':
+                return (
+                    <>
+                        <img 
+                            src={image_url ? (image_url.startsWith('http') ? image_url : STATIC_BASE + image_url) : 'https://placehold.co/400x300/EEE/31343C?text=No+Image'} 
+                            alt={title} 
+                            className="w-full h-48 object-cover" 
+                            onError={(e) => { e.target.src = 'https://placehold.co/400x300/EEE/31343C?text=No+Image'; }}
+                        />
+                        <div className="p-5">
+                            <h2 className="font-semibold text-lg text-gray-800">{title}</h2>
+                        </div>
+                    </>
+                );
+            case 'title_image_description':
+                return (
+                    <>
+                        <img 
+                            src={image_url ? (image_url.startsWith('http') ? image_url : STATIC_BASE + image_url) : 'https://placehold.co/400x300/EEE/31343C?text=No+Image'} 
+                            alt={title} 
+                            className="w-full h-48 object-cover" 
+                            onError={(e) => { e.target.src = 'https://placehold.co/400x300/EEE/31343C?text=No+Image'; }}
+                        />
+                        <div className="p-5">
+                            <h2 className="font-semibold text-lg mb-2 text-gray-800">{title}</h2>
+                            <p className="text-sm text-gray-500 line-clamp-2">{description}</p>
+                        </div>
+                    </>
+                );
+            case 'title_image_ingredients':
+                return (
+                    <>
+                        <img 
+                            src={image_url ? (image_url.startsWith('http') ? image_url : STATIC_BASE + image_url) : 'https://placehold.co/400x300/EEE/31343C?text=No+Image'} 
+                            alt={title} 
+                            className="w-full h-48 object-cover" 
+                            onError={(e) => { e.target.src = 'https://placehold.co/400x300/EEE/31343C?text=No+Image'; }}
+                        />
+                        <div className="p-5">
+                            <h2 className="font-semibold text-lg mb-2 text-gray-800">{title}</h2>
+                            {ingredients && ingredients.length > 0 && (
+                                <div className="text-sm text-gray-600">
+                                    <p className="font-medium mb-1">Ingredients:</p>
+                                    <ul className="space-y-1">
+                                        {ingredients.slice(0, 3).map((ingredient, index) => (
+                                            <li key={index} className="flex items-start">
+                                                <span className="text-green-600 mr-2 mt-1 flex-shrink-0">•</span>
+                                                <span className="text-gray-700">
+                                                    {typeof ingredient === 'string' ? ingredient : 
+                                                     ingredient.name ? `${ingredient.quantity || ''} ${ingredient.name}`.trim() : 
+                                                     'Unknown ingredient'}
+                                                </span>
+                                            </li>
+                                        ))}
+                                        {ingredients.length > 3 && (
+                                            <li className="text-gray-500 italic">... and {ingredients.length - 3} more</li>
+                                        )}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                );
+            default:
+                return null;
+        }
+    };
+
+    return (
+        <div 
+            className="bg-white rounded-lg shadow-lg overflow-hidden cursor-pointer hover:shadow-2xl transition-shadow duration-300 flex flex-col" 
+            onClick={onClick}
+        >
+            {renderContent()}
+            <div className="px-5 pb-5 mt-auto">
+                <div className="flex items-center text-xs text-gray-400 pt-4 border-t border-gray-100">
+                    <span>Saved on {new Date(recipe.created_at).toLocaleDateString()}</span>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 // --- Main Page Component ---
 const MyRecipes = () => {
     const [recipes, setRecipes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedRecipe, setSelectedRecipe] = useState(null);
+    
+    // Dropdown states
+    const [viewMode, setViewMode] = useState('title_image_description');
+    const [layoutMode, setLayoutMode] = useState('grid_2');
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+    const [isLayoutDropdownOpen, setIsLayoutDropdownOpen] = useState(false);
+
+    // Dropdown options
+    const viewOptions = [
+        { value: 'title_only', label: 'Bara titel' },
+        { value: 'title_image', label: 'Titel + bild' },
+        { value: 'title_image_description', label: 'Titel + bild + description' },
+        { value: 'title_image_ingredients', label: 'Titel + bild + ingredients' }
+    ];
+
+    const layoutOptions = [
+        { value: 'grid_2', label: 'Cols (2 bilder per col)' },
+        { value: 'grid_3', label: 'Cols (3 bilder per col)' },
+        { value: 'list', label: 'Lista (bara titel)' }
+    ];
 
     useEffect(() => {
         const fetchRecipes = async () => {
@@ -153,6 +320,7 @@ const MyRecipes = () => {
                 const response = await fetch(`${API_BASE}/recipes`, { credentials: 'include' });
                 if (!response.ok) throw new Error('Failed to fetch recipes from the server.');
                 const data = await response.json();
+                console.log('Fetched recipes:', data);
                 setRecipes(data);
             } catch (err) {
                 setError(err.message);
@@ -163,12 +331,57 @@ const MyRecipes = () => {
         fetchRecipes();
     }, []);
 
+    const getGridClasses = () => {
+        switch (layoutMode) {
+            case 'grid_2':
+                return 'grid-cols-1 md:grid-cols-2';
+            case 'grid_3':
+                return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3';
+            case 'list':
+                return 'grid-cols-1';
+            default:
+                return 'grid-cols-1 md:grid-cols-2';
+        }
+    };
+
     if (loading) return <div className="text-center p-8">Loading recipes...</div>;
     if (error) return <div className="text-center p-8 text-red-500">Error: {error}</div>;
 
     return (
         <div className="container mx-auto p-8">
-            <h1 className="text-4xl font-bold mb-8 text-gray-800">My Saved Recipes</h1>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
+                <h1 className="text-4xl font-bold text-gray-800">My Saved Recipes</h1>
+                
+                {/* Dropdown Controls */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                    {/* View Mode Dropdown */}
+                    <div className="w-full sm:w-64">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">View Mode</label>
+                        <Dropdown
+                            label="Select view mode"
+                            value={viewMode}
+                            options={viewOptions}
+                            onChange={setViewMode}
+                            isOpen={isDropdownOpen}
+                            onToggle={() => setIsDropdownOpen(!isDropdownOpen)}
+                        />
+                    </div>
+                    
+                    {/* Layout Mode Dropdown */}
+                    <div className="w-full sm:w-64">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Layout Mode</label>
+                        <Dropdown
+                            label="Select layout mode"
+                            value={layoutMode}
+                            options={layoutOptions}
+                            onChange={setLayoutMode}
+                            isOpen={isLayoutDropdownOpen}
+                            onToggle={() => setIsLayoutDropdownOpen(!isLayoutDropdownOpen)}
+                        />
+                    </div>
+                </div>
+            </div>
+
             {recipes.length === 0 ? (
                 <div className="text-center py-16">
                      <BookmarkIcon className="h-16 w-16 mx-auto mb-4 text-gray-300" />
@@ -176,18 +389,14 @@ const MyRecipes = () => {
                      <p className="text-gray-500">Start by generating and saving your first recipe!</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className={`grid ${getGridClasses()} gap-8`}>
                     {recipes.map(recipe => (
-                        <div key={recipe.id} className="bg-white rounded-lg shadow-lg overflow-hidden cursor-pointer hover:shadow-2xl transition-shadow duration-300 flex flex-col" onClick={() => setSelectedRecipe(recipe)}>
-                           <img src={recipe.recipe_content.image_url ? API_BASE + recipe.recipe_content.image_url : 'https://via.placeholder.com/400x300.png?text=No+Image+Found'} alt={recipe.recipe_content.title} className="w-full h-48 object-cover" />
-                            <div className="p-5 flex flex-col flex-grow">
-                                <h2 className="font-semibold text-lg mb-2 text-gray-800">{recipe.recipe_content.title}</h2>
-                                <p className="text-sm text-gray-500 line-clamp-2 flex-grow">{recipe.recipe_content.description}</p>
-                                <div className="flex items-center text-xs text-gray-400 mt-4 pt-4 border-t border-gray-100">
-                                    <span>Saved on {new Date(recipe.created_at).toLocaleDateString()}</span>
-                                </div>
-                            </div>
-                        </div>
+                        <RecipeCard
+                            key={recipe.id}
+                            recipe={recipe}
+                            viewMode={viewMode}
+                            onClick={() => setSelectedRecipe(recipe)}
+                        />
                     ))}
                 </div>
             )}

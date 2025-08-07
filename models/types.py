@@ -28,6 +28,7 @@ class RecipeContent(BaseModel):
     language: Optional[str] = Field("en", description="Language for the PDF")
     nutritional_information: Optional[dict] = None
     thumbnail_path: Optional[str] = None
+    image_url: Optional[str] = None
 
 class SavedRecipe(BaseModel):
     id: int

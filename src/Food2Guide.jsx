@@ -19,8 +19,10 @@ import {
   CheckIcon,
 } from '@heroicons/react/24/outline';
 import logger from './Logger';
+import ScrapingStatus from './ScrapingStatus';
 
 const API_BASE = 'http://localhost:8001/api/v1';
+const STATIC_BASE = 'http://localhost:8001';
 
 const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
   <svg className={`animate-spin ${size} ${color}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -36,7 +38,7 @@ const InfoCard = ({ label, value }) => (
     </div>
 );
 
-const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUrl }) => {
+const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUrl, isScraping }) => {
   const navigate = useNavigate();
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showTopImage, setShowTopImage] = useState(true);
@@ -45,9 +47,9 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   const [imageOrientation, setImageOrientation] = useState('landscape');
 
   useEffect(() => {
-    if (data.thumbnail_path || data.image_url) {
+    if (data.thumbnail_path || data.image_url || data.img) {
       const img = new window.Image();
-      img.src = data.thumbnail_path || data.image_url;
+      img.src = data.thumbnail_path || data.image_url || data.img;
       img.onload = () => {
         if (img.height > img.width) {
           setImageOrientation('portrait');
@@ -56,7 +58,7 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
         }
       };
     }
-  }, [data.thumbnail_path, data.image_url]);
+  }, [data.thumbnail_path, data.image_url, data.img]);
 
   const handleDownloadPdf = async (recipeData) => {
     try {
@@ -81,6 +83,10 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
         ...recipeData,
         ingredients: formattedIngredients,
         instructions: formattedInstructions,
+        prep_time: String(recipeData.prep_time_minutes || recipeData.prep_time || ''),
+        cook_time: String(recipeData.cook_time_minutes || recipeData.cook_time || ''),
+        nutritional_information: recipeData.nutrition || recipeData.nutritional_information,
+        image_url: recipeData.img || recipeData.image_url || recipeData.thumbnail_path,
         template_name: "professional",
         image_orientation: "landscape",
         show_top_image: showTopImage,
@@ -156,12 +162,13 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
                   const formattedRecipeContent = {
                     ...recipeData,
                     servings: String(recipeData.servings),
-                    prep_time: String(recipeData.prep_time),
-                    cook_time: String(recipeData.cook_time),
+                    prep_time: String(recipeData.prep_time_minutes || recipeData.prep_time || ''),
+                    cook_time: String(recipeData.cook_time_minutes || recipeData.cook_time || ''),
                     instructions: formattedInstructions,
                     ingredients: formattedIngredients,
                     chef_tips: Array.isArray(recipeData.chef_tips) ? recipeData.chef_tips : recipeData.chef_tips ? [recipeData.chef_tips] : [],
-                    nutritional_information: formattedNutritionalInfo,
+                    nutritional_information: recipeData.nutrition || formattedNutritionalInfo,
+                    image_url: recipeData.img || recipeData.image_url || recipeData.thumbnail_path,
                   };
 
       const payload = {
@@ -224,6 +231,8 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
               Try Again
             </button>
           </div>
+        ) : isScraping ? (
+          <ScrapingStatus isActive={isScraping} />
         ) : (
           <div>
             <div className="flex justify-center mb-4">
@@ -247,11 +256,20 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
         {/* Top section: Image and Description */}
         <div className="flex flex-col md:flex-row gap-8 mb-6">
             <div className="md:w-1/3">
-                {(data.thumbnail_path || data.image_url) && (
+                {(data.thumbnail_path || data.image_url || data.img) && (
                     <img 
-                        src={data.thumbnail_path || data.image_url} 
+                        src={(data.thumbnail_path || data.image_url || data.img).startsWith('http') ? 
+                             (data.thumbnail_path || data.image_url || data.img) : 
+                             STATIC_BASE + (data.thumbnail_path || data.image_url || data.img)} 
                         alt={data.title} 
                         className="w-full h-auto object-cover rounded-lg shadow-md"
+                        onError={(e) => { 
+                            console.log('Image failed to load:', e.target.src);
+                            e.target.style.display = 'none'; 
+                        }}
+                        onLoad={(e) => {
+                            console.log('Image loaded successfully:', e.target.src);
+                        }}
                     />
                 )}
             </div>
@@ -263,8 +281,8 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
         {/* Info Cards Section */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             {data.servings && <InfoCard label="Servings" value={data.servings} />}
-            {data.prep_time && <InfoCard label="Prep Time" value={data.prep_time} />}
-            {data.cook_time && <InfoCard label="Cook Time" value={data.cook_time} />}
+            {data.prep_time_minutes && <InfoCard label="Prep Time" value={`${data.prep_time_minutes} min`} />}
+            {data.cook_time_minutes && <InfoCard label="Cook Time" value={`${data.cook_time_minutes} min`} />}
         </div>
         
         {/* Main Content: Ingredients and Instructions */}
@@ -302,31 +320,31 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
           </div>
         )}
 
-        {data.nutritional_information && (
+        {data.nutrition && (
           <div className="mt-8">
             <h3 className="text-2xl font-semibold mb-4">Nutritional Information (per serving)</h3>
             <div className="bg-gray-50 p-4 rounded-lg">
-              {typeof data.nutritional_information === 'object' ? (
+              {typeof data.nutrition === 'object' ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                   <div>
                     <p className="text-sm text-gray-500">Calories</p>
-                    <p className="font-medium">{data.nutritional_information.calories || 'N/A'}</p>
+                    <p className="font-medium">{data.nutrition.kcal || 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Protein</p>
-                    <p className="font-medium">{data.nutritional_information.protein || 'N/A'}</p>
+                    <p className="font-medium">{data.nutrition.protein_g ? `${data.nutrition.protein_g}g` : 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Fat</p>
-                    <p className="font-medium">{data.nutritional_information.fat || 'N/A'}</p>
+                    <p className="font-medium">{data.nutrition.fat_g ? `${data.nutrition.fat_g}g` : 'N/A'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Carbs</p>
-                    <p className="font-medium">{data.nutritional_information.carbohydrates || 'N/A'}</p>
+                    <p className="font-medium">{data.nutrition.carbs_g ? `${data.nutrition.carbs_g}g` : 'N/A'}</p>
                   </div>
                 </div>
               ) : (
-                <p className="text-gray-700">{data.nutritional_information}</p>
+                <p className="text-gray-700">{data.nutrition}</p>
               )}
             </div>
           </div>
@@ -418,6 +436,7 @@ export default function Food2Guide() {
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreResults, setHasMoreResults] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isScraping, setIsScraping] = useState(false);
   const [recipeData, setRecipeData] = useState({});
   const [streamError, setStreamError] = useState(null);
   const [streamStatus, setStreamStatus] = useState('');
@@ -510,6 +529,7 @@ export default function Food2Guide() {
     setSearchResults([]);
     setSelectedVideoId(null);
     setIsStreaming(false);
+    setIsScraping(false);
     setRecipeData({});
     setStreamError(null);
     setStreamStatus('');
@@ -529,6 +549,7 @@ export default function Food2Guide() {
       handleStreamResponse(videoUrl);
     } else {
       // It's a website URL, so scrape it
+      setIsScraping(true);
       setStreamStatus('Scraping recipe from website...');
       try {
         const response = await fetch(`${API_BASE}/scrape-recipe`, {
@@ -555,6 +576,7 @@ export default function Food2Guide() {
         setStreamError(err.message);
       } finally {
         setIsStreaming(false);
+        setIsScraping(false);
       }
     }
   };
@@ -576,6 +598,7 @@ export default function Food2Guide() {
           onReset={resetAll}
           currentUser={currentUser}
           videoUrl={videoUrl}
+          isScraping={isScraping}
         />
       ) : (
         <>

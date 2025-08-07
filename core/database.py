@@ -131,11 +131,28 @@ class DatabaseManager:
             logger.error(f"Error creating OAuth user: {e}")
             return None
 
-    def save_recipe(self, user_id: int, source_url: str, recipe_content: RecipeContent) -> Optional[SavedRecipe]:
+    def save_recipe(self, user_id: int, source_url: str, recipe_content: dict) -> Optional[SavedRecipe]:
         try:
+            # Normalize recipe content before saving
+            if recipe_content.get('img'):
+                recipe_content['image_url'] = recipe_content.pop('img')
+            if recipe_content.get('prep_time_minutes') is not None:
+                recipe_content['prep_time'] = f"{recipe_content.pop('prep_time_minutes')} min"
+            if recipe_content.get('cook_time_minutes') is not None:
+                recipe_content['cook_time'] = f"{recipe_content.pop('cook_time_minutes')} min"
+            if recipe_content.get('nutrition'):
+                recipe_content['nutritional_information'] = recipe_content.pop('nutrition')
+            
+            # Ensure image_url is preserved and not overwritten
+            if recipe_content.get('image_url') and not recipe_content.get('thumbnail_path'):
+                recipe_content['thumbnail_path'] = recipe_content['image_url']
+
+            # Validate with Pydantic model before serializing
+            validated_content = RecipeContent.model_validate(recipe_content)
+            recipe_json = validated_content.model_dump_json()
+
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                recipe_json = recipe_content.model_dump_json()
                 cursor.execute(
                     "INSERT INTO saved_recipes (user_id, source_url, recipe_content) VALUES (?, ?, ?)",
                     (user_id, source_url, recipe_json)
@@ -174,13 +191,21 @@ class DatabaseManager:
                 rows = cursor.fetchall()
                 recipes = []
                 for row in rows:
+                    content_dict = json.loads(row['recipe_content'])
+                    
+                    # Definitive image URL normalization
+                    image = content_dict.get('image_url') or content_dict.get('img') or content_dict.get('thumbnail_path')
+                    if image:
+                        content_dict['image_url'] = image
+                        content_dict['thumbnail_path'] = image
+
                     recipes.append(
                         SavedRecipe(
                             id=row['id'],
                             user_id=row['user_id'],
                             source_url=row['source_url'],
                             created_at=datetime.fromisoformat(row["created_at"]),
-                            recipe_content=RecipeContent.model_validate_json(row['recipe_content'])
+                            recipe_content=RecipeContent.model_validate(content_dict)
                         )
                     )
                 return recipes
