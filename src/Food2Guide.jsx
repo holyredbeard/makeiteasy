@@ -20,12 +20,21 @@ import {
   ClipboardDocumentListIcon,
   ChartPieIcon,
   CloudArrowDownIcon,
+  ClockIcon,
+  UserGroupIcon,
 } from '@heroicons/react/24/outline';
 import logger from './Logger';
 import ScrapingStatus from './ScrapingStatus';
 
 const API_BASE = 'http://localhost:8001/api/v1';
 const STATIC_BASE = 'http://localhost:8001';
+
+const normalizeUrlPort = (url) => {
+  if (!url || typeof url !== 'string') return url;
+  return url
+    .replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
+    .replace('http://localhost:8000', 'http://localhost:8001');
+};
 
 const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
   <svg className={`animate-spin ${size} ${color}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -34,12 +43,58 @@ const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
   </svg>
 );
 
-const InfoCard = ({ label, value }) => (
-    <div className="bg-gray-50 p-3 rounded-lg">
-        <p className="text-sm text-gray-500">{label}</p>
-        <p className="font-medium">{value}</p>
-    </div>
-);
+// Bold numbers and units in ingredient strings
+const renderIngredientEmphasis = (text) => {
+  try {
+    const UNIT_WORDS = [
+      'tsp','teaspoon','teaspoons','tbsp','tablespoon','tablespoons','cup','cups','pinch','pint','pints','quart','quarts','ounce','ounces','oz','lb','lbs',
+      'ml','cl','dl','l','g','gram','grams','kg','kilogram','kilograms',
+      // Swedish
+      'kopp','koppar','tsk','msk','st','pkt'
+    ];
+    const units = UNIT_WORDS.join('|');
+    const combined = new RegExp(`(\\b\\d+[\\d/.,]*\\b|[¼½¾]|\\b(?:${units})\\b)`,`gi`);
+    const parts = String(text).split(combined);
+    return parts.map((part, idx) => {
+      if (!part) return null;
+      if (combined.test(part)) {
+        combined.lastIndex = 0;
+        return <strong key={idx} className="font-semibold text-gray-900">{part}</strong>;
+      }
+      return <span key={idx}>{part}</span>;
+    });
+  } catch {
+    return text;
+  }
+};
+
+const InfoCard = ({ label, value }) => {
+    const isTime = /prep|cook/i.test(label);
+    const normalizedValue = (() => {
+        if (!isTime) return value;
+        const str = String(value || '').trim();
+        if (/min/i.test(str)) return str;
+        const num = parseInt(str, 10);
+        return Number.isFinite(num) ? `${num} min` : str;
+    })();
+    const icon = (() => {
+        if (/prep/i.test(label)) return { type: 'clock', cls: 'bg-amber-100 text-amber-600' };
+        if (/cook/i.test(label)) return { type: 'clock', cls: 'bg-red-100 text-red-600' };
+        return { type: 'users', cls: 'bg-blue-100 text-blue-600' };
+    })();
+    return (
+      <div className="bg-white border border-gray-100 p-4 rounded-xl shadow-sm flex items-center gap-3">
+        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${icon.cls}`}>
+          {icon.type === 'clock' && (<ClockIcon className="w-5 h-5" />)}
+          {icon.type === 'users' && (<UserGroupIcon className="w-5 h-5" />)}
+        </div>
+        <div>
+          <p className="text-sm text-gray-500">{label}</p>
+          <p className="text-lg font-semibold text-gray-900">{normalizedValue}</p>
+        </div>
+      </div>
+    );
+};
 
 const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUrl, isScraping }) => {
   const navigate = useNavigate();
@@ -52,7 +107,8 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   useEffect(() => {
     if (data.thumbnail_path || data.image_url || data.img) {
       const img = new window.Image();
-      img.src = data.thumbnail_path || data.image_url || data.img;
+      const rawSrc = data.thumbnail_path || data.image_url || data.img;
+      img.src = normalizeUrlPort(rawSrc);
       img.onload = () => {
         if (img.height > img.width) {
           setImageOrientation('portrait');
@@ -219,6 +275,16 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
     }
   };
 
+  // Normalize various possible nutrition key shapes into a single view model
+  const normalizeNutritionForView = (nutrition) => {
+    if (!nutrition || typeof nutrition !== 'object') return null;
+    const calories = nutrition.calories || nutrition.kcal || nutrition.Calories || null;
+    const protein = nutrition.protein || nutrition.protein_g || nutrition.proteinContent || null;
+    const fat = nutrition.fat || nutrition.fat_g || nutrition.fatContent || null;
+    const carbs = nutrition.carbohydrates || nutrition.carbs || nutrition.carbs_g || nutrition.carbohydrateContent || null;
+    return { calories, protein, fat, carbs, summary: nutrition.summary };
+  };
+
   if (Object.keys(data).length === 0) {
     return (
       <div className="text-center">
@@ -261,9 +327,12 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
             <div className="md:w-1/3">
                 {(data.thumbnail_path || data.image_url || data.img) && (
                     <img 
-                        src={(data.thumbnail_path || data.image_url || data.img).startsWith('http') ? 
-                             (data.thumbnail_path || data.image_url || data.img) : 
-                             STATIC_BASE + (data.thumbnail_path || data.image_url || data.img)} 
+                        src={(() => {
+                          const raw = (data.thumbnail_path || data.image_url || data.img);
+                          const absolute = raw.startsWith('http');
+                          const url = absolute ? raw : (STATIC_BASE + raw);
+                          return normalizeUrlPort(url);
+                        })()} 
                         alt={data.title} 
                         className="w-full h-auto object-cover rounded-lg shadow-md"
                         onError={(e) => { 
@@ -295,7 +364,9 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
                 <ul className="list-disc pl-5 space-y-2">
                     {data.ingredients && data.ingredients.map((ing, idx) => (
                         <li key={idx} className="text-gray-700">
-                            {typeof ing === 'string' ? ing : `${ing.quantity || ''} ${ing.name || ing} ${ing.notes ? `(${ing.notes})` : ''}`}
+                            {typeof ing === 'string'
+                              ? renderIngredientEmphasis(ing)
+                              : renderIngredientEmphasis(`${ing.quantity || ''} ${ing.name || ing} ${ing.notes ? `(${ing.notes})` : ''}`)}
                         </li>
                     ))}
                 </ul>
@@ -323,32 +394,37 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
           </div>
         )}
 
-        {data.nutrition && (
+        { (data.nutrition || data.nutritional_information) && (
           <div className="mt-8">
             <h3 className="text-2xl font-semibold mb-4">Nutritional Information (per serving)</h3>
             <div className="bg-gray-50 p-4 rounded-lg">
-              {typeof data.nutrition === 'object' ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                  <div>
-                    <p className="text-sm text-gray-500">Calories</p>
-                    <p className="font-medium">{data.nutrition.kcal || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Protein</p>
-                    <p className="font-medium">{data.nutrition.protein_g ? `${data.nutrition.protein_g}g` : 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Fat</p>
-                    <p className="font-medium">{data.nutrition.fat_g ? `${data.nutrition.fat_g}g` : 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Carbs</p>
-                    <p className="font-medium">{data.nutrition.carbs_g ? `${data.nutrition.carbs_g}g` : 'N/A'}</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-gray-700">{data.nutrition}</p>
-              )}
+              {(() => {
+                const nutritionRaw = data.nutrition || data.nutritional_information;
+                if (nutritionRaw && typeof nutritionRaw === 'object') {
+                  const n = normalizeNutritionForView(nutritionRaw) || {};
+                  return (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                      <div>
+                        <p className="text-sm text-gray-500">Calories</p>
+                        <p className="font-medium">{n.calories || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Protein</p>
+                        <p className="font-medium">{n.protein ? (String(n.protein).endsWith('g') ? n.protein : `${n.protein}g`) : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Fat</p>
+                        <p className="font-medium">{n.fat ? (String(n.fat).endsWith('g') ? n.fat : `${n.fat}g`) : 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Carbs</p>
+                        <p className="font-medium">{n.carbs ? (String(n.carbs).endsWith('g') ? n.carbs : `${n.carbs}g`) : 'N/A'}</p>
+                      </div>
+                    </div>
+                  );
+                }
+                return <p className="text-gray-700">{nutritionRaw}</p>;
+              })()}
             </div>
           </div>
         )}

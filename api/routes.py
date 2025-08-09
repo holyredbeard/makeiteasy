@@ -13,6 +13,7 @@ from models.types import User, RecipeContent, SavedRecipe, Recipe, SaveRecipeReq
 from core.auth import get_current_active_user
 from core.database import db
 from core.limiter import limiter
+from core.auth import get_current_active_user
 from logic.video_processing import (
     download_video,
     transcribe_audio,
@@ -32,7 +33,25 @@ import re
 import os
 import yt_dlp
 
+# --- Tag DTOs ---
+class TagAction(BaseModel):
+    keywords: List[str]
+
 router = APIRouter()
+# --- Roles admin endpoint ---
+@router.post("/admin/users/{user_id}/roles")
+@limiter.limit("30/minute")
+async def set_user_roles(user_id: int, request: Request, payload: dict = Body(...), current_user: User = Depends(get_current_active_user)):
+    if not current_user or (not getattr(current_user, 'is_admin', False) and 'admin' not in getattr(current_user, 'roles', [])):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        roles = payload.get('roles') or []
+        from core.database import db
+        db.set_roles_for_user(user_id, roles)
+        return {"ok": True, "data": {"userId": user_id, "roles": roles}}
+    except Exception as e:
+        logger.error(f"Failed to set roles for user {user_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not update roles.")
 jobs = {}
 logger = logging.getLogger(__name__)
 
@@ -276,7 +295,8 @@ async def get_user_recipes(request: Request, current_user: Optional[User] = Depe
     if not current_user:
         return []
     try:
-        recipes = db.get_user_saved_recipes(current_user.id)
+        sort = request.query_params.get('sort') or 'latest'
+        recipes = db.get_user_saved_recipes(current_user.id, sort=sort)
         return recipes
     except Exception as e:
         logger.error(f"Failed to get recipes for user {current_user.email}: {e}")
@@ -299,6 +319,134 @@ async def scrape_recipe(request: Request, url_payload: dict = Body(...), current
     except Exception as e:
         logger.error(f"Error scraping URL {url}: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+# --- Ratings Endpoints ---
+@router.get("/recipes/{recipe_id}/ratings")
+@limiter.limit("120/minute")
+async def get_recipe_ratings(recipe_id: int, request: Request, current_user: User = Depends(get_current_active_user)):
+    try:
+        user_id = current_user.id if current_user else None
+        summary = db.get_ratings_summary(recipe_id, user_id)
+        return JSONResponse(content={"ok": True, "data": summary})
+    except Exception as e:
+        logger.error(f"Failed to get ratings for recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch ratings.")
+
+@router.put("/recipes/{recipe_id}/ratings")
+@limiter.limit("5/minute")
+async def put_recipe_rating(recipe_id: int, request: Request, payload: dict = Body(...), current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    value = int(payload.get("value", 0))
+    if value < 1 or value > 5:
+        raise HTTPException(status_code=400, detail="Rating must be 1-5")
+    try:
+        result = db.upsert_rating(recipe_id, current_user.id, value)
+        return {"ok": True, "data": result}
+    except Exception as e:
+        logger.error(f"Failed to set rating for recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not set rating.")
+
+@router.delete("/recipes/{recipe_id}/ratings")
+@limiter.limit("5/minute")
+async def delete_recipe_rating(recipe_id: int, request: Request, current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        result = db.delete_rating(recipe_id, current_user.id)
+        return {"ok": True, "data": result}
+    except Exception as e:
+        logger.error(f"Failed to delete rating for recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not delete rating.")
+
+# --- Comments Endpoints ---
+@router.get("/recipes/{recipe_id}/comments")
+@limiter.limit("240/minute")
+async def list_recipe_comments(recipe_id: int, request: Request, after: str = None, limit: int = 20, sort: str = 'newest', current_user: User = Depends(get_current_active_user)):
+    try:
+        limit = max(1, min(limit, 50))
+        viewer_id = current_user.id if current_user else None
+        page = db.list_comments(recipe_id, after_cursor=after, limit=limit, sort=sort, viewer_user_id=viewer_id)
+        return {"ok": True, "data": page}
+    except Exception as e:
+        logger.error(f"Failed to list comments for recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch comments.")
+
+@router.post("/recipes/{recipe_id}/comments")
+@limiter.limit("5/minute")
+async def create_recipe_comment(recipe_id: int, request: Request, payload: dict = Body(...), current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        body = (payload.get("body") or "").strip()
+        if len(body) < 1 or len(body) > 2000:
+            raise HTTPException(status_code=400, detail="Comment must be 1-2000 characters")
+        parent_id = payload.get("parentId")
+        dto = db.create_comment(recipe_id, current_user.id, body=body, parent_id=parent_id)
+        return {"ok": True, "data": dto}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create comment for recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not create comment.")
+
+@router.patch("/comments/{comment_id}")
+@limiter.limit("60/minute")
+async def update_comment(comment_id: int, request: Request, payload: dict = Body(...), current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        body = (payload.get("body") or "").strip()
+        dto = db.update_comment(comment_id, current_user.id, body=body, is_admin=getattr(current_user, 'is_admin', False))
+        return {"ok": True, "data": dto}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to update comment {comment_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not update comment.")
+
+@router.delete("/comments/{comment_id}")
+@limiter.limit("60/minute")
+async def delete_comment(comment_id: int, request: Request, current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        dto = db.soft_delete_comment(comment_id, current_user.id, is_admin=getattr(current_user, 'is_admin', False))
+        return {"ok": True, "data": dto}
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Failed to delete comment {comment_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not delete comment.")
+
+@router.post("/comments/{comment_id}/like")
+@limiter.limit("120/minute")
+async def toggle_comment_like(comment_id: int, request: Request, current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        res = db.toggle_comment_like(comment_id, current_user.id)
+        return {"ok": True, "data": res}
+    except Exception as e:
+        logger.error(f"Failed to toggle like for comment {comment_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not like comment.")
+
+@router.post("/comments/{comment_id}/report")
+@limiter.limit("60/minute")
+async def report_comment(comment_id: int, request: Request, payload: dict = Body(...), current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        reason = (payload.get("reason") or "").strip()
+        db.report_comment(comment_id, current_user.id, reason)
+        return {"ok": True}
+    except Exception as e:
+        logger.error(f"Failed to report comment {comment_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not report comment.")
 
 @router.post("/search")
 @limiter.limit("20/minute")
@@ -332,3 +480,74 @@ async def search_videos(request: Request, search_request: YouTubeSearchRequest =
     except Exception as e:
         logger.error(f"General search failed for query '{query}': {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+
+# --- Tagging Endpoints ---
+def _can_edit_tags(current_user: Optional[User], recipe_id: int) -> (bool, bool):
+    if not current_user:
+        return (False, False)
+    roles = set(getattr(current_user, 'roles', []) or ([]))
+    is_admin = getattr(current_user, 'is_admin', False) or ('admin' in roles)
+    is_moderator = 'moderator' in roles
+    is_trusted = 'trusted' in roles
+    owner_id = db.get_recipe_owner_id(recipe_id)
+    is_creator = owner_id == current_user.id
+    can_direct = is_admin or is_moderator or is_creator or is_trusted
+    return (can_direct, is_admin or is_moderator)
+
+@router.get("/recipes/{recipe_id}/tags")
+async def list_recipe_tags_endpoint(recipe_id: int):
+    return {"ok": True, "data": db.list_recipe_tags(recipe_id)}
+
+@router.get("/tags/search")
+async def search_tags_endpoint(q: str = None):
+    return {"ok": True, "data": db.search_tags(q)}
+
+@router.post("/recipes/{recipe_id}/tags")
+@limiter.limit("30/minute")
+async def add_recipe_tags_endpoint(recipe_id: int, request: Request, payload: TagAction = Body(...), current_user: Optional[User] = Depends(get_current_active_user)):
+    keywords = payload.keywords or []
+    if db.is_tag_edit_locked(recipe_id):
+        _, can_moderate = _can_edit_tags(current_user, recipe_id)
+        if not can_moderate:
+            raise HTTPException(status_code=423, detail="Tags are locked for this recipe")
+    can_direct, _ = _can_edit_tags(current_user, recipe_id)
+    direct = can_direct
+    user_id = current_user.id if current_user else 0
+    result = db.add_recipe_tags(recipe_id, user_id, keywords, direct)
+    return {"ok": True, "data": result}
+
+@router.delete("/recipes/{recipe_id}/tags")
+@limiter.limit("30/minute")
+async def remove_recipe_tag_endpoint(recipe_id: int, request: Request, keyword: str, current_user: Optional[User] = Depends(get_current_active_user)):
+    can_direct, can_moderate = _can_edit_tags(current_user, recipe_id)
+    if not (can_direct or can_moderate):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    res = db.remove_recipe_tag(recipe_id, current_user.id if current_user else 0, keyword)
+    return {"ok": True, "data": res}
+
+@router.post("/recipes/{recipe_id}/tags/approve")
+@limiter.limit("60/minute")
+async def approve_tag_endpoint(recipe_id: int, request: Request, keyword: str = Body(...), current_user: Optional[User] = Depends(get_current_active_user)):
+    _, can_moderate = _can_edit_tags(current_user, recipe_id)
+    if not can_moderate:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return {"ok": True, "data": db.approve_recipe_tag(recipe_id, current_user.id, keyword)}
+
+@router.post("/recipes/{recipe_id}/tags/reject")
+@limiter.limit("60/minute")
+async def reject_tag_endpoint(recipe_id: int, request: Request, keyword: str = Body(...), current_user: Optional[User] = Depends(get_current_active_user)):
+    _, can_moderate = _can_edit_tags(current_user, recipe_id)
+    if not can_moderate:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return {"ok": True, "data": db.reject_recipe_tag(recipe_id, current_user.id, keyword)}
+
+@router.post("/recipes/{recipe_id}/tags/lock")
+@limiter.limit("30/minute")
+async def lock_tags_endpoint(recipe_id: int, request: Request, payload: dict = Body(...), current_user: Optional[User] = Depends(get_current_active_user)):
+    _, can_moderate = _can_edit_tags(current_user, recipe_id)
+    if not can_moderate:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    locked = bool(payload.get('locked', True))
+    reason = payload.get('reason')
+    db.set_tag_lock(recipe_id, locked, current_user.id, reason)
+    return {"ok": True}

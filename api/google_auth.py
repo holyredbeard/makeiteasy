@@ -68,7 +68,7 @@ async def get_google_auth_url():
     return {"auth_url": auth_url, "state": state}
 
 @router.get("/google/callback")
-async def google_callback(request: Request):
+async def google_callback(request: Request, response: Response):
     """Handle Google OAuth callback"""
     try:
         # Get authorization code and state from query parameters
@@ -79,12 +79,12 @@ async def google_callback(request: Request):
         if error:
             logger.error(f"Google OAuth error: {error}")
             # Redirect to frontend with error
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8001")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             return RedirectResponse(url=f"{frontend_url}/?error=oauth_error&message={error}")
         
         if not code or not state:
             logger.error("Missing code or state in OAuth callback")
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8001")
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             return RedirectResponse(url=f"{frontend_url}/?error=oauth_error&message=missing_parameters")
         
         # Verify state (CSRF protection)
@@ -160,10 +160,16 @@ async def google_callback(request: Request):
             data={"sub": user.email}
         )
         
-        # Redirect to frontend with token
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:8001")
-        redirect_url = f"{frontend_url}/?token={jwt_token}&oauth_success=true"
-        return RedirectResponse(url=redirect_url)
+        # Set HTTP-only cookie so frontend requests carry auth automatically
+        resp = RedirectResponse(url=os.getenv("FRONTEND_URL", "http://localhost:3000") + "/?oauth_success=true")
+        resp.set_cookie(
+            key="access_token",
+            value=jwt_token,
+            httponly=True,
+            samesite="lax",
+            secure=False
+        )
+        return resp
         
     except Exception as e:
         logger.error(f"Google OAuth callback error: {e}")

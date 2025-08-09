@@ -78,6 +78,8 @@ class YouTubeSearchRequest(BaseModel):
 class UserBase(BaseModel):
     email: EmailStr = Field(..., description="User's email address")
     full_name: str = Field(..., description="User's full name")
+    username: Optional[str] = Field(None, description="User's public username")
+    avatar_url: Optional[str] = Field(None, description="URL to user's avatar image")
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, description="User's password (minimum 6 characters)")
@@ -96,6 +98,7 @@ class User(UserBase):
     monthly_limit: int = Field(100, description="Monthly PDF generation limit")
     created_at: Optional[datetime] = Field(None, description="When the user account was created")
     saved_recipes: List[SavedRecipe] = []
+    roles: List[str] = Field(default_factory=list, description="Roles assigned to the user")
 
 class UserInDB(User):
     hashed_password: str = Field(..., description="Hashed password stored in database")

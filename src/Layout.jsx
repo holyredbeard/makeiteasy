@@ -6,67 +6,107 @@ import {
   BookOpenIcon,
   WrenchScrewdriverIcon,
   XMarkIcon,
-  BugAntIcon
+  BugAntIcon,
+  Cog6ToothIcon,
+  CreditCardIcon,
+  LifebuoyIcon
 } from '@heroicons/react/24/outline';
 import logger from './Logger';
 import LogPanel from './LogPanel';
 
 const API_BASE = 'http://localhost:8001/api/v1';
+const API_ROOT = API_BASE.replace(/\/api\/v1$/, '');
 
-const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => (
-  <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">
-    <div className="max-w-7xl mx-auto px-6">
-      <div className="flex justify-between items-center py-3">
-        <div className="flex items-center gap-2">
-          <Link to="/">
-            <img className="h-10 w-auto" src="/logo.png" alt="Clip2Cook" />
-          </Link>
-        </div>
-        {currentUser ? (
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-                <UserCircleIcon className="h-6 w-6 text-gray-500" />
-                <span className="text-sm text-gray-700 font-medium hidden sm:block">{currentUser.full_name || currentUser.email}</span>
-            </div>
-            <Link to="/my-recipes" className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors">
-              <BookOpenIcon className="h-5 w-5" />
-              <span className="hidden sm:block">My Recipes</span>
+function normalizeBackendUrl(pathOrUrl) {
+  if (!pathOrUrl) return pathOrUrl;
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${API_ROOT}${pathOrUrl.startsWith('/') ? pathOrUrl : '/' + pathOrUrl}`;
+}
+
+const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => {
+  const [openUserMenu, setOpenUserMenu] = useState(false);
+  return (
+    <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="flex justify-between items-center py-3">
+          <div className="flex items-center gap-2">
+            <Link to="/">
+              <img className="h-10 w-auto" src="/logo.png" alt="Clip2Cook" />
             </Link>
-            {currentUser.is_admin && (
-              <button 
-                onClick={showTestPdfModal}
-                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
-              >
-                <WrenchScrewdriverIcon className="h-5 w-5" />
-                <span className="hidden sm:block">TEST PDF</span>
+          </div>
+          {currentUser ? (
+            <div className="flex items-center gap-6 relative">
+              <Link to="/my-recipes" className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors">
+                <BookOpenIcon className="h-5 w-5" />
+                <span className="hidden sm:block">My Recipes</span>
+              </Link>
+              {currentUser.is_admin && (
+                <button 
+                  onClick={showTestPdfModal}
+                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  <WrenchScrewdriverIcon className="h-5 w-5" />
+                  <span className="hidden sm:block">TEST PDF</span>
+                </button>
+              )}
+              <button onClick={() => setOpenUserMenu(v => !v)} className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors focus:outline-none">
+                {currentUser?.avatar_url ? (
+                  <img src={normalizeBackendUrl(currentUser.avatar_url)} alt="avatar" className="h-6 w-6 rounded-full object-cover" />
+                ) : (
+                  <UserCircleIcon className="h-6 w-6 text-gray-500" />
+                )}
+                <span className="hidden sm:block">{(currentUser.username || '').trim() || currentUser.full_name || currentUser.email}</span>
               </button>
-            )}
-            <button onClick={handleLogout} className="flex items-center gap-2 text-sm text-gray-600 hover:text-red-600 transition-colors">
-              <ArrowRightOnRectangleIcon className="h-5 w-5" />
-              <span className="hidden sm:block">Sign Out</span>
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-4">
-            {usageStatus && !usageStatus.is_authenticated && (
-              <div className="text-sm text-gray-600">
-                <span className="font-medium text-blue-600">{usageStatus.remaining_usage}</span> free PDFs remaining today
-              </div>
-            )}
-            <button 
-              onClick={showAuthModal} 
-              className="flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg shadow-sm hover:shadow-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
-            >
-                Sign In
-            </button>
-          </div>
-        )}
+              {openUserMenu && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+                  <div className="py-1">
+                    <Link to="/profile" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50" onClick={() => setOpenUserMenu(false)}>
+                      <UserCircleIcon className="h-5 w-5 text-gray-500" />
+                      <span>Profile</span>
+                    </Link>
+                    <Link to="#" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50">
+                      <Cog6ToothIcon className="h-5 w-5 text-gray-500" />
+                      <span>Settings</span>
+                    </Link>
+                    <Link to="#" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50">
+                      <CreditCardIcon className="h-5 w-5 text-gray-500" />
+                      <span>Subscription / Billing</span>
+                    </Link>
+                    <Link to="#" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50">
+                      <LifebuoyIcon className="h-5 w-5 text-gray-500" />
+                      <span>Help & Support</span>
+                    </Link>
+                    <div className="my-1 border-t border-gray-200" />
+                    <button onClick={handleLogout} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 text-red-600">
+                      <ArrowRightOnRectangleIcon className="h-5 w-5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              {usageStatus && !usageStatus.is_authenticated && (
+                <div className="text-sm text-gray-600">
+                  <span className="font-medium text-blue-600">{usageStatus.remaining_usage}</span> free PDFs remaining today
+                </div>
+              )}
+              <button 
+                onClick={showAuthModal} 
+                className="flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg shadow-sm hover:shadow-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
+              >
+                  Sign In
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
-  </header>
-);
+    </header>
+  );
+};
 
-const AuthModal = ({ isOpen, onClose, initiateGoogleSignIn, authTab, setAuthTab }) => {
+const AuthModal = ({ isOpen, onClose, initiateGoogleSignIn, authTab, setAuthTab, onLogin, onRegister }) => {
   if (!isOpen) return null;
 
   return (
@@ -104,7 +144,13 @@ const AuthModal = ({ isOpen, onClose, initiateGoogleSignIn, authTab, setAuthTab 
 
           {authTab === 'login' ? (
             <div className="space-y-6">
-              <form className="space-y-4">
+              <form className="space-y-4" onSubmit={async (e) => {
+                e.preventDefault();
+                const form = new FormData(e.currentTarget);
+                const email = form.get('email');
+                const password = form.get('password');
+                await onLogin?.({ email, password });
+              }}>
                 <div>
                   <label htmlFor="login-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input 
@@ -157,7 +203,15 @@ const AuthModal = ({ isOpen, onClose, initiateGoogleSignIn, authTab, setAuthTab 
             </div>
           ) : (
             <div className="space-y-6">
-              <form className="space-y-4">
+              <form className="space-y-4" onSubmit={async (e) => {
+                e.preventDefault();
+                const form = new FormData(e.currentTarget);
+                const full_name = form.get('name');
+                const username = form.get('username');
+                const email = form.get('email');
+                const password = form.get('password');
+                await onRegister?.({ full_name, username, email, password });
+              }}>
                 <div>
                   <label htmlFor="register-name" className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
                   <input 
@@ -167,6 +221,19 @@ const AuthModal = ({ isOpen, onClose, initiateGoogleSignIn, authTab, setAuthTab 
                     required 
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" 
                   />
+                </div>
+                <div>
+                  <label htmlFor="register-username" className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                  <input 
+                    type="text" 
+                    name="username" 
+                    id="register-username" 
+                    required 
+                    pattern="^[a-z0-9_]{3,20}$"
+                    title="3-20 chars; lowercase letters, numbers and underscore only"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500" 
+                  />
+                  <p className="text-xs text-gray-500 mt-1">3-20 characters, lowercase letters, numbers and underscore.</p>
                 </div>
                 <div>
                   <label htmlFor="register-email" className="block text-sm font-medium text-gray-700 mb-1">Email</label>
@@ -234,22 +301,20 @@ export default function Layout() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [showLogPanel, setShowLogPanel] = useState(true);
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const response = await fetch(`${API_BASE}/auth/me`, {
-          credentials: 'include'
-        });
-        if (response.ok) {
-          const user = await response.json();
-          setCurrentUser(user);
-        }
-      } catch (error) {
-        console.error('Failed to fetch user', error);
+  const refreshCurrentUser = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+      if (response.ok) {
+        const user = await response.json();
+        setCurrentUser(user);
       }
-    };
-    
-    fetchUser();
+    } catch (error) {
+      console.error('Failed to fetch user', error);
+    }
+  };
+
+  useEffect(() => {
+    refreshCurrentUser();
     
     const urlParams = new URLSearchParams(window.location.search);
     const code = urlParams.get('code');
@@ -310,6 +375,31 @@ export default function Layout() {
     }
   };
 
+  const doLogin = async ({ email, password }) => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ email, password }) });
+      if (!res.ok) throw new Error('Login failed');
+      const data = await res.json();
+      setCurrentUser(data.user);
+      setIsAuthModalOpen(false);
+    } catch (e) {
+      alert('Login failed');
+    }
+  };
+
+  const doRegister = async ({ full_name, username, email, password }) => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ full_name, username, email, password }) });
+      if (!res.ok) throw new Error('Registration failed');
+      const data = await res.json();
+      // After registration, user is logged in via cookie in backend
+      setCurrentUser(data.user);
+      setIsAuthModalOpen(false);
+    } catch (e) {
+      alert('Registration failed');
+    }
+  };
+
   const initiateGoogleSignIn = async () => {
     try {
       const urlResponse = await fetch(`${API_BASE}/auth/google/url`, { credentials: 'include' });
@@ -355,6 +445,8 @@ export default function Layout() {
         initiateGoogleSignIn={initiateGoogleSignIn}
         authTab={authTab}
         setAuthTab={setAuthTab}
+        onLogin={doLogin}
+        onRegister={doRegister}
       />
 
       {showWelcome && (
@@ -364,7 +456,7 @@ export default function Layout() {
       )}
 
       <main className="max-w-3xl mx-auto py-10 px-8">
-        <Outlet context={{ currentUser }} />
+        <Outlet context={{ currentUser, refreshCurrentUser, setCurrentUser }} />
       </main>
     </div>
   );
