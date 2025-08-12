@@ -3,6 +3,8 @@ import React from 'react';
 export default function DeepSeekPreviewDiff({ result, baseIngredients = [], baseInstructions = [] }) {
   if (!result) return null;
   const { substitutions = [], ingredients = [], instructions = [], notes = [], nutritionPerServing = {}, compliance = {} } = result;
+  // Normalize notes to array to avoid "notes.map is not a function" when a string is returned
+  const noteList = Array.isArray(notes) ? notes : (notes ? [String(notes)] : []);
   const hasSubs = Array.isArray(substitutions) && substitutions.length > 0;
   return (
     <div className="grid gap-4">
@@ -58,11 +60,11 @@ export default function DeepSeekPreviewDiff({ result, baseIngredients = [], base
           <span className={compliance.sodium === false ? 'text-red-600' : 'text-green-600'}>Sodium: {mark(compliance.sodium)}</span>
         </div>
       </section>
-      {notes?.length > 0 && (
+      {noteList.length > 0 && (
         <section>
           <h4 className="font-semibold mb-2">Notes</h4>
           <ul className="list-disc pl-5 text-sm space-y-1">
-            {notes.map((n, i) => (<li key={i}>{n}</li>))}
+            {noteList.map((n, i) => (<li key={i}>{n}</li>))}
           </ul>
         </section>
       )}

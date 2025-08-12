@@ -541,7 +541,8 @@ export default function RecipeView({
               const result = await convertRecipeWithDeepSeek({
                 apiKey: process.env.DEEPSEEK_API_KEY || '',
                 systemPrompt: SYSTEM_PROMPT,
-                userPayload: payload
+                userPayload: payload,
+                fast: true
               });
               if (!validateConversionSchema(result)) throw new Error('Invalid schema');
               setPreviewResult(result);
@@ -561,7 +562,8 @@ export default function RecipeView({
                 result = await convertRecipeWithDeepSeek({
                   apiKey: process.env.DEEPSEEK_API_KEY || '',
                   systemPrompt: SYSTEM_PROMPT,
-                  userPayload: payload
+                  userPayload: payload,
+                  fast: true
                 });
                 if (!validateConversionSchema(result)) throw new Error('Invalid schema');
               }

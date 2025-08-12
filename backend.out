@@ -1,606 +1,133 @@
 Starting backend server with Google OAuth configured...
 /Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
   warnings.warn(
-2025-08-12 10:41:43,066 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 10:41:43 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 10:41:43,465 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:41:43,465 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:41:43,465 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
+2025-08-12 11:29:45,850 [INFO] [logic.video_processing] Using device: cpu
+2025-08-12 11:29:46 [INFO] [pdf_generator] PDF Generator initialized
+2025-08-12 11:29:46,346 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
+2025-08-12 11:29:46,346 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
+2025-08-12 11:29:46,346 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
 /Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/main.py:100: DeprecationWarning: connections() is deprecated and will be removed; use net_connections() instead
   for conn in proc.connections(kind='inet'):
-2025-08-12 10:41:43,494 [INFO] [logic.video_processing] Initializing BLIP model for image analysis (cached, fast processor)...
-2025-08-12 10:41:46,535 [INFO] [logic.video_processing] BLIP model loaded.
+2025-08-12 11:29:46,382 [INFO] [logic.video_processing] Initializing BLIP model for image analysis (cached, fast processor)...
+2025-08-12 11:29:49,641 [INFO] [logic.video_processing] BLIP model loaded.
 INFO:     Will watch for changes in these directories: ['/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy']
 INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
 WARNING:  --reload-include and --reload-exclude have no effect unless watchfiles is installed.
-INFO:     Started reloader process [6919] using StatReload
+INFO:     Started reloader process [19869] using StatReload
 /Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
   warnings.warn(
-2025-08-12 10:41:49,540 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 10:41:49 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 10:41:49,962 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:41:49,962 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:41:49,962 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 10:41:49,998 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:41:49,998 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:41:49,998 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [6993]
+2025-08-12 11:29:53,311 [INFO] [logic.video_processing] Using device: cpu
+2025-08-12 11:29:53 [INFO] [pdf_generator] PDF Generator initialized
+2025-08-12 11:29:53,861 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
+2025-08-12 11:29:53,861 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
+2025-08-12 11:29:53,861 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
+2025-08-12 11:29:53,906 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
+2025-08-12 11:29:53,906 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
+2025-08-12 11:29:53,906 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
+INFO:     Started server process [20134]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     127.0.0.1:49992 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51881 - "GET /health HTTP/1.1" 200 OK
 WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
 INFO:     Shutting down
 INFO:     Waiting for application shutdown.
 INFO:     Application shutdown complete.
-INFO:     Finished server process [6993]
+INFO:     Finished server process [20134]
 /Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
   warnings.warn(
-2025-08-12 10:42:01,946 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 10:42:02 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 10:42:02,354 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:42:02,355 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:42:02,355 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 10:42:02,391 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:42:02,391 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:42:02,391 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [7190]
+2025-08-12 11:30:06,209 [INFO] [logic.video_processing] Using device: cpu
+2025-08-12 11:30:06 [INFO] [pdf_generator] PDF Generator initialized
+2025-08-12 11:30:06,680 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
+2025-08-12 11:30:06,680 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
+2025-08-12 11:30:06,681 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
+2025-08-12 11:30:06,723 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
+2025-08-12 11:30:06,723 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
+2025-08-12 11:30:06,723 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
+INFO:     Started server process [20199]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
-INFO:     127.0.0.1:50009 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50010 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50011 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50009 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50010 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50011 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50009 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50013 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50010 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50011 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50009 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50016 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50017 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50013 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50010 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50011 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50009 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50016 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50017 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50013 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50010 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50011 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50009 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50016 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50017 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50013 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50013 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50013 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50013 - "GET /api/v1/recipes/45/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50013 - "GET /api/v1/recipes/45/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50017 - "GET /api/v1/recipes/45/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50017 - "GET /api/v1/recipes/45/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50021 - "OPTIONS /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50017 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50024 - "OPTIONS /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50024 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50030 - "GET /images/recipes/6915074f-1612-4a73-89fe-96a4bd1c8ac0.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50026 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50035 - "GET /images/recipes/63083c68-ad8f-4c95-92f8-7f3e477e1fd7.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50026 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50035 - "GET /images/recipes/a1dbc403-9460-4079-9a5d-11e5ecab21cb.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50026 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50035 - "GET /images/recipes/e43ec99f-286e-497f-8525-8c884c9f96bd.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50026 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50035 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50044 - "OPTIONS /api/v1/recipes/45/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50046 - "POST /api/v1/recipes/45/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50046 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50054 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50055 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50046 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50054 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50055 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50046 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50057 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50054 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50055 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50060 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50061 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50046 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50057 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50054 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50055 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50060 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50061 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50046 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50057 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50054 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50055 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50060 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50061 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50046 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50057 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50054 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50055 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50060 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50063 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50063 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50065 - "GET /api/v1/recipes/47/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50065 - "GET /api/v1/recipes/47/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50063 - "GET /api/v1/recipes/47/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50063 - "GET /api/v1/recipes/47/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50080 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50080 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50081 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50080 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50080 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-2025-08-12 10:44:51,501 [ERROR] [api.routes] DeepSeek proxy failed: 
-INFO:     127.0.0.1:50080 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 500 Internal Server Error
-INFO:     127.0.0.1:50125 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [7190]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 10:48:15,197 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 10:48:15 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 10:48:15,611 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:48:15,611 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:48:15,612 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 10:48:15,648 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:48:15,648 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:48:15,648 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [9576]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     127.0.0.1:50145 - "GET /health HTTP/1.1" 200 OK
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [9576]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 10:48:37,473 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 10:48:37 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 10:48:37,877 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:48:37,877 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:48:37,877 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 10:48:37,912 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 10:48:37,913 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 10:48:37,913 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [9771]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-2025-08-12 10:49:39,815 [ERROR] [api.routes] DeepSeek proxy failed: 
-INFO:     127.0.0.1:50154 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 500 Internal Server Error
-INFO:     127.0.0.1:50210 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50212 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50210 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50212 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50210 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50217 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50218 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50212 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50210 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50217 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50218 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50212 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50210 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50217 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50218 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50212 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50210 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50217 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50218 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50212 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50214 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50210 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50210 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/45/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/45/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/45/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50211 - "GET /api/v1/recipes/45/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50220 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-2025-08-12 10:52:10,408 [ERROR] [api.routes] DeepSeek proxy failed: 
-INFO:     127.0.0.1:50245 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 500 Internal Server Error
-INFO:     127.0.0.1:50272 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50292 - "OPTIONS /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50294 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50374 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50374 - "GET /api/v1/recipes/45/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50374 - "GET /api/v1/recipes/45/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50422 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50423 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50424 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50422 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50423 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50424 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50422 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50423 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50424 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50429 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50422 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50423 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50426 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50424 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50429 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50422 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50423 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50426 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50424 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50429 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50422 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50423 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50426 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50424 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50429 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50429 - "GET /api/v1/recipes/47/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50429 - "GET /api/v1/recipes/47/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "GET /api/v1/recipes/47/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "GET /api/v1/recipes/47/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50430 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50466 - "OPTIONS /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50466 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50472 - "GET /images/recipes/f5827a97-18c7-4e3a-826c-53df4714e009.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50468 - "OPTIONS /api/v1/recipes/47/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50474 - "POST /api/v1/recipes/47/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50474 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50482 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50483 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50474 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50482 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50483 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50474 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50482 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50483 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50474 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50489 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50482 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50485 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50487 - "GET /images/recipes/f5827a97-18c7-4e3a-826c-53df4714e009.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50483 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50474 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50489 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50482 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50485 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50487 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50483 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50474 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50489 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50482 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50485 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50487 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50483 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50474 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50489 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50482 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50485 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50487 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50487 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50485 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50487 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50485 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50487 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50487 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50485 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50485 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-2025-08-12 10:59:18,322 [ERROR] [api.routes] DeepSeek proxy failed: 
-INFO:     127.0.0.1:50485 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 500 Internal Server Error
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [9771]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 11:00:19,053 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 11:00:19 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 11:00:19,578 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:00:19,578 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:00:19,579 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 11:00:19,626 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:00:19,626 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:00:19,626 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [14186]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [14186]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 11:00:46,339 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 11:00:46 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 11:00:46,829 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:00:46,829 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:00:46,829 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 11:00:46,873 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:00:46,873 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:00:46,873 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [14329]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-2025-08-12 11:00:54,017 [INFO] [api.routes] DeepSeek proxy call model=deepseek-chat base=https://api.deepseek.com len_system=1798 bytes_user=1558
-2025-08-12 11:01:24,623 [ERROR] [api.routes] DeepSeek proxy failed: ReadTimeout
-INFO:     127.0.0.1:50557 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 500 Internal Server Error
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [14329]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 11:02:25,276 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 11:02:25 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 11:02:25,818 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:02:25,818 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:02:25,818 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 11:02:25,864 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:02:25,864 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:02:25,865 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [14363]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [14363]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 11:02:37,517 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 11:02:37 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 11:02:37,936 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:02:37,937 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:02:37,937 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 11:02:37,972 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:02:37,972 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:02:37,972 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [14584]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     127.0.0.1:50636 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50639 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50640 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50636 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50639 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50640 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50636 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50636 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50646 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50636 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50646 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50640 - "GET /images/recipes/f5827a97-18c7-4e3a-826c-53df4714e009.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50636 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50639 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50646 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50640 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50636 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50639 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50646 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50640 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50636 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50642 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50645 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-2025-08-12 11:02:53,555 [INFO] [api.routes] DeepSeek proxy call model=deepseek-chat base=https://api.deepseek.com len_system=1798 bytes_user=1553
-2025-08-12 11:02:53,556 [ERROR] [api.routes] DeepSeek proxy failed: unsupported operand type(s) for |: 'type' and 'NoneType'
-INFO:     127.0.0.1:50645 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 500 Internal Server Error
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [14584]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 11:03:31,652 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 11:03:32 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 11:03:32,145 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:03:32,146 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:03:32,146 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 11:03:32,194 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:03:32,194 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:03:32,194 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [14604]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [14604]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 11:03:46,553 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 11:03:47 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 11:03:47,053 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:03:47,053 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:03:47,054 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 11:03:47,098 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:03:47,098 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:03:47,098 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [14757]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     127.0.0.1:50701 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50703 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50703 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50701 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50703 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50707 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50701 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50703 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50710 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50711 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50707 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50701 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50703 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50710 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50707 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50701 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50703 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50710 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50707 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50701 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50703 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50710 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50707 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50711 - "GET /images/recipes/f5827a97-18c7-4e3a-826c-53df4714e009.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50711 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50711 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50707 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50707 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50702 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50713 - "OPTIONS /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-2025-08-12 11:03:51,757 [INFO] [api.routes] DeepSeek proxy call model=deepseek-chat base=https://api.deepseek.com len_system=1798 bytes_user=1553
-INFO:     127.0.0.1:50702 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50717 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50721 - "GET /images/recipes/08d1123c-631b-43db-ab0d-286ca4c42461.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50723 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50727 - "GET /images/recipes/ccadd118-d857-4542-8abb-3a75fe8819db.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50723 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50727 - "GET /images/recipes/146bb5dd-c69c-4c64-9c74-35b64f6704c1.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50723 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50734 - "GET /images/recipes/b37ca42d-75af-49d6-8268-88be76268e9b.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50736 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50740 - "GET /images/recipes/2c097c29-6528-46c8-bf2f-e781829d7d3a.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50736 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50740 - "GET /images/recipes/79a42f61-c0d0-4b05-8d84-b4d3a12e9977.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50736 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50746 - "GET /images/recipes/33007de6-393f-4061-90e3-d4dc843c1b01.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50736 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50746 - "GET /images/recipes/6b10602b-bbc9-45d9-a1cb-83b342f66826.png HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50751 - "OPTIONS /api/v1/recipes/16/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "POST /api/v1/recipes/16/convert HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50762 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "GET /api/v1/recipes HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50762 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50762 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50762 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50764 - "GET /images/recipes/f5827a97-18c7-4e3a-826c-53df4714e009.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50766 - "GET /images/recipes/6b10602b-bbc9-45d9-a1cb-83b342f66826.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50761 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50768 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 304 Not Modified
-INFO:     127.0.0.1:50762 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50764 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50766 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50768 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50762 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50764 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50766 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50768 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50762 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50753 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50764 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50766 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50761 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50768 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50790 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50790 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50790 - "GET /api/v1/recipes/49/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50790 - "GET /api/v1/recipes/49/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50790 - "GET /api/v1/recipes/49/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50790 - "GET /api/v1/recipes/49/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50797 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50798 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50797 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50798 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50798 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50798 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50797 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50797 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
-WARNING:  StatReload detected changes in 'logic/web_scraper.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [14757]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 11:07:30,947 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 11:07:31 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 11:07:31,452 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:07:31,452 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:07:31,452 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 11:07:31,495 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:07:31,495 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:07:31,495 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [16214]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-WARNING:  StatReload detected changes in 'api/routes.py'. Reloading...
-INFO:     Shutting down
-INFO:     Waiting for application shutdown.
-INFO:     Application shutdown complete.
-INFO:     Finished server process [16214]
-/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
-  warnings.warn(
-2025-08-12 11:07:40,602 [INFO] [logic.video_processing] Using device: cpu
-2025-08-12 11:07:41 [INFO] [pdf_generator] PDF Generator initialized
-2025-08-12 11:07:41,074 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:07:41,075 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:07:41,075 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-2025-08-12 11:07:41,120 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
-2025-08-12 11:07:41,121 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
-2025-08-12 11:07:41,121 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
-INFO:     Started server process [16494]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
+INFO:     127.0.0.1:52522 - "GET /api/v1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52523 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52524 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /api/v1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52523 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52524 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /api/v1/recipes/50/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52523 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52524 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52523 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52524 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52523 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52524 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52523 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52524 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52526 - "GET /images/recipes/62849cc1-ae78-4216-a5b9-c61334cc6a1f.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52523 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "GET /images/recipes/6b10602b-bbc9-45d9-a1cb-83b342f66826.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52530 - "GET /images/recipes/f5827a97-18c7-4e3a-826c-53df4714e009.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52526 - "GET /api/v1/recipes/50/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52523 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52530 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52524 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52526 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /images/recipes/50be2183-5022-4676-8bab-ae912225be48.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:52523 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52530 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52524 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52526 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52522 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52523 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52530 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52530 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52530 - "GET /api/v1/recipes/16/variants?page=1&limit=12&sort=newest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52528 - "GET /api/v1/recipes/16/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52530 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52530 - "GET /api/v1/recipes/16/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52534 - "OPTIONS /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
+2025-08-12 12:29:01,623 [INFO] [api.routes] DeepSeek proxy call model=deepseek-chat base=https://api.deepseek.com fast=True len_system=1798 bytes_user=1553
+INFO:     127.0.0.1:52530 - "POST /api/v1/llm/deepseek/convert HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "GET /api/v1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52670 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52671 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "GET /api/v1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52670 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52671 - "GET /api/v1/recipes/50/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52673 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52670 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52671 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52676 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52677 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52673 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52670 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52671 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52676 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52677 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52673 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52670 - "GET /api/v1/recipes/50/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52671 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52676 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52677 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "GET /api/v1/recipes/44/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52673 - "GET /api/v1/recipes/48/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52670 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52671 - "GET /api/v1/recipes/41/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52676 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52677 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52669 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52673 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52670 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52671 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               ./start_server.sh: line 12: 18398 Killed: 9               python main.py

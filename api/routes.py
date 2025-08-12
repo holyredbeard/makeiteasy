@@ -35,6 +35,7 @@ import os
 import yt_dlp
 import httpx
 from datetime import datetime, timezone
+import hashlib as _hashlib
 import unicodedata as _unicodedata
 import re as _re2
 
@@ -1181,6 +1182,36 @@ def _normalize_presets_backend(selected):
 @router.post("/llm/deepseek/convert")
 @limiter.limit("30/minute")
 async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
+    # Lightweight in-memory cache and de-duplication to speed up repeated conversions
+    # Keyed by hash of (model, base_url, fast flag, userPayload JSON, truncated system prompt hash)
+    global _CONVERT_CACHE, _CONVERT_INFLIGHT
+    try:
+        _CONVERT_CACHE
+    except NameError:
+        _CONVERT_CACHE = {}
+    try:
+        _CONVERT_INFLIGHT
+    except NameError:
+        _CONVERT_INFLIGHT = {}
+    _CONVERT_TTL = 600  # seconds
+    _CONVERT_MAX = 128
+
+    def _cache_get(key: str):
+        entry = _CONVERT_CACHE.get(key)
+        if not entry:
+            return None
+        if (time.time() - entry['t']) > _CONVERT_TTL:
+            _CONVERT_CACHE.pop(key, None)
+            return None
+        return entry['data']
+
+    def _cache_set(key: str, data: dict):
+        _CONVERT_CACHE[key] = {'t': time.time(), 'data': data}
+        if len(_CONVERT_CACHE) > _CONVERT_MAX:
+            # Evict oldest
+            oldest_key = min(_CONVERT_CACHE.items(), key=lambda kv: kv[1]['t'])[0]
+            _CONVERT_CACHE.pop(oldest_key, None)
+
     try:
         api_key = os.getenv('DEEPSEEK_API_KEY') or os.getenv('OPENAI_API_KEY')
         if not api_key:
@@ -1189,11 +1220,41 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
         user_payload = payload.get('userPayload') or {}
         model = payload.get('model') or 'deepseek-chat'
         base_url = payload.get('baseURL') or 'https://api.deepseek.com'
+        fast = bool(payload.get('fast'))
+
+        # Compute cache key
+        try:
+            up_str = json.dumps(user_payload, sort_keys=True, ensure_ascii=False)
+        except Exception:
+            up_str = str(user_payload)
+        sp_hash = _hashlib.sha1((system_prompt or '').encode('utf-8')).hexdigest()[:10]
+        key_raw = f"{model}|{base_url}|fast={int(fast)}|{sp_hash}|{up_str}"
+        key = _hashlib.sha1(key_raw.encode('utf-8')).hexdigest()
+
+        # Serve from cache if available
+        cached = _cache_get(key)
+        if cached is not None:
+            return JSONResponse(cached)
+
+        # If an identical request is already in-flight, await it
+        inflight = _CONVERT_INFLIGHT.get(key)
+        if inflight is not None:
+            try:
+                data = await inflight
+                return JSONResponse(data)
+            except Exception:
+                # Fall through to perform our own call
+                pass
+
+        # Create a future placeholder to deduplicate subsequent callers
+        loop = asyncio.get_event_loop()
+        future: asyncio.Future = loop.create_future()
+        _CONVERT_INFLIGHT[key] = future
         msgs = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": json.dumps(user_payload)}
         ]
-        logger.info(f"DeepSeek proxy call model={model} base={base_url} len_system={len(system_prompt or '')} bytes_user={len(json.dumps(user_payload) or '')}")
+        logger.info(f"DeepSeek proxy call model={model} base={base_url} fast={fast} len_system={len(system_prompt or '')} bytes_user={len(json.dumps(user_payload) or '')}")
         async def _call(messages, *, max_tokens: Optional[int] = None, temperature: float = 0.7, timeout_s: float = 60.0):
             # Longer server-side timeout to avoid ReadTimeout for bigger recipes
             timeout = httpx.Timeout(timeout_s, connect=10.0, read=timeout_s, write=timeout_s/2)
@@ -1257,9 +1318,17 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
             except Exception:
                 return None
 
-        # First attempt
+        # First attempt: if fast-mode, use compact instructions and tighter budget up-front
         try:
-            content = await _call(msgs, max_tokens=900, temperature=0.4, timeout_s=65.0)
+            if fast:
+                compact_system = "Return STRICT JSON only. Keys: title, substitutions, ingredients, instructions, notes, nutritionPerServing, compliance. No markdown. Keep output concise."
+                msgs_fast = [
+                    {"role": "system", "content": compact_system},
+                    {"role": "user", "content": json.dumps(user_payload)}
+                ]
+                content = await _call(msgs_fast, max_tokens=550, temperature=0.2, timeout_s=40.0)
+            else:
+                content = await _call(msgs, max_tokens=900, temperature=0.4, timeout_s=65.0)
         except (httpx.ReadTimeout, httpx.TimeoutException):
             # Fallback: compact instructions to force short, fast JSON
             compact_system = "Return STRICT JSON only. Keys: title, substitutions, ingredients, instructions, notes, nutritionPerServing, compliance. No markdown. Keep output concise."
@@ -1270,6 +1339,12 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
             content = await _call(compact_msgs, max_tokens=700, temperature=0.2, timeout_s=65.0)
         parsed = _extract_json(content)
         if parsed is not None:
+            try:
+                _cache_set(key, parsed)
+                if not future.done():
+                    future.set_result(parsed)
+            finally:
+                _CONVERT_INFLIGHT.pop(key, None)
             return JSONResponse(parsed)
 
         # Second attempt: add strict instruction and retry
@@ -1277,6 +1352,12 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
         content = await _call(msgs)
         parsed = _extract_json(content)
         if parsed is not None:
+            try:
+                _cache_set(key, parsed)
+                if not future.done():
+                    future.set_result(parsed)
+            finally:
+                _CONVERT_INFLIGHT.pop(key, None)
             return JSONResponse(parsed)
 
         # Third attempt: ask model to reformat the previous content into JSON
@@ -1287,12 +1368,23 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
         content2 = await _call(repair_msgs)
         parsed = _extract_json(content2)
         if parsed is not None:
+            try:
+                _cache_set(key, parsed)
+                if not future.done():
+                    future.set_result(parsed)
+            finally:
+                _CONVERT_INFLIGHT.pop(key, None)
             return JSONResponse(parsed)
 
         # Surface first part of model output to help diagnose
         snippet = (content or '')
         if isinstance(snippet, str):
             snippet = snippet.strip().replace('\n', ' ')[:300]
+        try:
+            if not future.done():
+                future.set_exception(Exception("non-json"))
+        finally:
+            _CONVERT_INFLIGHT.pop(key, None)
         raise HTTPException(status_code=500, detail=f"DeepSeek returned non-JSON: {snippet}")
     except HTTPException:
         raise
