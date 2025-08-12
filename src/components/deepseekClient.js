@@ -1,22 +1,39 @@
 // Thin client wrapper for DeepSeek Chat Completions
 // This file does NOT contain API keys. Expect the caller to provide baseURL and apiKey via env/runtime.
 
-export async function convertRecipeWithDeepSeek({ apiKey, baseURL = 'https://api.deepseek.com', model = 'deepseek-chat', systemPrompt, userPayload, fast = true }) {
+export async function convertRecipeWithDeepSeek({ apiKey, baseURL = 'https://api.deepseek.com', model = 'deepseek-chat', systemPrompt, userPayload, fast = true, timeoutMs = 25000 }) {
   // Först: försök via backend-proxy (enklast & säkrast)
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), Math.max(5000, timeoutMs));
+  const startedAt = Date.now();
+  console.info('[Convert] Preview → calling proxy (fast=%s)...', fast);
   try {
     const proxy = await fetch('http://localhost:8001/api/v1/llm/deepseek/convert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
+      signal: controller.signal,
       body: JSON.stringify({ systemPrompt, userPayload, model, baseURL, fast })
     });
-    const data = await proxy.json();
-    if (!proxy.ok) throw new Error(data?.detail || 'Proxy failed');
+    const text = await proxy.text();
+    let data;
+    try { data = JSON.parse(text); } catch { data = null; }
+    if (!proxy.ok) {
+      const detail = (data && (data.detail || data.error)) || text || 'Proxy failed';
+      throw new Error(detail);
+    }
+    console.info('[Convert] Proxy OK in %dms', Date.now() - startedAt);
     return data;
   } catch (e) {
-    console.warn('DeepSeek proxy unavailable:', e?.message);
-    // Do not require a frontend API key. Surface the proxy error to the caller.
+    if (e?.name === 'AbortError') {
+      console.error('[Convert] Preview timeout after %dms', Date.now() - startedAt);
+      throw new Error('Preview timed out. Please try again.');
+    }
+    console.warn('DeepSeek proxy error:', e?.message || e);
+    // Surface the proxy error to the caller.
     throw new Error(e?.message || 'DeepSeek proxy unavailable');
+  } finally {
+    clearTimeout(id);
   }
 }
 

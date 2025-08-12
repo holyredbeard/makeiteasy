@@ -548,7 +548,8 @@ export default function RecipeView({
               setPreviewResult(result);
             } catch (e) {
               setConvertError(String(e?.message || 'Conversion failed'));
-            } finally { setConvertBusy(false); }
+              console.error('[Convert] Preview failed:', e);
+              } finally { setConvertBusy(false); }
           }}
           onApply={async (constraintsArg)=>{
             try {
