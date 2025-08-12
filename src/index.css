@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-    background-image: url('bg.png');
+    background-color: gainsboro;
     background-size: cover;
     background-position: center;
     background-attachment: fixed;

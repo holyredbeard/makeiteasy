@@ -16,7 +16,9 @@
   },
   "scripts": {
     "start": "PORT=3000 react-scripts start",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "images:install": "echo 'A1111 deprecated: using Replicate now'",
+    "images:start": "echo 'A1111 deprecated: using Replicate now'"
   },
   "browserslist": [
     ">0.2%",

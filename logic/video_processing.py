@@ -61,12 +61,25 @@ def get_blip_model():
     global blip_processor, blip_model
     with blip_lock:
         if blip_processor is None or blip_model is None:
-            logger.info("Initializing BLIP model for image analysis...")
-            blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
-            blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
+            logger.info("Initializing BLIP model for image analysis (cached, fast processor)...")
+            # use_fast=True minskar preprocessing-overhead
+            blip_processor = BlipProcessor.from_pretrained(
+                "Salesforce/blip-image-captioning-base",
+                use_fast=True
+            )
+            blip_model = BlipForConditionalGeneration.from_pretrained(
+                "Salesforce/blip-image-captioning-base"
+            )
             blip_model.to(device)
             logger.info("BLIP model loaded.")
         return blip_processor, blip_model
+
+def preload_vision_models():
+    """Warm start for vision models to undvika kallstart vid första Generate."""
+    try:
+        get_blip_model()
+    except Exception as e:
+        logger.warning(f"BLIP preload skipped: {e}")
 
 # --- Utility Functions ---
 def get_video_id(url: str) -> Optional[str]:

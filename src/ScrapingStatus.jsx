@@ -60,11 +60,12 @@ const ScrapingStatus = ({ isActive, onComplete }) => {
     <div className="text-center">
       <div className="flex justify-center mb-4">
         <div className="relative">
-          {/* Main spinner */}
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          
-          {/* Pulsing ring effect */}
-          <div className="absolute inset-0 rounded-full border-2 border-blue-200 animate-ping opacity-75"></div>
+          <div className="animate-spin rounded-full h-12 w-12" style={{ filter: 'drop-shadow(0 2px 6px rgba(251,113,133,0.35))' }}>
+            <svg width="48" height="48" viewBox="0 0 48 48">
+              <circle cx="24" cy="24" r="18" stroke="#fecaca" strokeWidth="8" fill="none" />
+              <circle cx="24" cy="24" r="18" stroke="#fb7185" strokeWidth="8" strokeLinecap="round" fill="none" strokeDasharray={`${2*Math.PI*18*0.28} ${2*Math.PI*18}`} />
+            </svg>
+          </div>
         </div>
       </div>
       
@@ -88,9 +89,9 @@ const ScrapingStatus = ({ isActive, onComplete }) => {
             key={index}
             className={`w-2 h-2 rounded-full transition-all duration-300 ${
               isVisible && index === currentMessageIndex
-                ? 'bg-blue-500 scale-125'
+                ? 'bg-rose-500 scale-125'
                 : isVisible && index < currentMessageIndex
-                ? 'bg-green-400'
+                ? 'bg-orange-300'
                 : 'bg-gray-300'
             }`}
           />

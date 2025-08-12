@@ -343,6 +343,40 @@ class DatabaseManager:
             if recipe_content.get('image_url') and not recipe_content.get('thumbnail_path'):
                 recipe_content['thumbnail_path'] = recipe_content['image_url']
 
+            # Coerce ingredients/instructions into structured objects if strings were provided
+            def _coerce_ingredients(items):
+                coerced = []
+                for item in items or []:
+                    if isinstance(item, dict):
+                        name = (item.get('name') or item.get('ingredient') or '').strip()
+                        quantity = (item.get('quantity') or '').strip()
+                        notes = item.get('notes')
+                        coerced.append({ 'name': name, 'quantity': quantity, 'notes': notes })
+                    else:
+                        text = str(item).strip()
+                        if not text:
+                            continue
+                        coerced.append({ 'name': text, 'quantity': '', 'notes': None })
+                return coerced
+            def _coerce_instructions(items):
+                coerced = []
+                for idx, item in enumerate(items or [], start=1):
+                    if isinstance(item, dict):
+                        step_num = int(item.get('step') or idx)
+                        desc = (item.get('description') or '').strip() or f'Step {idx}'
+                        coerced.append({ 'step': step_num, 'description': desc, 'image_path': item.get('image_path') })
+                    else:
+                        text = str(item).strip()
+                        if not text:
+                            continue
+                        coerced.append({ 'step': idx, 'description': text, 'image_path': None })
+                return coerced
+
+            if isinstance(recipe_content.get('ingredients'), list):
+                recipe_content['ingredients'] = _coerce_ingredients(recipe_content['ingredients'])
+            if isinstance(recipe_content.get('instructions'), list):
+                recipe_content['instructions'] = _coerce_instructions(recipe_content['instructions'])
+
             # Validate with Pydantic model before serializing
             validated_content = RecipeContent.model_validate(recipe_content)
             recipe_json = validated_content.model_dump_json()
@@ -811,7 +845,9 @@ class DatabaseManager:
                 where_extra = " AND (c.created_at > ? OR (c.created_at = ? AND c.id > ?))"
             params.extend([created_after, created_after, id_after])
         query = f"""
-            SELECT c.id FROM comments c WHERE c.recipe_id = ? {where_extra} {order_clause} LIMIT ?
+            SELECT c.id FROM comments c 
+            WHERE c.recipe_id = ? AND (c.deleted IS NULL OR c.deleted = 0)
+            {where_extra} {order_clause} LIMIT ?
         """
         params.append(limit + 1)
         with self.get_connection() as conn:

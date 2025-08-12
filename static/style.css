@@ -31,8 +31,8 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #e5eefa;
+    font-family: 'Poppins', sans-serif;
+    background-color: #f9fafb;
     min-height: 100vh;
     color: #333;
 }

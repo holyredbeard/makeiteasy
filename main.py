@@ -14,9 +14,15 @@ from dotenv import load_dotenv
 from api.routes import router as recipes_router
 from api.auth_routes import router as auth_router
 from api.google_auth import router as google_auth_router
+from logic.video_processing import preload_vision_models
 
 # --- App Initialization ---
-load_dotenv()
+# Always load .env and override to ensure fresh keys are picked up on restart
+load_dotenv(override=True)
+import os as _os_check
+import logging as _log_check
+_log_check.info(f"ENV CHECK: DEEPSEEK_API_KEY present={bool(_os_check.getenv('DEEPSEEK_API_KEY'))}")
+_log_check.info(f"ENV CHECK: REPLICA_API_KEY present={bool(_os_check.getenv('REPLICA_API_KEY')) or bool(_os_check.getenv('REPLICATE_API_TOKEN'))}")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,6 +33,9 @@ logging.basicConfig(
     ]
 )
 logging.info("--- SERVER RESTART - CODE VERSION 2 ---")
+# Reduce noisy third-party loggers
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
 
 app = FastAPI(
     title="Make It Easy - Video to PDF Converter",
@@ -39,7 +48,12 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -47,6 +61,8 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/downloads", StaticFiles(directory="downloads"), name="downloads")
+# Serve generated images under /images
+app.mount("/images", StaticFiles(directory="public/images"), name="images")
 
 app.include_router(recipes_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
@@ -106,7 +122,24 @@ if __name__ == "__main__":
     multiprocessing.set_start_method('spawn', force=True)
     
     try:
-        uvicorn.run("main:app", host="127.0.0.1", port=PORT, reload=True)
+        # Preload vision models (BLIP) för att undvika kallstart vid Generate
+        try:
+            preload_vision_models()
+        except Exception:
+            pass
+        uvicorn.run(
+            "main:app",
+            host="127.0.0.1",
+            port=PORT,
+            reload=True,
+            reload_excludes=[
+                "stable-diffusion-webui/*",
+                "stable-diffusion-webui/venv/*",
+                "venv/*",
+                "whisper_env/*",
+                "pdf_env/*",
+            ],
+        )
     except Exception as e:
         logging.error(f"Server failed to start: {e}")
     finally:

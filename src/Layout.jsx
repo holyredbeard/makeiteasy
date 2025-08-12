@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { 
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
@@ -11,8 +11,7 @@ import {
   CreditCardIcon,
   LifebuoyIcon
 } from '@heroicons/react/24/outline';
-import logger from './Logger';
-import LogPanel from './LogPanel';
+// Logging UI disabled
 
 const API_BASE = 'http://localhost:8001/api/v1';
 const API_ROOT = API_BASE.replace(/\/api\/v1$/, '');
@@ -51,11 +50,10 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
               )}
               <button onClick={() => setOpenUserMenu(v => !v)} className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors focus:outline-none">
                 {currentUser?.avatar_url ? (
-                  <img src={normalizeBackendUrl(currentUser.avatar_url)} alt="avatar" className="h-6 w-6 rounded-full object-cover" />
+                  <img src={normalizeBackendUrl(currentUser.avatar_url)} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
                 ) : (
-                  <UserCircleIcon className="h-6 w-6 text-gray-500" />
+                  <UserCircleIcon className="h-8 w-8 text-gray-500" />
                 )}
-                <span className="hidden sm:block">{(currentUser.username || '').trim() || currentUser.full_name || currentUser.email}</span>
               </button>
               {openUserMenu && (
                 <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
@@ -299,7 +297,8 @@ export default function Layout() {
   const [usageStatus, setUsageStatus] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
-  const [showLogPanel, setShowLogPanel] = useState(true);
+  // const [showLogPanel, setShowLogPanel] = useState(true); // disabled
+  const navigate = useNavigate();
 
   const refreshCurrentUser = async () => {
     try {
@@ -372,6 +371,12 @@ export default function Layout() {
       console.error("Logout failed", error);
     } finally {
       setCurrentUser(null);
+      setIsAuthModalOpen(false);
+      setAuthTab('login');
+      // ensure we show logged-out landing
+      navigate('/', { replace: true });
+      // refresh usage status (will show unauthenticated quotas)
+      checkUsageStatus();
     }
   };
 
@@ -418,7 +423,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="font-poppins bg-gradient-to-br from-[#d6e5dd] to-[#eaf3ef] min-h-screen">
+    <div className="font-poppins bg-[#f9fafb] min-h-screen">
       <Header 
         currentUser={currentUser} 
         handleLogout={handleLogout} 
@@ -426,18 +431,7 @@ export default function Layout() {
         usageStatus={usageStatus} 
       />
       
-      <LogPanel 
-        isVisible={showLogPanel} 
-        onToggle={() => setShowLogPanel(!showLogPanel)} 
-      />
-      
-      <button
-        onClick={() => setShowLogPanel(!showLogPanel)}
-        className="fixed bottom-4 left-4 bg-gray-800 hover:bg-gray-700 text-white p-3 rounded-full shadow-lg z-40 transition-all duration-300"
-        title={showLogPanel ? 'Dölj loggar' : 'Visa loggar'}
-      >
-        <BugAntIcon className="h-6 w-6" />
-      </button>
+      {/* LogPanel disabled */}
 
       <AuthModal
         isOpen={isAuthModalOpen}
@@ -455,7 +449,7 @@ export default function Layout() {
         </div>
       )}
 
-      <main className="max-w-3xl mx-auto py-10 px-8">
+      <main className="max-w-[1080px] mx-auto py-10 px-8">
         <Outlet context={{ currentUser, refreshCurrentUser, setCurrentUser }} />
       </main>
     </div>

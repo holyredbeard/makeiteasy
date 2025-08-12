@@ -25,6 +25,9 @@ import {
 } from '@heroicons/react/24/outline';
 import logger from './Logger';
 import ScrapingStatus from './ScrapingStatus';
+import Spinner from './components/Spinner';
+import TagInput from './components/TagInput';
+import RecipeView from './components/RecipeView';
 
 const API_BASE = 'http://localhost:8001/api/v1';
 const STATIC_BASE = 'http://localhost:8001';
@@ -36,12 +39,7 @@ const normalizeUrlPort = (url) => {
     .replace('http://localhost:8000', 'http://localhost:8001');
 };
 
-const Spinner = ({ size = 'h-5 w-5', color = 'text-white' }) => (
-  <svg className={`animate-spin ${size} ${color}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-  </svg>
-);
+// Replaced by orange ring spinner component
 
 // Bold numbers and units in ingredient strings
 const renderIngredientEmphasis = (text) => {
@@ -102,6 +100,64 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   const [showTopImage, setShowTopImage] = useState(true);
   const [showStepImages, setShowStepImages] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [tagsEditorOpen, setTagsEditorOpen] = useState(false);
+  const [proposedTags, setProposedTags] = useState([]);
+  const [saveResultId, setSaveResultId] = useState(null);
+  const [suggestions, setSuggestions] = useState([]);
+
+  // Canonical tag sets for suggestions
+  const DISH = ['pasta','soup','stew','salad','sandwich','wrap','pizza','pie','casserole','burger','tacos','stirfry','bowl','onepot','baked','pancake','crepe','waffle','omelette','sushi','rice','noodle','curry','gratin','skewer','quiche','dumpling'];
+  const METHOD = ['grilled','fried','roasted','baked','boiled','steamed','poached','braised','slowcooked','barbecue','smoked','blanched','seared'];
+  const MEAL = ['breakfast','brunch','lunch','dinner','snack','dessert','side','appetizer','main','drink'];
+  const CUISINE = ['italian','mexican','indian','thai','japanese','chinese','french','greek','turkish','mediterranean','swedish','vietnamese','korean','moroccan','american','british','german','spanish','middleeastern'];
+  const DIET = ['vegan','vegetarian','pescatarian','glutenfree','dairyfree','lowcarb','highprotein','keto','paleo','sugarfree'];
+  const THEME = ['quick','easy','budget','healthy','comfortfood','kidfriendly','mealprep'];
+
+  const normalize = (s) => String(s || '').toLowerCase();
+  const chipCls = (type) => ({
+    dish: 'bg-sky-50 text-sky-700 border-sky-200',
+    method: 'bg-violet-50 text-violet-700 border-violet-200',
+    meal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    cuisine: 'bg-blue-50 text-blue-700 border-blue-200',
+    diet: 'bg-rose-50 text-rose-700 border-rose-200',
+    theme: 'bg-amber-50 text-amber-800 border-amber-200',
+  }[type] || 'bg-gray-50 text-gray-700 border-gray-200');
+
+  const suggestTagsForRecipe = (recipe) => {
+    try {
+      const title = normalize(recipe.title);
+      const description = normalize(recipe.description);
+      const ing = (recipe.ingredients || []).map(i => typeof i === 'string' ? normalize(i) : normalize(`${i.quantity||''} ${i.name||''} ${i.notes||''}`)).join(' ');
+      const text = `${title} ${description} ${ing}`;
+      const picks = [];
+      const pushUnique = (label, type) => {
+        if (!label) return;
+        if (!picks.find(p => p.label === label)) picks.push({ label, type });
+      };
+      // cuisine
+      for (const cu of CUISINE) { if (text.includes(cu)) { pushUnique(cu, 'cuisine'); break; } }
+      // dish
+      for (const d of DISH) { if (text.includes(d)) { pushUnique(d, 'dish'); break; } }
+      // method
+      for (const m of METHOD) { if (text.includes(m)) { pushUnique(m, 'method'); break; } }
+      // meal
+      for (const m of MEAL) { if (text.includes(m)) { pushUnique(m, 'meal'); break; } }
+      // diet
+      for (const d of DIET) { if (text.includes(d)) { pushUnique(d, 'diet'); break; } }
+      // theme defaults
+      if (picks.length < 5) { pushUnique('easy', 'theme'); }
+      if (picks.length < 5) { pushUnique('healthy', 'theme'); }
+      if (picks.length < 5) { pushUnique('dinner', 'meal'); }
+      return picks.slice(0,5);
+    } catch { return []; }
+  };
+
+  // When tag editor opens, prepare suggestions
+  useEffect(() => {
+    if (tagsEditorOpen) {
+      setSuggestions(suggestTagsForRecipe(data));
+    }
+  }, [tagsEditorOpen]);
   const [imageOrientation, setImageOrientation] = useState('landscape');
 
   useEffect(() => {
@@ -264,11 +320,11 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
 
       const savedRecipe = await response.json();
       console.log('Recipe saved successfully:', savedRecipe);
+      setSaveResultId(savedRecipe.id || savedRecipe?.data?.id || null);
       setShowSuccessModal(true);
       // Navigate after a short delay to show the success modal
-      setTimeout(() => {
-        navigate('/my-recipes');
-      }, 2000); 
+      // Instead of immediate redirect, open tags editor
+      setTagsEditorOpen(true);
     } catch (error) {
       console.error('Save recipe error:', error);
       alert(error.message || 'Failed to save recipe. Please try again.');
@@ -305,7 +361,7 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
         ) : (
           <div>
             <div className="flex justify-center mb-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+              <Spinner size={56} color="#fb7185" background="#fecaca" thickness={8} />
             </div>
             <h3 className="text-xl font-bold mb-2">Processing</h3>
             <p className="text-gray-600">{status}</p>
@@ -317,158 +373,15 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   
   return (
     <div>
-      <div className="recipe-display a4-format">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-3xl font-bold">{data.title}</h2>
-        </div>
-        
-        {/* Top section: Image and Description */}
-        <div className="flex flex-col md:flex-row gap-8 mb-6">
-            <div className="md:w-1/3">
-                {(data.thumbnail_path || data.image_url || data.img) && (
-                    <img 
-                        src={(() => {
-                          const raw = (data.thumbnail_path || data.image_url || data.img);
-                          const absolute = raw.startsWith('http');
-                          const url = absolute ? raw : (STATIC_BASE + raw);
-                          return normalizeUrlPort(url);
-                        })()} 
-                        alt={data.title} 
-                        className="w-full h-auto object-cover rounded-lg shadow-md"
-                        onError={(e) => { 
-                            console.log('Image failed to load:', e.target.src);
-                            e.target.style.display = 'none'; 
-                        }}
-                        onLoad={(e) => {
-                            console.log('Image loaded successfully:', e.target.src);
-                        }}
-                    />
-                )}
-            </div>
-            <div className="md:w-2/3">
-                <p className="text-gray-600">{data.description}</p>
-            </div>
-        </div>
-
-        {/* Info Cards Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            {data.servings && <InfoCard label="Servings" value={data.servings} />}
-            {data.prep_time_minutes && <InfoCard label="Prep Time" value={`${data.prep_time_minutes} min`} />}
-            {data.cook_time_minutes && <InfoCard label="Cook Time" value={`${data.cook_time_minutes} min`} />}
-        </div>
-        
-        {/* Main Content: Ingredients and Instructions */}
-        <div className="flex flex-col md:flex-row gap-8">
-            <div className="md:w-1/3">
-                <h3 className="text-2xl font-semibold mb-4">Ingredients</h3>
-                <ul className="list-disc pl-5 space-y-2">
-                    {data.ingredients && data.ingredients.map((ing, idx) => (
-                        <li key={idx} className="text-gray-700">
-                            {typeof ing === 'string'
-                              ? renderIngredientEmphasis(ing)
-                              : renderIngredientEmphasis(`${ing.quantity || ''} ${ing.name || ing} ${ing.notes ? `(${ing.notes})` : ''}`)}
-                        </li>
-                    ))}
-                </ul>
-            </div>
-            <div className="md:w-2/3">
-                <h3 className="text-2xl font-semibold mb-4">Instructions</h3>
-                <ol className="list-decimal pl-5 space-y-4">
-                    {data.instructions && data.instructions.map((step, idx) => (
-                        <li key={idx} className="text-gray-700">
-                            {typeof step === 'string' ? step : step.description || `Step ${idx + 1}`}
-                        </li>
-                    ))}
-                </ol>
-            </div>
-        </div>
-        
-        {data.chef_tips && data.chef_tips.length > 0 && (
-          <div className="mt-8">
-            <h3 className="text-2xl font-semibold mb-4">Chef's Tips</h3>
-            <ul className="list-disc pl-5 space-y-2">
-              {data.chef_tips.map((tip, idx) => (
-                <li key={idx} className="text-gray-700">{tip}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        { (data.nutrition || data.nutritional_information) && (
-          <div className="mt-8">
-            <h3 className="text-2xl font-semibold mb-4">Nutritional Information (per serving)</h3>
-            <div className="bg-gray-50 p-4 rounded-lg">
-              {(() => {
-                const nutritionRaw = data.nutrition || data.nutritional_information;
-                if (nutritionRaw && typeof nutritionRaw === 'object') {
-                  const n = normalizeNutritionForView(nutritionRaw) || {};
-                  return (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                      <div>
-                        <p className="text-sm text-gray-500">Calories</p>
-                        <p className="font-medium">{n.calories || 'N/A'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Protein</p>
-                        <p className="font-medium">{n.protein ? (String(n.protein).endsWith('g') ? n.protein : `${n.protein}g`) : 'N/A'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Fat</p>
-                        <p className="font-medium">{n.fat ? (String(n.fat).endsWith('g') ? n.fat : `${n.fat}g`) : 'N/A'}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-500">Carbs</p>
-                        <p className="font-medium">{n.carbs ? (String(n.carbs).endsWith('g') ? n.carbs : `${n.carbs}g`) : 'N/A'}</p>
-                      </div>
-                    </div>
-                  );
-                }
-                return <p className="text-gray-700">{nutritionRaw}</p>;
-              })()}
-            </div>
-          </div>
-        )}
-
-        {videoUrl && (
-          <div className="mt-8">
-            <h3 className="text-2xl font-semibold mb-4">Source</h3>
-            <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-3">
-              <LinkIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-              <a href={videoUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">
-                {videoUrl}
-              </a>
-            </div>
-          </div>
-        )}
-        
-        <div className="flex flex-wrap justify-center gap-4 mt-8 pt-6 border-t border-gray-200">
-          <button
-            onClick={() => handleDownloadPdf(data)}
-            className="flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors"
-          >
-            <ArrowDownTrayIcon className="h-5 w-5" />
-            <span>Download PDF</span>
-          </button>
-          
-          {currentUser && (
-            <button
-              onClick={() => handleSaveRecipe(data)}
-              className="flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors"
-            >
-              <BookmarkIcon className="h-5 w-5" />
-              <span>Save to Recipes</span>
-            </button>
-          )}
-          
-          <button
-            onClick={onReset}
-            className="flex items-center justify-center gap-2 bg-amber-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-amber-700 transition-colors"
-          >
-            <PlusCircleIcon className="h-5 w-5" />
-            <span>Create New Recipe</span>
-          </button>
-        </div>
-      </div>
+      <RecipeView
+        recipe={data}
+        variant="inline"
+        isSaved={false}
+        currentUser={currentUser}
+        onSave={handleSaveRecipe}
+        onDownload={handleDownloadPdf}
+        onCreateNew={onReset}
+      />
       
       {/* Success Modal */}
       {showSuccessModal && (
@@ -482,19 +395,58 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
                 Recipe Saved!
               </h3>
               <p className="text-gray-600 mb-6">
-                Your recipe has been successfully saved to your collection. You'll be redirected to your recipes page shortly.
+                Your recipe has been saved. You can now add tags to help organize it.
               </p>
               <div className="flex justify-center">
                 <button
                   onClick={() => {
                     setShowSuccessModal(false);
-                    navigate('/my-recipes');
+                    setTagsEditorOpen(true);
                   }}
                   className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-colors"
                 >
-                  Go to My Recipes
+                  Add Tags
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tags editor modal */}
+      {tagsEditorOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>setTagsEditorOpen(false)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full p-6" onClick={(e)=>e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-2">Add tags to this recipe</h3>
+            <p className="text-gray-600 mb-4">Type a tag and press Enter. Add at least three tags.</p>
+            <TagInput tags={proposedTags} setTags={setProposedTags} />
+            {/* Suggested tags */}
+            {suggestions.length > 0 && (
+              <div className="mt-4">
+                <p className="text-sm text-gray-600 mb-2">Suggested:</p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestions.map((s, idx) => (
+                    <button key={idx} onClick={()=>setProposedTags(t=>[...(t||[]), { label: s.label }])} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(s.type)}`}>
+                      <span className="font-medium">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex justify-end gap-3 mt-6">
+              <button className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50" onClick={()=>{setTagsEditorOpen(false); navigate('/my-recipes');}}>Skip</button>
+              <button className="px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700" onClick={async ()=>{
+                try {
+                  const keywords = proposedTags.map(t=>t.label || t);
+                  if (saveResultId) {
+                    const res = await fetch(`${API_BASE}/recipes/${saveResultId}/tags`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ keywords }) });
+                    await res.json().catch(()=>({}));
+                  }
+                } finally {
+                  setTagsEditorOpen(false);
+                  navigate('/my-recipes');
+                }
+              }}>Save Tags</button>
             </div>
           </div>
         </div>

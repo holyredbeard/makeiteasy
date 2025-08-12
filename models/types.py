@@ -29,6 +29,8 @@ class RecipeContent(BaseModel):
     nutritional_information: Optional[dict] = None
     thumbnail_path: Optional[str] = None
     image_url: Optional[str] = None
+    # Conversion/variant metadata stored alongside the recipe content
+    conversion: Optional[dict] = None
 
 class SavedRecipe(BaseModel):
     id: int
