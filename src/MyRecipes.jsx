@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, useLocation, Link } from 'react-router-dom';
 import { 
   LinkIcon, 
   XMarkIcon, 
@@ -10,6 +10,44 @@ import {
 import RecipeView from './components/RecipeView';
 
 const API_BASE = 'http://localhost:8001/api/v1';
+
+const CreateCollectionForm = ({ onCreated }) => {
+    const [title, setTitle] = useState('');
+    const [description, setDescription] = useState('');
+    const [visibility, setVisibility] = useState('public');
+    const [imageUrl, setImageUrl] = useState('');
+    return (
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Title</label>
+          <input className="w-full border rounded-lg px-3 py-2" value={title} onChange={(e)=>setTitle(e.target.value)} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Description</label>
+          <textarea className="w-full border rounded-lg px-3 py-2" value={description} onChange={(e)=>setDescription(e.target.value)} />
+        </div>
+        <div className="flex gap-3">
+          <select className="border rounded-lg px-3 py-2" value={visibility} onChange={(e)=>setVisibility(e.target.value)}>
+            <option value="public">Public</option>
+            <option value="private">Private</option>
+          </select>
+          <input className="flex-1 border rounded-lg px-3 py-2" placeholder="Image URL (optional)" value={imageUrl} onChange={(e)=>setImageUrl(e.target.value)} />
+        </div>
+        <div className="flex justify-end gap-3">
+          <button className="px-4 py-2 rounded-lg border" onClick={()=>onCreated?.(null)}>Cancel</button>
+          <button className="px-4 py-2 rounded-lg bg-green-600 text-white" onClick={async()=>{
+            try {
+              const res = await fetch(`${API_BASE}/collections`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ title, description, visibility, image_url: imageUrl }) });
+              const json = await res.json();
+              onCreated?.(json.id || null);
+            } catch { onCreated?.(null); }
+          }}>Create</button>
+        </div>
+      </div>
+    );
+};
+
+// API_BASE already defined above
 const STATIC_BASE = 'http://localhost:8001';
 const PROXY = `${STATIC_BASE}/api/v1/proxy-image?url=`;
 // --- Tagging UI components ---
@@ -91,6 +129,18 @@ const asThumbSrc = (imageUrl) => {
         return url.startsWith('http') ? url : STATIC_BASE + url;
     }
     return PROXY + encodeURIComponent(url);
+};
+
+// Helper: human friendly saved time
+const humanSaved = (dateStr) => {
+    try {
+        const saved = new Date(dateStr);
+        const now = new Date();
+        const days = Math.max(0, Math.floor((now - saved) / (1000*60*60*24)));
+        if (days === 0) return 'Saved today';
+        if (days === 1) return 'Saved 1 day ago';
+        return `Saved ${days} days ago`;
+    } catch { return `Saved ${new Date(dateStr).toLocaleDateString()}`; }
 };
 
 // --- Reusable Sub-components ---
@@ -226,7 +276,7 @@ const SourceSection = ({ url }) => (
 );
 
 // --- Dropdown Components ---
-const Dropdown = ({ label, value, options, onChange, isOpen, onToggle }) => (
+const Dropdown = ({ label, value, options, onChange, isOpen, onToggle, isOptionDisabled }) => (
     <div className="relative">
         <button
             onClick={onToggle}
@@ -237,20 +287,28 @@ const Dropdown = ({ label, value, options, onChange, isOpen, onToggle }) => (
         </button>
         {isOpen && (
             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg">
-                {options.map((option) => (
-                    <button
-                        key={option.value}
-                        onClick={() => {
-                            onChange(option.value);
-                            onToggle();
-                        }}
-                        className={`block w-full text-left px-4 py-2 text-sm hover:bg-gray-100 ${
-                            value === option.value ? 'bg-blue-50 text-blue-700' : 'text-gray-700'
-                        }`}
-                    >
-                        {option.label}
-                    </button>
-                ))}
+                {options.map((option) => {
+                    const disabled = typeof isOptionDisabled === 'function' ? !!isOptionDisabled(option) : false;
+                    const isSelected = value === option.value;
+                    const baseCls = 'block w-full text-left px-4 py-2 text-sm';
+                    const stateCls = disabled
+                        ? 'text-gray-300 cursor-not-allowed'
+                        : (isSelected ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-100');
+                    return (
+                        <button
+                            key={option.value}
+                            disabled={disabled}
+                            onClick={() => {
+                                if (disabled) return;
+                                onChange(option.value);
+                                onToggle();
+                            }}
+                            className={`${baseCls} ${stateCls}`}
+                        >
+                            {option.label}
+                        </button>
+                    );
+                })}
             </div>
         )}
     </div>
@@ -271,7 +329,7 @@ const Star = ({ filled, onClick, onMouseEnter, onMouseLeave, ariaLabel }) => (
     </button>
 );
 
-const RecipeModal = ({ recipe, onClose, currentUser, onOpenRecipe }) => {
+const RecipeModal = ({ recipe, onClose, currentUser, onOpenRecipe, onTagsUpdated }) => {
     if (!recipe) return null;
     // Close on ESC
     useEffect(() => {
@@ -298,6 +356,7 @@ const RecipeModal = ({ recipe, onClose, currentUser, onOpenRecipe }) => {
                     currentUser={currentUser}
                     onOpenRecipeInModal={(id, state)=>{ if (!id) return; onOpenRecipe?.(id, state); }}
                     sourceFrom={recipe._sourceFrom}
+                    onTagsUpdated={(tags)=>{ try { onTagsUpdated?.(tags); } catch {} }}
                   />
                 </div>
             </div>
@@ -306,9 +365,40 @@ const RecipeModal = ({ recipe, onClose, currentUser, onOpenRecipe }) => {
 };
 
 // --- Recipe Card Component ---
-const RecipeCard = ({ recipe, viewMode, onClick, onDelete }) => {
+const RecipeCard = ({ recipe, viewMode, onClick, onDelete, onFilterByChip, currentUser, onAddToCollection }) => {
     const { title, description, image_url, ingredients } = recipe.recipe_content;
     const [cardRating, setCardRating] = React.useState({ average: null, count: 0 });
+    const chips = React.useMemo(() => {
+        const out = [];
+        const rc = recipe?.recipe_content || {};
+        const conv = rc.conversion || {};
+        if (conv.isVariant) out.push({ label: 'Variant', cls: 'bg-blue-600 text-white' });
+        const normalize = (k) => String(k || '').toLowerCase().replace(/\s+/g, '-');
+        let presets = [];
+        try { presets = ((conv.constraints || {}).presets || []).map(normalize); } catch {}
+        if (presets.length === 0) {
+            const t = String(rc.title || '').toLowerCase();
+            if (/\bvegan\b/.test(t)) presets.push('vegan');
+            else if (/\bvegetarian\b/.test(t)) presets.push('vegetarian');
+            else if (/\bpesc(etarian)?\b/.test(t)) presets.push('pescetarian');
+        }
+        if (presets.includes('vegan')) out.push({ label: 'Vegan', cls: 'bg-emerald-600 text-white' });
+        if (presets.includes('vegetarian')) out.push({ label: 'Vegetarian', cls: 'bg-lime-600 text-white' });
+        if (presets.includes('pescetarian')) out.push({ label: 'Pescetarian', cls: 'bg-sky-600 text-white' });
+        // Include approved tags from backend
+        try {
+            const approved = (recipe.tags && recipe.tags.approved) ? recipe.tags.approved : [];
+            for (const t of approved) {
+                const key = String(t?.keyword || t).toLowerCase();
+                if (key === 'vegan' && !out.find(c=>c.label==='Vegan')) { out.push({ label:'Vegan', cls:'bg-emerald-600 text-white' }); continue; }
+                if (key === 'vegetarian' && !out.find(c=>c.label==='Vegetarian')) { out.push({ label:'Vegetarian', cls:'bg-lime-600 text-white' }); continue; }
+                if (key === 'pescetarian' && !out.find(c=>c.label==='Pescetarian')) { out.push({ label:'Pescetarian', cls:'bg-sky-600 text-white' }); continue; }
+                // default subdued style for generic tags
+                out.push({ label: t.keyword || t, cls: 'bg-gray-100 text-gray-700 border border-gray-200' });
+            }
+        } catch {}
+        return out;
+    }, [recipe]);
 
     React.useEffect(() => {
         let cancelled = false;
@@ -345,30 +435,87 @@ const RecipeCard = ({ recipe, viewMode, onClick, onDelete }) => {
             case 'title_image':
                 return (
                     <>
-                        <img 
-                            src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
-                            alt={title} 
-                            className="w-full h-56 object-cover rounded-t-lg" 
-                            onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
-                        />
-                        <div className="p-5">
-                            <TitleRow>{title}</TitleRow>
+                        <div className="relative w-full h-56">
+                          <img 
+                              src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
+                              alt={title} 
+                              className="w-full h-56 object-cover rounded-t-lg" 
+                              onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
+                          />
+                          <div className="absolute inset-0 rounded-t-lg bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+                          <div className="absolute top-3 left-3">
+                            <div className="flex items-center bg-white/95 rounded-full px-2 py-0.5 text-xs shadow">
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="#facc15" aria-hidden="true" className="mr-1"><path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                              <span className="text-gray-800 font-semibold">{cardRating && cardRating.count > 0 ? Number(cardRating.average || 0).toFixed(1) : '-'}</span>
+                            </div>
+                          </div>
+                          <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
+                            <div>
+                              <h2 className="text-white text-lg font-extrabold drop-shadow-sm">{title}</h2>
+                              {(() => {
+                                const ownerDisplayName = recipe.owner_username || recipe.owner || (recipe.user?.username) || (recipe.user?.full_name) || 'You';
+                                const ownerUsername = recipe.owner_username || recipe.user?.username || ownerDisplayName;
+                                const ownerIsSelf = !!currentUser && (ownerDisplayName === 'You' || String(recipe.user?.id || '') === String(currentUser.id || ''));
+                                const linkTarget = ownerIsSelf ? '/profile' : `/users/${encodeURIComponent(ownerUsername)}`;
+                                return (
+                                  <p className="text-white/90 text-xs mt-2">
+                                    By <Link to={linkTarget} className="font-semibold underline-offset-2 hover:underline">{ownerDisplayName}</Link>
+                                  </p>
+                                );
+                              })()}
+                            </div>
+                          </div>
                         </div>
                     </>
                 );
             case 'title_image_description':
                 return (
                     <>
-                        <img 
-                            src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
-                            alt={title} 
-                            className="w-full h-56 object-cover rounded-t-lg" 
-                            onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
-                        />
+                        <div className="relative w-full h-56">
+                          <img 
+                              src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
+                              alt={title} 
+                              className="w-full h-56 object-cover rounded-t-lg" 
+                              onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
+                          />
+                          <div className="absolute inset-0 rounded-t-lg bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+                          <div className="absolute top-3 left-3">
+                            <div className="flex items-center bg-white/95 rounded-full px-2 py-0.5 text-xs shadow">
+                              <svg viewBox="0 0 24 24" width="14" height="14" fill="#facc15" aria-hidden="true" className="mr-1"><path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                              <span className="text-gray-800 font-semibold">{cardRating && cardRating.count > 0 ? Number(cardRating.average || 0).toFixed(1) : '-'}</span>
+                            </div>
+                          </div>
+                          <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
+                            <div>
+                              <h2 className="text-white text-lg font-extrabold drop-shadow-sm">{title}</h2>
+                              {(() => {
+                                const ownerDisplayName = recipe.owner_username || recipe.owner || (recipe.user?.username) || (recipe.user?.full_name) || 'You';
+                                const ownerUsername = recipe.owner_username || recipe.user?.username || ownerDisplayName;
+                                const ownerIsSelf = !!currentUser && (ownerDisplayName === 'You' || String(recipe.user?.id || '') === String(currentUser.id || ''));
+                                const linkTarget = ownerIsSelf ? '/profile' : `/users/${encodeURIComponent(ownerUsername)}`;
+                                return (
+                                  <p className="text-white/90 text-xs mt-2">
+                                    By <Link to={linkTarget} className="font-semibold underline-offset-2 hover:underline">{ownerDisplayName}</Link>
+                                  </p>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        </div>
                         <div className="p-5">
-                            <TitleRow>{title}</TitleRow>
-                            <div className="h-2" />
-                            <p className="text-sm text-gray-500 line-clamp-2">{description}</p>
+                            {chips.length > 0 && (
+                              <div className="mb-2 flex flex-wrap gap-2">
+                                {(() => { const max = 3; const visible = chips.slice(0, max); const extra = chips.length - visible.length; return (
+                                  <>
+                                    {visible.map((c, i) => (
+                                      <button key={`${c.label}-${i}`} onClick={(e)=>{ e.stopPropagation(); if (typeof onFilterByChip === 'function') onFilterByChip(c.label); }} className={`text-xs px-2 py-1 rounded-full shadow-sm ${c.cls} cursor-pointer hover:opacity-90`} title={`Filter by ${c.label}`}>{c.label}</button>
+                                    ))}
+                                    {extra > 0 && (<span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-700">+{extra}</span>)}
+                                  </>
+                                ); })()}
+                              </div>
+                            )}
+                            <p className="text-sm text-gray-600 line-clamp-2">{description}</p>
                         </div>
                     </>
                 );
@@ -383,6 +530,17 @@ const RecipeCard = ({ recipe, viewMode, onClick, onDelete }) => {
                         />
                         <div className="p-5">
                             <TitleRow>{title}</TitleRow>
+                            {(() => {
+                              const ownerDisplayName = recipe.owner_username || recipe.owner || (recipe.user?.username) || (recipe.user?.full_name) || 'You';
+                              const ownerUsername = recipe.owner_username || recipe.user?.username || ownerDisplayName;
+                              const ownerIsSelf = !!currentUser && (ownerDisplayName === 'You' || String(recipe.user?.id || '') === String(currentUser.id || ''));
+                              const linkTarget = ownerIsSelf ? '/profile' : `/users/${encodeURIComponent(ownerUsername)}`;
+                              return (
+                                <p className="text-gray-600 text-xs mt-3">
+                                  By <Link to={linkTarget} className="font-semibold text-gray-800 underline-offset-2 hover:underline">{ownerDisplayName}</Link>
+                                </p>
+                              );
+                            })()}
                             <div className="h-2" />
                             {ingredients && ingredients.length > 0 && (
                                 <div className="text-sm text-gray-600">
@@ -425,10 +583,14 @@ const RecipeCard = ({ recipe, viewMode, onClick, onDelete }) => {
             >
               <svg viewBox="0 0 24 24" width="18" height="18" fill="#ef4444"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z"/></svg>
             </button>
+            {/* Chips moved to bottom section above description */}
             {renderContent()}
             <div className="px-5 pb-5 mt-auto">
-                <div className="flex items-center text-xs text-gray-400 pt-4 border-t border-gray-100">
-                    <span>Saved on {new Date(recipe.created_at).toLocaleDateString()}</span>
+                <div className="flex items-center justify-between text-xs pt-4 border-t border-gray-100">
+                    <span className="text-gray-400">{humanSaved(recipe.created_at)}</span>
+                    <button className="text-[#e87b35] font-medium hover:underline" onClick={(e)=>{ e.stopPropagation(); if (typeof onAddToCollection === 'function') onAddToCollection(recipe); }}>
+                        + Add to Collection
+                    </button>
                 </div>
             </div>
         </div>
@@ -439,35 +601,48 @@ const RecipeCard = ({ recipe, viewMode, onClick, onDelete }) => {
 const MyRecipes = () => {
     const { currentUser } = useOutletContext();
     const navigate = useNavigate();
+    const location = useLocation();
     const [recipes, setRecipes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedRecipe, setSelectedRecipe] = useState(null);
     const [toDelete, setToDelete] = useState(null);
+    const [justInsertedId, setJustInsertedId] = useState(null);
+    const [tagFilter, setTagFilter] = useState(null);
+    // Always reset any residual filter on mount to avoid showing a single filtered recipe
+    useEffect(() => { setTagFilter(null); }, []);
     
     // Dropdown states
     const [viewMode, setViewMode] = useState('title_image_description');
-    const [layoutMode, setLayoutMode] = useState('grid_2');
+    const [layoutMode, setLayoutMode] = useState('grid_3');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isLayoutDropdownOpen, setIsLayoutDropdownOpen] = useState(false);
 
+    // Enforce valid combinations: List layout only supports Title only view
+    useEffect(() => {
+        if (layoutMode === 'list' && viewMode !== 'title_only') {
+            setViewMode('title_only');
+        }
+    }, [layoutMode]);
+
     // Dropdown options
     const viewOptions = [
-        { value: 'title_only', label: 'Bara titel' },
-        { value: 'title_image', label: 'Titel + bild' },
-        { value: 'title_image_description', label: 'Titel + bild + description' },
-        { value: 'title_image_ingredients', label: 'Titel + bild + ingredients' }
+        { value: 'title_only', label: 'Title only' },
+        { value: 'title_image', label: 'Title + image' },
+        { value: 'title_image_description', label: 'Title + image + description' },
+        { value: 'title_image_ingredients', label: 'Title + image + ingredients' }
     ];
 
     const layoutOptions = [
-        { value: 'grid_2', label: 'Cols (2 bilder per col)' },
-        { value: 'grid_3', label: 'Cols (3 bilder per col)' },
-        { value: 'list', label: 'Lista (bara titel)' }
+        { value: 'grid_2', label: 'Columns (2 per row)' },
+        { value: 'grid_3', label: 'Columns (3 per row)' },
+        { value: 'list', label: 'List (title only)' }
     ];
 
     useEffect(() => {
         const fetchRecipes = async () => {
             try {
+                // Fetch only current user's saved recipes (backend defaults to scope="mine")
                 const response = await fetch(`${API_BASE}/recipes`, { credentials: 'include' });
                 if (!response.ok) throw new Error('Failed to fetch recipes from the server.');
                 const data = await response.json();
@@ -482,29 +657,101 @@ const MyRecipes = () => {
         fetchRecipes();
     }, []);
 
+    // Listen for optimistic insert events from Convert flow
+    useEffect(() => {
+        const onVariantSaved = (e) => {
+            const v = e?.detail?.recipe;
+            if (!v || !v.id) return;
+            setRecipes((list) => {
+                const exists = (list || []).some(r => String(r.id) === String(v.id));
+                const next = exists ? list.map(r => String(r.id) === String(v.id) ? v : r) : [v, ...list];
+                return next;
+            });
+            setJustInsertedId(String(v.id));
+            setTimeout(() => setJustInsertedId(null), 900);
+        };
+        window.addEventListener('recipes:variant-saved', onVariantSaved);
+        return () => window.removeEventListener('recipes:variant-saved', onVariantSaved);
+    }, []);
+
+    // Deep-link: open modal if ?variant=ID is present
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const variantId = params.get('variant');
+        if (!variantId || recipes.length === 0) return;
+        const r = recipes.find(x => String(x.id) === String(variantId));
+        if (r) {
+            if (window.innerWidth < 768) navigate(`/recipes/${r.id}`);
+            else setSelectedRecipe(r);
+        }
+    }, [location.search, recipes, navigate]);
+
     const getGridClasses = () => {
         switch (layoutMode) {
             case 'grid_2':
-                return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3';
+                return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2';
             case 'grid_3':
                 return 'grid-cols-1 md:grid-cols-3';
             case 'list':
                 return 'grid-cols-1';
             default:
-                return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3';
+                return 'grid-cols-1 md:grid-cols-3';
         }
     };
+
+    // Collection picker state
+    const [showPicker, setShowPicker] = useState(false);
+    const [pickerRecipe, setPickerRecipe] = useState(null);
+    const [collections, setCollections] = useState([]);
+    const [showCreate, setShowCreate] = useState(false);
+
+    const openPicker = async () => {
+        try {
+            const res = await fetch('http://localhost:8001/api/v1/collections', { credentials: 'include' });
+            const data = await res.json();
+            setCollections(Array.isArray(data) ? data : []);
+        } catch {}
+    };
+    useEffect(() => { if (showPicker) openPicker(); }, [showPicker]);
 
     if (loading) return <div className="text-center p-8">Loading recipes...</div>;
     if (error) return <div className="text-center p-8 text-red-500">Error: {error}</div>;
 
+    const normalize = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '-');
+    const visibleRecipes = (() => {
+        if (!tagFilter) return recipes;
+        const needle = normalize(tagFilter);
+        return (recipes || []).filter((r) => {
+            const rc = (r.recipe_content || {});
+            const conv = rc.conversion || {};
+            if (needle === 'variant' && conv.isVariant) return true;
+            const presets = ((conv.constraints || {}).presets || []).map(normalize);
+            if (presets.includes(needle)) return true;
+            const appr = ((r.tags || {}).approved || []).map(t => normalize(t.keyword));
+            if (appr.includes(needle)) return true;
+            return false;
+        });
+    })();
+
+    // helper: human friendly saved time
+    const humanSaved = (dateStr) => {
+        try {
+            const saved = new Date(dateStr);
+            const now = new Date();
+            const days = Math.max(0, Math.floor((now - saved) / (1000*60*60*24)));
+            if (days === 0) return 'Saved today';
+            if (days === 1) return 'Saved 1 day ago';
+            return `Saved ${days} days ago`;
+        } catch { return `Saved ${new Date(dateStr).toLocaleDateString()}`; }
+    };
+
     return (
         <div className="container mx-auto p-8">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8 gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-8 gap-4">
                 <h1 className="text-4xl font-bold text-gray-800">My Saved Recipes</h1>
                 
                 {/* Dropdown Controls */}
-                <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col sm:flex-row gap-4 self-start sm:self-auto">
                     {/* View Mode Dropdown */}
                     <div className="w-full sm:w-64">
                         <label className="block text-sm font-medium text-gray-700 mb-2">View Mode</label>
@@ -515,6 +762,7 @@ const MyRecipes = () => {
                             onChange={setViewMode}
                             isOpen={isDropdownOpen}
                             onToggle={() => setIsDropdownOpen(!isDropdownOpen)}
+                            isOptionDisabled={(opt) => layoutMode === 'list' && opt.value !== 'title_only'}
                         />
                     </div>
                     
@@ -532,6 +780,12 @@ const MyRecipes = () => {
                     </div>
                 </div>
             </div>
+            {tagFilter && (
+                <div className="mb-6 flex items-center justify-between bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-lg">
+                    <div>Filter: <span className="font-semibold">{tagFilter}</span></div>
+                    <button className="text-sm underline" onClick={()=>setTagFilter(null)}>Clear filter</button>
+                </div>
+            )}
 
             {recipes.length === 0 ? (
                 <div className="text-center py-16">
@@ -541,41 +795,64 @@ const MyRecipes = () => {
                 </div>
             ) : (
                 <div className={`grid ${getGridClasses()} gap-8`}>
-                    {recipes.map(recipe => (
-                        <RecipeCard
-                            key={recipe.id}
-                            recipe={recipe}
-                            viewMode={viewMode}
-                            onClick={() => {
-                                if (window.innerWidth < 768) navigate(`/recipes/${recipe.id}`);
-                                else setSelectedRecipe(recipe);
-                            }}
-                            onDelete={(r) => setToDelete(r)}
-                        />
+                    {visibleRecipes.map(recipe => (
+                        <div key={recipe.id} className={justInsertedId === String(recipe.id) ? 'animate-slide-in-top' : ''}>
+                          <RecipeCard
+                              recipe={recipe}
+                              viewMode={viewMode}
+                              onFilterByChip={(label)=> setTagFilter(label)}
+                              currentUser={currentUser}
+                              onClick={() => {
+                                  // Always navigate to full page view; pass state so Back returns to My Recipes
+                                  navigate(`/recipes/${recipe.id}`, { state: { fromMyRecipes: true } });
+                              }}
+                              onDelete={(r) => setToDelete(r)}
+                              onAddToCollection={(r)=>{ setPickerRecipe(r); setShowPicker(true); }}
+                          />
+                        </div>
                     ))}
                 </div>
             )}
-            <RecipeModal
-              key={selectedRecipe?.id || 'modal-empty'}
-              recipe={selectedRecipe}
-              onClose={() => setSelectedRecipe(null)}
-              currentUser={currentUser}
-              onOpenRecipe={async (targetId, state)=>{
-                try {
-                  const res = await fetch(`${API_BASE}/recipes`, { credentials: 'include' });
-                  const list = await res.json();
-                  const r = (list || []).find(x => String(x.id) === String(targetId));
-                  if (r) {
-                    if (state?.clearSource) {
-                      r._sourceFrom = null;
-                    } else if (state?.sourceRecipeId) {
-                      r._sourceFrom = { id: state.sourceRecipeId, title: state.sourceTitle };
-                    }
-                    setSelectedRecipe(r);
-                  }
-                } catch {}
-              }}
-            />
+            {/* Modal removed to always use full page view */}
+
+            {showPicker && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>setShowPicker(false)}>
+                <div className="bg-white rounded-2xl max-w-lg w-full p-6" onClick={(e)=>e.stopPropagation()}>
+                  <h3 className="text-2xl font-bold mb-4">Add to Collection</h3>
+                  <div className="space-y-3 max-h-60 overflow-auto">
+                    {collections.map(c => (
+                      <button key={c.id} className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 border" onClick={async()=>{
+                        await fetch(`http://localhost:8001/api/v1/collections/${c.id}/recipes`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ recipe_id: pickerRecipe.id }) });
+                        setShowPicker(false);
+                      }}>
+                        <div className="flex items-center gap-3">
+                          <img src={(c.image_url && (c.image_url.startsWith('http') ? c.image_url : `${STATIC_BASE}${c.image_url}`)) || 'https://placehold.co/80x60?text=+'} alt="thumb" className="w-16 h-12 object-cover rounded" onError={(e)=>{ e.currentTarget.src='https://placehold.co/80x60?text=+'; }} />
+                          <div>
+                            <div className="font-semibold">{c.title}</div>
+                            <div className="text-xs text-gray-500">{c.recipes_count} recept</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 flex justify-between items-center">
+                    <button className="text-sm underline" onClick={()=>setShowPicker(false)}>Cancel</button>
+                    <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white" onClick={()=>setShowCreate(true)}>+ New Collection</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {showPicker && showCreate && (
+              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>setShowCreate(false)}>
+                <div className="bg-white rounded-2xl max-w-lg w-full p-6" onClick={(e)=>e.stopPropagation()}>
+                  <h3 className="text-2xl font-bold mb-4">New Collection</h3>
+                  <CreateCollectionForm onCreated={async (cid)=>{ if (cid) {
+                    await fetch(`http://localhost:8001/api/v1/collections/${cid}/recipes`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ recipe_id: pickerRecipe.id }) });
+                  } setShowCreate(false); setShowPicker(false); }} />
+                </div>
+              </div>
+            )}
 
             {/* Delete confirmation modal */}
             {toDelete && (

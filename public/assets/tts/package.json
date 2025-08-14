@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "piper-wasm": "^0.1.4"
+  }
+}

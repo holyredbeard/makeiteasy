@@ -6,7 +6,7 @@ const SUGGESTIONS = [
   'quick','easy','healthy','highprotein','lowcarb'
 ];
 
-export default function TagInput({ tags, setTags, placeholder = 'Add a tag...' }) {
+export default function TagInput({ tags, setTags, placeholder = 'Add a tag...', required = false, onValidityChange }) {
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
   const normalized = useMemo(()=>String(input).trim().toLowerCase(), [input]);
@@ -23,6 +23,11 @@ export default function TagInput({ tags, setTags, placeholder = 'Add a tag...' }
   };
 
   const remove = (val) => setTags((tags||[]).filter(x => (x.label||x) !== val));
+
+  const isValid = (tags || []).length > 0 || !required;
+  if (typeof onValidityChange === 'function') {
+    try { onValidityChange(isValid); } catch {}
+  }
 
   return (
     <div>
@@ -50,7 +55,10 @@ export default function TagInput({ tags, setTags, placeholder = 'Add a tag...' }
           ))}
         </div>
       )}
-      <div className="text-right mt-2">
+      <div className="flex items-center justify-between mt-2">
+        {required && !isValid && (
+          <span className="text-xs text-red-600">At least one tag is required</span>
+        )}
         <button onClick={()=>add(input)} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700">Add</button>
       </div>
     </div>

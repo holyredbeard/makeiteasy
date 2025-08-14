@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
@@ -9,7 +9,10 @@ import {
   BugAntIcon,
   Cog6ToothIcon,
   CreditCardIcon,
-  LifebuoyIcon
+  LifebuoyIcon,
+  PlusIcon,
+  LinkIcon as LinkOutlineIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 // Logging UI disabled
 
@@ -24,8 +27,10 @@ function normalizeBackendUrl(pathOrUrl) {
 
 const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => {
   const [openUserMenu, setOpenUserMenu] = useState(false);
+  const [openNewMenu, setOpenNewMenu] = useState(false);
+  const navigate = useNavigate();
   return (
-    <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/80 shadow-sm sticky top-0 z-50 font-poppins">
+    <header className="bg-[#5b8959] sticky top-0 z-50 shadow-sm" style={{fontFamily: 'Poppins, sans-serif'}}>
       <div className="max-w-7xl mx-auto px-6">
         <div className="flex justify-between items-center py-3">
           <div className="flex items-center gap-2">
@@ -34,51 +39,82 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
             </Link>
           </div>
           {currentUser ? (
-            <div className="flex items-center gap-6 relative">
-              <Link to="/my-recipes" className="flex items-center gap-2 text-sm text-gray-600 hover:text-blue-600 transition-colors">
-                <BookOpenIcon className="h-5 w-5" />
-                <span className="hidden sm:block">My Recipes</span>
-              </Link>
+            <div className="flex items-center gap-6 relative w-full">
+              <nav className="flex-1 flex justify-center gap-4 md:gap-6 transform translate-x-4 md:translate-x-6">
+                <Link
+                  to="/explore"
+                  className="text-base text-white/95 px-3 py-2 rounded-lg transition-colors hover:text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  title="Explore"
+                >
+                  <span className="sm:block">Explore</span>
+                </Link>
+                <Link
+                  to="/collections"
+                  className="text-base text-white/95 px-3 py-2 rounded-lg transition-colors hover:text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  title="Collections"
+                >
+                  <span className="sm:block">Collections</span>
+                </Link>
+                <Link
+                  to="/my-recipes"
+                  className="text-base text-white/95 px-3 py-2 rounded-lg transition-colors hover:text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  title="My Recipes"
+                >
+                  <span className="sm:block">My Recipes</span>
+                </Link>
+              </nav>
               {currentUser.is_admin && (
                 <button 
                   onClick={showTestPdfModal}
-                  className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                  className="flex items-center gap-2 text-sm text-white/90 hover:text-white transition-colors"
                 >
                   <WrenchScrewdriverIcon className="h-5 w-5" />
                   <span className="hidden sm:block">TEST PDF</span>
                 </button>
               )}
-              <button onClick={() => setOpenUserMenu(v => !v)} className="flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 transition-colors focus:outline-none">
+              <NewRecipeSplitButton onCreate={() => navigate('/create')} onExtract={() => navigate('/extract')} />
+              <button onClick={() => setOpenUserMenu(v => !v)} className="flex items-center gap-2 text-sm text-white hover:text-white/90 transition-colors focus:outline-none">
                 {currentUser?.avatar_url ? (
                   <img src={normalizeBackendUrl(currentUser.avatar_url)} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
                 ) : (
-                  <UserCircleIcon className="h-8 w-8 text-gray-500" />
+                  <UserCircleIcon className="h-8 w-8 text-white" />
                 )}
               </button>
               {openUserMenu && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
-                  <div className="py-1">
-                    <Link to="/profile" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50" onClick={() => setOpenUserMenu(false)}>
+                <div className="absolute right-0 top-full mt-2 z-50">
+                  {/* Arrow behind bubble */}
+                  <div className="absolute -top-1 right-3 w-3 h-3 bg-white/95 ring-1 ring-black/5 rotate-45 z-0" />
+                  {/* Bubble */}
+                  <div className="w-64 origin-top-right rounded-xl ring-1 ring-black/5 shadow-lg bg-white/95 backdrop-blur animate-menu-pop relative z-10">
+                    <div className="py-1" role="menu" aria-label="User menu">
+                    {/* My Profile (public) */}
+                    <Link to={`/users/${encodeURIComponent(currentUser?.username || '')}`} title="View your public profile" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 font-medium" onClick={() => setOpenUserMenu(false)}>
                       <UserCircleIcon className="h-5 w-5 text-gray-500" />
-                      <span>Profile</span>
+                      <span>My Profile</span>
                     </Link>
-                    <Link to="#" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50">
+                    {/* Edit Profile */}
+                    <Link to="/profile" title="Edit your profile" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50" onClick={() => setOpenUserMenu(false)}>
+                      <Cog6ToothIcon className="h-5 w-5 text-gray-500" />
+                      <span>Edit Profile</span>
+                    </Link>
+                    <Link to="/settings" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50" title="Settings">
                       <Cog6ToothIcon className="h-5 w-5 text-gray-500" />
                       <span>Settings</span>
                     </Link>
-                    <Link to="#" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50">
+                    <Link to="/billing" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50" title="Subscription / Billing">
                       <CreditCardIcon className="h-5 w-5 text-gray-500" />
                       <span>Subscription / Billing</span>
                     </Link>
-                    <Link to="#" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50">
+                    <Link to="/help" className="flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50" title="Help & Support">
                       <LifebuoyIcon className="h-5 w-5 text-gray-500" />
                       <span>Help & Support</span>
                     </Link>
                     <div className="my-1 border-t border-gray-200" />
-                    <button onClick={handleLogout} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm hover:bg-gray-50 text-red-600">
+                    <button onClick={handleLogout} className="w-full text-left flex items-center gap-3 px-4 py-2 text-sm hover:bg-red-50 text-red-600">
                       <ArrowRightOnRectangleIcon className="h-5 w-5" />
                       <span>Sign Out</span>
                     </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -101,6 +137,109 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
         </div>
       </div>
     </header>
+  );
+};
+
+const NewRecipeSplitButton = ({ onCreate, onExtract }) => {
+  const [open, setOpen] = useState(false);
+  const containerRef = React.useRef(null);
+  const buttonRef = React.useRef(null);
+  const menuRef = React.useRef(null);
+  const item0Ref = React.useRef(null);
+  const item1Ref = React.useRef(null);
+  const [menuMinWidth, setMenuMinWidth] = useState(0);
+  const [focusIndex, setFocusIndex] = useState(0);
+
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target)) setOpen(false);
+    };
+    const onEsc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onEsc);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onEsc);
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      const w = buttonRef.current ? buttonRef.current.offsetWidth : 0;
+      setMenuMinWidth(w);
+    } catch {}
+  }, [open]);
+
+  const openMenu = () => { setOpen(true); setFocusIndex(0); setTimeout(()=> item0Ref.current?.focus(), 0); };
+  const toggleMenu = () => { setOpen(v => { const n = !v; if (n) setTimeout(()=> item0Ref.current?.focus(), 0); return n; }); };
+
+  const onKeyDownToggle = (e) => {
+    if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); toggleMenu(); }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (!open) openMenu(); else { setFocusIndex(0); item0Ref.current?.focus(); } }
+  };
+
+  const onKeyDownMenu = (e) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); const next = Math.min(1, focusIndex + 1); setFocusIndex(next); (next === 0 ? item0Ref : item1Ref).current?.focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); const next = Math.max(0, focusIndex - 1); setFocusIndex(next); (next === 0 ? item0Ref : item1Ref).current?.focus(); }
+    if (e.key === 'Escape') { e.preventDefault(); setOpen(false); }
+  };
+
+  return (
+    <div className="ml-auto mr-2 relative" ref={containerRef}>
+      <div ref={buttonRef} className="inline-flex rounded-lg shadow-sm overflow-hidden">
+        <button
+          onClick={onExtract}
+          className="flex items-center gap-2 bg-[#cc7c2e] text-white font-semibold py-2 px-4 hover:brightness-110 active:brightness-95 transition-colors"
+          title="Create Recipe"
+        >
+          <PlusIcon className="h-5 w-5" />
+          <span>New Recipe</span>
+        </button>
+        <button
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => toggleMenu()}
+          onKeyDown={onKeyDownToggle}
+          className="flex items-center justify-center bg-[#cc7c2e] text-white px-2 hover:brightness-110 active:brightness-95 transition-colors"
+          title="More options"
+        >
+          <ChevronDownIcon className="h-5 w-5" />
+        </button>
+      </div>
+      {open && (
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label="New recipe menu"
+          onKeyDown={onKeyDownMenu}
+          className="absolute right-0 mt-2 z-50 origin-top-right rounded-xl ring-1 ring-black/5 shadow-lg bg-white/95 backdrop-blur p-2 animate-menu-pop"
+          style={{ minWidth: menuMinWidth || undefined }}
+        >
+          <div className="absolute -top-1 right-6 w-3 h-3 bg-white/95 ring-1 ring-black/5 rotate-45" />
+          <button
+            ref={item0Ref}
+            role="menuitem"
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg hover:bg-neutral-50 active:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#cc7c2e]"
+            onClick={() => { setOpen(false); onExtract?.(); }}
+            title="Extract Recipe"
+          >
+            <LinkOutlineIcon className="h-5 w-5 text-neutral-600" />
+            <span>Extract Recipe</span>
+          </button>
+          <button
+            ref={item1Ref}
+            role="menuitem"
+            className="mt-1 w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg hover:bg-neutral-50 active:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#cc7c2e]"
+            onClick={() => { setOpen(false); onCreate?.(); }}
+            title="Create Recipe"
+          >
+            <PlusIcon className="h-5 w-5 text-neutral-600" />
+            <span>Create Recipe</span>
+          </button>
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -297,8 +436,11 @@ export default function Layout() {
   const [usageStatus, setUsageStatus] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [openNewMenu, setOpenNewMenu] = useState(false);
   // const [showLogPanel, setShowLogPanel] = useState(true); // disabled
   const navigate = useNavigate();
+  const location = useLocation();
+  const isHome = location.pathname === '/';
 
   const refreshCurrentUser = async () => {
     try {
@@ -324,6 +466,24 @@ export default function Layout() {
       checkUsageStatus();
     }
   }, []);
+
+  // Global deep-link handler: open variant modal from any route
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const variantId = params.get('variant');
+    if (!variantId) return;
+    const isDesktop = window.innerWidth >= 768;
+    // If already on target route, no redirect
+    if (isDesktop) {
+      if (location.pathname !== '/my-recipes') {
+        navigate(`/my-recipes?variant=${variantId}`, { replace: true });
+      }
+    } else {
+      if (!location.pathname.startsWith(`/recipes/${variantId}`)) {
+        navigate(`/recipes/${variantId}`, { replace: true });
+      }
+    }
+  }, [location.pathname, location.search, navigate]);
 
   const checkUsageStatus = async () => {
     try {
@@ -423,7 +583,7 @@ export default function Layout() {
   };
 
   return (
-    <div className="font-poppins bg-[#f9fafb] min-h-screen">
+    <div className={`font-poppins bg-[#FAF9F7] min-h-screen`}>
       <Header 
         currentUser={currentUser} 
         handleLogout={handleLogout} 
@@ -449,7 +609,7 @@ export default function Layout() {
         </div>
       )}
 
-      <main className="max-w-[1080px] mx-auto py-10 px-8">
+      <main className={`max-w-[1080px] mx-auto ${isHome ? 'py-0 px-0' : 'py-10 px-8'}`}>
         <Outlet context={{ currentUser, refreshCurrentUser, setCurrentUser }} />
       </main>
     </div>

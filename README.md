@@ -1,3 +1,13 @@
+## TTS (Text-to-Speech)
+
+By default the app uses browser TTS for online usage. To enable local Piper WASM models, set:
+
+```
+REACT_APP_USE_PIPER=true
+```
+
+in a `.env.local` at project root, and place worker/models under `public/assets/tts/`.
+
 # Food2Guide React Frontend
 
 ## Installation

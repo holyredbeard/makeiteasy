@@ -32,7 +32,8 @@
 
 body {
     font-family: 'Poppins', sans-serif;
-    background-color: #f9fafb;
+    /*background-color: #f9fafb;*/
+    background-color: rgb(232 229 221);
     min-height: 100vh;
     color: #333;
 }

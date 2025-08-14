@@ -38,6 +38,25 @@ class SavedRecipe(BaseModel):
     source_url: str
     created_at: datetime
     recipe_content: RecipeContent
+    # Include tags summary so cards can render chips without extra requests
+    tags: Optional[dict] = None
+
+class Collection(BaseModel):
+    id: int
+    owner_id: int
+    title: str
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    visibility: str = Field('public', description="public|private")
+    created_at: datetime
+    recipes_count: int = 0
+    likes_count: int = 0
+    followers_count: int = 0
+    rating_average: float = 0.0
+    rating_count: int = 0
+    owner_name: Optional[str] = None
+    owner_avatar: Optional[str] = None
+    owner_username: Optional[str] = None
 
 class Step(BaseModel):
     number: int = Field(..., description="The step number in the recipe.")
@@ -82,6 +101,12 @@ class UserBase(BaseModel):
     full_name: str = Field(..., description="User's full name")
     username: Optional[str] = Field(None, description="User's public username")
     avatar_url: Optional[str] = Field(None, description="URL to user's avatar image")
+    location: Optional[str] = Field(None, description="City/Country or free text location")
+    instagram_url: Optional[str] = Field(None, description="Link to Instagram profile")
+    youtube_url: Optional[str] = Field(None, description="Link to YouTube channel")
+    facebook_url: Optional[str] = Field(None, description="Link to Facebook profile")
+    tiktok_url: Optional[str] = Field(None, description="Link to TikTok profile")
+    website_url: Optional[str] = Field(None, description="Personal website")
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=6, description="User's password (minimum 6 characters)")
@@ -101,6 +126,9 @@ class User(UserBase):
     created_at: Optional[datetime] = Field(None, description="When the user account was created")
     saved_recipes: List[SavedRecipe] = []
     roles: List[str] = Field(default_factory=list, description="Roles assigned to the user")
+    followers_count: Optional[int] = Field(0, description="Number of followers")
+    following_count: Optional[int] = Field(0, description="Number of accounts this user follows")
+    followed_by_me: Optional[bool] = Field(False, description="Whether the viewer follows this user")
 
 class UserInDB(User):
     hashed_password: str = Field(..., description="Hashed password stored in database")

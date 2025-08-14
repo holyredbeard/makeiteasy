@@ -117,6 +117,12 @@ async def update_profile(request: Request, current_user: User = Depends(get_curr
         full_name = form.get('full_name')
         username = form.get('username')
         email = form.get('email')
+        location = form.get('location')
+        instagram_url = form.get('instagram_url')
+        youtube_url = form.get('youtube_url')
+        facebook_url = form.get('facebook_url')
+        tiktok_url = form.get('tiktok_url')
+        website_url = form.get('website_url')
         password = form.get('password')
         remove_avatar = str(form.get('remove_avatar', 'false')).lower() == 'true'
         avatar = form.get('avatar')  # UploadFile if provided
@@ -138,6 +144,18 @@ async def update_profile(request: Request, current_user: User = Depends(get_curr
                 c.execute("UPDATE users SET username=? WHERE id=?", (username.strip().lower(), current_user.id))
             if email:
                 c.execute("UPDATE users SET email=? WHERE id=?", (email, current_user.id))
+            if location is not None:
+                c.execute("UPDATE users SET location=? WHERE id=?", (location, current_user.id))
+            if instagram_url is not None:
+                c.execute("UPDATE users SET instagram_url=? WHERE id=?", (instagram_url, current_user.id))
+            if youtube_url is not None:
+                c.execute("UPDATE users SET youtube_url=? WHERE id=?", (youtube_url, current_user.id))
+            if facebook_url is not None:
+                c.execute("UPDATE users SET facebook_url=? WHERE id=?", (facebook_url, current_user.id))
+            if tiktok_url is not None:
+                c.execute("UPDATE users SET tiktok_url=? WHERE id=?", (tiktok_url, current_user.id))
+            if website_url is not None:
+                c.execute("UPDATE users SET website_url=? WHERE id=?", (website_url, current_user.id))
             if password:
                 from core.password import get_password_hash
                 c.execute("UPDATE users SET hashed_password=? WHERE id=?", (get_password_hash(password), current_user.id))

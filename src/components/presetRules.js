@@ -10,7 +10,7 @@ const DIET_PRIORITY = [
 ];
 
 export const PRESET_GROUPS = {
-  dietStyle: ["omnivore", "plant-based", "vegan", "vegetarian", "pescetarian"],
+  dietStyle: ["vegan", "vegetarian", "pescetarian"],
   addOns: ["add-meat", "add-fish", "add-dairy"],
   exclusions: [
     "dairy-free",
@@ -25,7 +25,7 @@ export const PRESET_GROUPS = {
     "kosher",
     "paleo",
   ],
-  macros: ["low-carb", "keto", "low-fat", "high-protein", "low-sodium"],
+  macros: ["low-carb", "keto", "low-fat", "high-protein"],
   programs: ["Mediterranean", "Whole30"],
 };
 
@@ -78,6 +78,11 @@ function applyExclusionConflicts(selected, adjustments) {
   if (selected.has("add-dairy")) {
     disabled.add("dairy-free");
     if (selected.delete("dairy-free")) adjustments.autoUnselected.push("dairy-free");
+  }
+  // fish-free disables add-fish
+  if (selected.has("fish-free")) {
+    disabled.add("add-fish");
+    if (selected.delete("add-fish")) adjustments.autoUnselected.push("add-fish");
   }
   // lactose-free can coexist; no special conflict beyond dairy-free rule
   return disabled;
@@ -134,6 +139,16 @@ export function resolvePresets(inputSelected) {
   const disabledExcl = applyExclusionConflicts(selected, adjustments);
   const disabledMacroProg = applyMacrosPrograms(selected, adjustments);
 
+  // Vegan auto-add and lock exclusions (UI lock handled separately)
+  if (selected.has('vegan')) {
+    ["dairy-free", "egg-free", "fish-free", "shellfish-free"].forEach((k) => {
+      if (!selected.has(k)) {
+        selected.add(k);
+        adjustments.autoAdded.push(k);
+      }
+    });
+  }
+
   const autoDisabled = new Set([...disabledDiet, ...disabledExcl, ...disabledMacroProg]);
   adjustments.autoDisabled = [...autoDisabled];
 
@@ -154,6 +169,7 @@ export function getDisabledPresets(inputSelected) {
   // Exclusions
   if (selected.has("dairy-free")) disabled.add("add-dairy");
   if (selected.has("add-dairy")) disabled.add("dairy-free");
+  if (selected.has("fish-free")) disabled.add("add-fish");
 
   // Macros / Programs
   if (selected.has("keto")) disabled.add("low-carb");
@@ -162,11 +178,35 @@ export function getDisabledPresets(inputSelected) {
   return [...disabled];
 }
 
+// Locked presets (non-clickable) derived from current selection (UI enforcement)
+export function getLockedPresets(inputSelected) {
+  const selected = new Set(toArraySafe(inputSelected));
+  const locked = new Set();
+  if (selected.has('vegan')) {
+    ["dairy-free", "egg-free", "fish-free", "shellfish-free"].forEach(k => locked.add(k));
+  }
+  return [...locked];
+}
+
+// UI label mapping
+export function labelForPreset(key) {
+  if (!key) return '';
+  if (key === 'Whole30' || key === 'Mediterranean') return key; // keep proper names
+  const map = {
+    'add-meat': 'Add meat',
+    'add-fish': 'Add fish',
+    'add-dairy': 'Add dairy',
+  };
+  if (map[key]) return map[key];
+  const pretty = String(key).replace(/-/g, ' ');
+  return pretty.charAt(0).toUpperCase() + pretty.slice(1);
+}
+
 // Contextual visibility for add-ons; keep simple and permissive (disabled will still apply)
 export function getVisibleAddOns() {
   return PRESET_GROUPS.addOns;
 }
 
-export default { PRESET_GROUPS, resolvePresets, getDisabledPresets };
+export default { PRESET_GROUPS, resolvePresets, getDisabledPresets, getLockedPresets, labelForPreset };
 
 

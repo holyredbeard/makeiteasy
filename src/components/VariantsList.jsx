@@ -4,13 +4,18 @@ import { useNavigate } from 'react-router-dom';
 const API_BASE = 'http://localhost:8001/api/v1';
 
 function Chip({ label }) {
-  return <span className="px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">{label}</span>;
+  const l = String(label || '').toLowerCase();
+  let cls = 'bg-gray-50 text-gray-700 border border-gray-200';
+  if (l === 'variant') cls = 'bg-blue-600 text-white border-blue-600';
+  else if (l === 'vegan') cls = 'bg-emerald-600 text-white border-emerald-600';
+  else if (l === 'vegetarian') cls = 'bg-lime-600 text-white border-lime-600';
+  else if (l === 'pescetarian') cls = 'bg-sky-600 text-white border-sky-600';
+  return <span className={`px-2 py-0.5 rounded-full text-xs ${cls}`}>{label}</span>;
 }
 
-export default function VariantsList({ parentId, onOpenRecipeInModal }) {
+export default function VariantsList({ parentId, onOpenRecipeInModal, sort = 'newest' }) {
   const [items, setItems] = useState([]);
   const navigate = useNavigate();
-  const [sort, setSort] = useState('newest'); // 'popular' | 'closest'
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [limit, setLimit] = useState(12);
@@ -43,8 +48,7 @@ export default function VariantsList({ parentId, onOpenRecipeInModal }) {
   useEffect(() => { fetchPage(1, sort); /* eslint-disable-next-line */ }, [parentId, sort]);
 
   if (loading && items.length === 0) return (
-    <div className="my-8">
-      <h3 className="text-2xl font-bold text-gray-900 mb-4">Variants</h3>
+    <div className="py-4">
       <div className="text-gray-500">Loading…</div>
     </div>
   );
@@ -54,15 +58,7 @@ export default function VariantsList({ parentId, onOpenRecipeInModal }) {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
-    <div className="my-8">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-2xl font-bold text-gray-900">Variants</h3>
-        <select value={sort} onChange={(e)=>setSort(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm">
-          <option value="popular">Most popular</option>
-          <option value="newest">Newest</option>
-          <option value="closest">Closest to your filters</option>
-        </select>
-      </div>
+    <div className="pt-2">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {items.map(v => (
           <button

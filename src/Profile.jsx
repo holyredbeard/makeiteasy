@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useOutletContext, useNavigate, Link } from 'react-router-dom';
+import { CameraIcon, PlayCircleIcon, GlobeAltIcon, MusicalNoteIcon, LinkIcon as LinkIconHero, MapPinIcon } from '@heroicons/react/24/outline';
 
 const API_BASE = 'http://localhost:8001/api/v1';
 const API_ROOT = API_BASE.replace(/\/api\/v1$/, '');
@@ -18,6 +19,12 @@ export default function Profile() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [location, setLocation] = useState('');
+  const [instagram, setInstagram] = useState('');
+  const [youtube, setYoutube] = useState('');
+  const [facebook, setFacebook] = useState('');
+  const [tiktok, setTiktok] = useState('');
+  const [website, setWebsite] = useState('');
   const [avatar, setAvatar] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState('');
   const [avatarDirty, setAvatarDirty] = useState(false);
@@ -32,6 +39,12 @@ export default function Profile() {
     setEmail(currentUser.email || '');
     if (currentUser.avatar_url) setAvatarPreview(normalizeBackendUrl(currentUser.avatar_url));
     setUsername(currentUser.username || '');
+    setLocation(currentUser.location || '');
+    setInstagram(currentUser.instagram_url || '');
+    setYoutube(currentUser.youtube_url || '');
+    setFacebook(currentUser.facebook_url || '');
+    setTiktok(currentUser.tiktok_url || '');
+    setWebsite(currentUser.website_url || '');
     setAvatarDirty(false);
   }, [currentUser]);
 
@@ -103,6 +116,12 @@ export default function Profile() {
       form.append('full_name', name.trim());
       form.append('username', username.trim());
       form.append('email', email.trim());
+      form.append('location', location.trim());
+      form.append('instagram_url', instagram.trim());
+      form.append('youtube_url', youtube.trim());
+      form.append('facebook_url', facebook.trim());
+      form.append('tiktok_url', tiktok.trim());
+      form.append('website_url', website.trim());
       // Only send password if user filled both fields correctly
       if (password && confirmPassword && password === confirmPassword && password.length >= 6) {
         form.append('password', password);
@@ -129,7 +148,14 @@ export default function Profile() {
 
   return (
     <div className="max-w-3xl mx-auto py-10 px-6">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Profile</h1>
+      <div className="flex items-baseline justify-between mb-6">
+        <h1 className="text-3xl font-bold text-gray-900">Profile</h1>
+        {username && (
+          <Link to={`/users/${encodeURIComponent(username)}`} className="text-sm text-[#e87b35] hover:underline">
+            View public profile
+          </Link>
+        )}
+      </div>
 
       {success && (
         <div className="mb-4 bg-green-50 text-green-800 border border-green-200 px-4 py-3 rounded-lg">{success}</div>
@@ -176,6 +202,40 @@ export default function Profile() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="you@example.com" required />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+          <div className="relative">
+            <MapPinIcon className="h-5 w-5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input type="text" value={location} onChange={(e)=>setLocation(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="City, Country" />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Social</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="relative">
+              <CameraIcon className="h-5 w-5 text-pink-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="url" value={instagram} onChange={(e)=>setInstagram(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Instagram URL" />
+            </div>
+            <div className="relative">
+              <PlayCircleIcon className="h-5 w-5 text-red-600 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="url" value={youtube} onChange={(e)=>setYoutube(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="YouTube URL" />
+            </div>
+            <div className="relative">
+              <GlobeAltIcon className="h-5 w-5 text-blue-600 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="url" value={facebook} onChange={(e)=>setFacebook(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Facebook URL" />
+            </div>
+            <div className="relative">
+              <MusicalNoteIcon className="h-5 w-5 text-black absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="url" value={tiktok} onChange={(e)=>setTiktok(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="TikTok URL" />
+            </div>
+            <div className="relative md:col-span-2">
+              <LinkIconHero className="h-5 w-5 text-gray-700 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input type="url" value={website} onChange={(e)=>setWebsite(e.target.value)} className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Website URL" />
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

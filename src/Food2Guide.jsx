@@ -9,6 +9,7 @@ import {
   WrenchScrewdriverIcon,
   BookmarkIcon, 
   PlusCircleIcon,
+  BookOpenIcon,
   ArrowLeftIcon,
   ExclamationCircleIcon,
   ChevronUpIcon,
@@ -104,6 +105,10 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   const [proposedTags, setProposedTags] = useState([]);
   const [saveResultId, setSaveResultId] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
+  const [showCollectionPicker, setShowCollectionPicker] = useState(false);
+  const [collections, setCollections] = useState([]);
+  const [savedRecipeId, setSavedRecipeId] = useState(null);
+  const [toast, setToast] = useState(null);
 
   // Canonical tag sets for suggestions
   const DISH = ['pasta','soup','stew','salad','sandwich','wrap','pizza','pie','casserole','burger','tacos','stirfry','bowl','onepot','baked','pancake','crepe','waffle','omelette','sushi','rice','noodle','curry','gratin','skewer','quiche','dumpling'];
@@ -152,12 +157,72 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
     } catch { return []; }
   };
 
+  // Save silently (no modals) and return recipe id
+  const saveCurrentRecipeSilently = async () => {
+    const recipeData = data || {};
+    // format instructions/ingredients like handleSaveRecipe
+    const formattedInstructions = (recipeData.instructions || []).map((inst, idx) => {
+      if (typeof inst === 'string') return { step: idx + 1, description: inst, image_path: null };
+      return { ...inst, step: inst.step || idx + 1 };
+    });
+    const formattedIngredients = (recipeData.ingredients || []).map(ing => {
+      if (typeof ing === 'string') return { name: ing, quantity: '', notes: null };
+      return ing;
+    });
+    let formattedNutritionalInfo = null;
+    if (recipeData.nutritional_information) {
+      if (typeof recipeData.nutritional_information === 'string') {
+        const nutritionText = recipeData.nutritional_information;
+        formattedNutritionalInfo = { summary: nutritionText };
+      } else {
+        formattedNutritionalInfo = recipeData.nutritional_information;
+      }
+    }
+    const formattedRecipeContent = {
+      ...recipeData,
+      servings: String(recipeData.servings || ''),
+      prep_time: String(recipeData.prep_time_minutes || recipeData.prep_time || ''),
+      cook_time: String(recipeData.cook_time_minutes || recipeData.cook_time || ''),
+      instructions: formattedInstructions,
+      ingredients: formattedIngredients,
+      nutritional_information: formattedNutritionalInfo,
+      image_url: recipeData.img || recipeData.image_url || recipeData.thumbnail_path
+    };
+    const payload = { source_url: videoUrl || recipeData.source_url || '', recipe_content: formattedRecipeContent };
+    const response = await fetch(`${API_BASE}/recipes/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) {
+      const t = await response.text();
+      throw new Error(t || 'Failed to save recipe');
+    }
+    const json = await response.json();
+    const sid = json.id || json?.data?.id || null;
+    setSavedRecipeId(sid);
+    setSaveResultId(sid);
+    return sid;
+  };
+
   // When tag editor opens, prepare suggestions
   useEffect(() => {
     if (tagsEditorOpen) {
       setSuggestions(suggestTagsForRecipe(data));
     }
   }, [tagsEditorOpen]);
+  // Ensure we have a saved recipe id so Convert-knappen kan visas direkt
+  useEffect(() => {
+    (async () => {
+      try {
+        if (data && Object.keys(data || {}).length > 0 && !savedRecipeId) {
+          const sid = await saveCurrentRecipeSilently();
+          setSavedRecipeId(sid);
+        }
+      } catch {}
+    })();
+  }, [data]);
   const [imageOrientation, setImageOrientation] = useState('landscape');
 
   useEffect(() => {
@@ -320,7 +385,9 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
 
       const savedRecipe = await response.json();
       console.log('Recipe saved successfully:', savedRecipe);
-      setSaveResultId(savedRecipe.id || savedRecipe?.data?.id || null);
+      const sid = savedRecipe.id || savedRecipe?.data?.id || null;
+      setSaveResultId(sid);
+      setSavedRecipeId(sid);
       setShowSuccessModal(true);
       // Navigate after a short delay to show the success modal
       // Instead of immediate redirect, open tags editor
@@ -374,14 +441,25 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   return (
     <div>
       <RecipeView
+        recipeId={savedRecipeId || undefined}
         recipe={data}
         variant="inline"
-        isSaved={false}
+        isSaved={Boolean(savedRecipeId)}
         currentUser={currentUser}
         onSave={handleSaveRecipe}
         onDownload={handleDownloadPdf}
         onCreateNew={onReset}
+        onAddToCollection={async()=>{
+          try {
+            const res = await fetch(`${API_BASE}/collections`, { credentials: 'include' });
+            const list = await res.json();
+            setCollections(Array.isArray(list)?list:[]);
+            setShowCollectionPicker(true);
+          } catch (e) { alert('Failed to load collections'); }
+        }}
+        onEditRecipe={()=>{ /* open editor placeholder */ alert('Editor coming soon'); }}
       />
+      
       
       {/* Success Modal */}
       {showSuccessModal && (
@@ -420,6 +498,23 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
             <h3 className="text-xl font-bold mb-2">Add tags to this recipe</h3>
             <p className="text-gray-600 mb-4">Type a tag and press Enter. Add at least three tags.</p>
             <TagInput tags={proposedTags} setTags={setProposedTags} />
+            {/* Live preview of chosen tags with card colors */}
+            {proposedTags.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {proposedTags.map((t, i) => {
+                  const key = String(t.label || t).toLowerCase();
+                  let cls = 'bg-gray-100 text-gray-700 border border-gray-200';
+                  if (key === 'vegan') cls = 'bg-emerald-600 text-white';
+                  if (key === 'vegetarian') cls = 'bg-lime-600 text-white';
+                  if (key === 'pescetarian' || key === 'pescatarian') cls = 'bg-sky-600 text-white';
+                  return (
+                    <span key={`p-${i}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${cls}`}>
+                      <span className="font-medium">{t.label || t}</span>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
             {/* Suggested tags */}
             {suggestions.length > 0 && (
               <div className="mt-4">
@@ -448,6 +543,46 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
                 }
               }}>Save Tags</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collection picker modal */}
+      {showCollectionPicker && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>setShowCollectionPicker(false)}>
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6" onClick={(e)=>e.stopPropagation()}>
+            <h3 className="text-xl font-bold mb-3">Add to Collection</h3>
+            <div className="space-y-2 max-h-64 overflow-auto">
+              {collections.map(c => (
+                <button key={c.id} className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 border" onClick={async()=>{
+                  try {
+                    let rid = savedRecipeId || saveResultId;
+                    if (!rid) { rid = await saveCurrentRecipeSilently(); }
+                    await fetch(`${API_BASE}/collections/${c.id}/recipes`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ recipe_id: rid }) });
+                    setShowCollectionPicker(false);
+                    setToast({ type: 'success', message: `Added to "${c.title}"` });
+                    setTimeout(()=>setToast(null), 2500);
+                  } catch { alert('Failed to add'); }
+                }}>
+                  <div className="font-semibold">{c.title}</div>
+                  <div className="text-xs text-gray-500">{c.recipes_count} recipes</div>
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-between items-center mt-4">
+              <button className="text-sm underline" onClick={()=>setShowCollectionPicker(false)}>Close</button>
+              <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white" onClick={()=>setShowCreate(true)}>+ New Collection</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
+          <div className="flex items-center gap-3 bg-green-600 text-white px-4 py-3 rounded-xl shadow-lg">
+            <CheckIcon className="h-5 w-5" />
+            <span className="font-semibold">{toast.message}</span>
           </div>
         </div>
       )}
@@ -648,7 +783,7 @@ export default function Food2Guide() {
                 </button>
                 <button onClick={() => setActiveTab('search')} className={`w-full text-sm rounded-lg px-4 py-2 flex items-center justify-center gap-2 transition-colors ${activeTab === 'search' ? 'bg-green-600 text-white font-semibold shadow-sm' : 'bg-transparent hover:bg-gray-200/50'}`}>
                   <MagnifyingGlassIcon className="h-5 w-5" />
-                  Search Recipes
+                  Search Videos
                 </button>
               </div>
               <div className="mt-6">

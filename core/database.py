@@ -54,6 +54,13 @@ class DatabaseManager:
                 cursor.execute("ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT 1")
             if 'created_at' not in user_cols:
                 cursor.execute("ALTER TABLE users ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+            # New optional profile fields
+            for col in ['location','instagram_url','youtube_url','facebook_url','tiktok_url','website_url']:
+                if col not in user_cols:
+                    try:
+                        cursor.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT")
+                    except Exception:
+                        pass
             # Roles mapping
             cursor.execute(
                 """
@@ -62,6 +69,19 @@ class DatabaseManager:
                     role TEXT NOT NULL,
                     PRIMARY KEY (user_id, role),
                     FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+                """
+            )
+            # User follows (user to user)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_follows (
+                    follower_id INTEGER NOT NULL,
+                    followee_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (follower_id, followee_id),
+                    FOREIGN KEY (follower_id) REFERENCES users (id),
+                    FOREIGN KEY (followee_id) REFERENCES users (id)
                 )
                 """
             )
@@ -150,6 +170,67 @@ class DatabaseManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (comment_id) REFERENCES comments (id),
                     FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+                """
+            )
+
+            # --- Collections ---
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS collections (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    owner_id INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT,
+                    image_url TEXT,
+                    visibility TEXT NOT NULL DEFAULT 'public',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    rating_average REAL DEFAULT 0,
+                    rating_count INTEGER DEFAULT 0,
+                    likes_count INTEGER DEFAULT 0,
+                    followers_count INTEGER DEFAULT 0,
+                    FOREIGN KEY (owner_id) REFERENCES users (id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS collection_recipes (
+                    collection_id INTEGER NOT NULL,
+                    recipe_id INTEGER NOT NULL,
+                    position INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (collection_id, recipe_id),
+                    FOREIGN KEY (collection_id) REFERENCES collections (id),
+                    FOREIGN KEY (recipe_id) REFERENCES saved_recipes (id)
+                )
+                """
+            )
+            # Ensure new column exists for already-created databases
+            cursor.execute("PRAGMA table_info(collection_recipes)")
+            cr_cols = {row[1] for row in cursor.fetchall()}
+            if 'position' not in cr_cols:
+                try:
+                    cursor.execute("ALTER TABLE collection_recipes ADD COLUMN position INTEGER")
+                except Exception:
+                    pass
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS collection_likes (
+                    collection_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (collection_id, user_id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS collection_follows (
+                    collection_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (collection_id, user_id)
                 )
                 """
             )
@@ -297,6 +378,35 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error getting user by ID {user_id}: {e}")
             return None
+
+    def get_user_by_username(self, username: str) -> Optional[User]:
+        try:
+            if not username:
+                return None
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT * FROM users WHERE LOWER(username) = LOWER(?)", (username,))
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                user_dict = dict(row)
+                # followers/following counts
+                try:
+                    cursor.execute("SELECT COUNT(*) FROM user_follows WHERE followee_id = ?", (user_dict['id'],))
+                    user_dict['followers_count'] = int(cursor.fetchone()[0] or 0)
+                    cursor.execute("SELECT COUNT(*) FROM user_follows WHERE follower_id = ?", (user_dict['id'],))
+                    user_dict['following_count'] = int(cursor.fetchone()[0] or 0)
+                except Exception:
+                    user_dict['followers_count'] = 0
+                    user_dict['following_count'] = 0
+                # roles
+                cursor.execute("SELECT role FROM user_roles WHERE user_id = ?", (user_dict['id'],))
+                roles = [r[0] for r in cursor.fetchall()]
+                user_dict['roles'] = roles
+                return User(**user_dict)
+        except Exception as e:
+            logger.error(f"Error getting user by username '{username}': {e}")
+            return None
     
     def update_password(self, user_id: int, new_hashed_password: str):
         try:
@@ -315,10 +425,18 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    "INSERT INTO users (email, full_name, google_id, avatar_url, auth_provider) VALUES (?, ?, ?, ?, 'google')",
-                    (email, full_name, google_id, avatar_url)
-                )
+                # Some older DBs may have NOT NULL constraint on hashed_password. Insert empty string to satisfy it.
+                try:
+                    cursor.execute(
+                        "INSERT INTO users (email, full_name, username, hashed_password, google_id, avatar_url, auth_provider) VALUES (?, ?, ?, ?, ?, ?, 'google')",
+                        (email, full_name, None, '', google_id, avatar_url)
+                    )
+                except Exception:
+                    # Fallback for schema without NOT NULL on hashed_password
+                    cursor.execute(
+                        "INSERT INTO users (email, full_name, google_id, avatar_url, auth_provider) VALUES (?, ?, ?, ?, 'google')",
+                        (email, full_name, google_id, avatar_url)
+                    )
                 user_id = cursor.lastrowid
                 cursor.execute("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, ?)", (user_id, 'user'))
                 conn.commit()
@@ -401,12 +519,17 @@ class DatabaseManager:
                 cursor.execute("SELECT * FROM saved_recipes WHERE id = ?", (recipe_id,))
                 row = cursor.fetchone()
                 if row:
+                    try:
+                        tags = self.list_recipe_tags(row['id'])
+                    except Exception:
+                        tags = {"approved": [], "pending": []}
                     return SavedRecipe(
                         id=row['id'],
                         user_id=row['user_id'],
                         source_url=row['source_url'],
                         created_at=datetime.fromisoformat(row["created_at"]),
-                        recipe_content=RecipeContent.model_validate_json(row['recipe_content'])
+                        recipe_content=RecipeContent.model_validate_json(row['recipe_content']),
+                        tags=tags
                     )
                 return None
         except Exception as e:
@@ -428,7 +551,7 @@ class DatabaseManager:
                 recipes = []
                 for row in rows:
                     content_dict = json.loads(row['recipe_content'])
-                    
+
                     # Definitive image URL normalization
                     def _normalize_port(url: str) -> str:
                         try:
@@ -453,19 +576,373 @@ class DatabaseManager:
                             if isinstance(inst, dict) and inst.get('image_path'):
                                 inst['image_path'] = _normalize_port(inst['image_path'])
 
+                    # Attach tags so frontend cards can show chips immediately
+                    try:
+                        tags = self.list_recipe_tags(row['id'])
+                    except Exception:
+                        tags = {"approved": [], "pending": []}
+
                     recipes.append(
                         SavedRecipe(
                             id=row['id'],
                             user_id=row['user_id'],
                             source_url=row['source_url'],
                             created_at=datetime.fromisoformat(row["created_at"]),
-                            recipe_content=RecipeContent.model_validate(content_dict)
+                            recipe_content=RecipeContent.model_validate(content_dict),
+                            tags=tags
                         )
                     )
+
                 return recipes
         except Exception as e:
             logger.error(f"Error getting saved recipes for user {user_id}: {e}")
             return []
+
+    def get_all_saved_recipes(self, sort: str = "latest") -> List[SavedRecipe]:
+        try:
+            with self.get_connection() as conn:
+                cursor = conn.cursor()
+                if sort == 'rating_desc':
+                    order = "ORDER BY rating_average DESC, rating_count DESC, created_at DESC"
+                elif sort == 'rating_count_desc':
+                    order = "ORDER BY rating_count DESC, rating_average DESC, created_at DESC"
+                else:
+                    order = "ORDER BY created_at DESC"
+                cursor.execute(f"SELECT * FROM saved_recipes {order}")
+                rows = cursor.fetchall()
+                recipes: List[SavedRecipe] = []
+                for row in rows:
+                    content_dict = json.loads(row['recipe_content'])
+                    def _normalize_port(url: str) -> str:
+                        try:
+                            if isinstance(url, str):
+                                if url.startswith('http://127.0.0.1:8000'):
+                                    return url.replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
+                                if url.startswith('http://localhost:8000'):
+                                    return url.replace('http://localhost:8000', 'http://localhost:8001')
+                        except Exception:
+                            pass
+                        return url
+                    image = content_dict.get('image_url') or content_dict.get('img') or content_dict.get('thumbnail_path')
+                    image = _normalize_port(image) if image else image
+                    if image:
+                        content_dict['image_url'] = image
+                        content_dict['thumbnail_path'] = image
+                    if isinstance(content_dict.get('instructions'), list):
+                        for inst in content_dict['instructions']:
+                            if isinstance(inst, dict) and inst.get('image_path'):
+                                inst['image_path'] = _normalize_port(inst['image_path'])
+                    try:
+                        tags = self.list_recipe_tags(row['id'])
+                    except Exception:
+                        tags = {"approved": [], "pending": []}
+                    recipes.append(
+                        SavedRecipe(
+                            id=row['id'],
+                            user_id=row['user_id'],
+                            source_url=row['source_url'],
+                            created_at=datetime.fromisoformat(row["created_at"]),
+                            recipe_content=RecipeContent.model_validate(content_dict),
+                            tags=tags
+                        )
+                    )
+                return recipes
+        except Exception as e:
+            logger.error(f"Error getting all saved recipes: {e}")
+            return []
+
+    # Collections API
+    def create_collection(self, owner_id: int, title: str, description: Optional[str], visibility: str, image_url: Optional[str]) -> Optional[int]:
+        with self.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("INSERT INTO collections (owner_id, title, description, visibility, image_url) VALUES (?,?,?,?,?)", (owner_id, title, description, visibility, image_url))
+            conn.commit()
+            return c.lastrowid
+
+    def list_collections(self, viewer_id: Optional[int]) -> List[dict]:
+        with self.get_connection() as conn:
+            c = conn.cursor()
+            c.execute(
+                """
+                SELECT col.id, col.owner_id, col.title, col.description, col.image_url, col.visibility, col.created_at,
+                       col.rating_average, col.rating_count, col.likes_count, col.followers_count,
+                       u.full_name as owner_name, u.avatar_url as owner_avatar, u.username as owner_username,
+                       (SELECT COUNT(*) FROM collection_recipes cr WHERE cr.collection_id = col.id) as recipes_count,
+                       CASE WHEN ? IS NULL THEN 0 ELSE EXISTS(SELECT 1 FROM collection_likes cl WHERE cl.collection_id = col.id AND cl.user_id = ?) END as liked_by_me,
+                       CASE WHEN ? IS NULL THEN 0 ELSE EXISTS(SELECT 1 FROM collection_follows cf WHERE cf.collection_id = col.id AND cf.user_id = ?) END as followed_by_me
+                FROM collections col
+                LEFT JOIN users u ON u.id = col.owner_id
+                WHERE col.visibility = 'public' OR col.owner_id = ?
+                ORDER BY col.created_at DESC
+                """,
+                (viewer_id, viewer_id, viewer_id, viewer_id, viewer_id or 0,)
+            )
+            rows = c.fetchall()
+            out = []
+            for r in rows:
+                d = dict(r)
+                # Fallback cover: adopt first recipe image if collection has no image yet
+                if not d.get('image_url'):
+                    try:
+                        c.execute(
+                            """
+                            SELECT sr.recipe_content FROM saved_recipes sr
+                            JOIN collection_recipes cr ON cr.recipe_id = sr.id
+                            WHERE cr.collection_id = ?
+                            ORDER BY cr.created_at ASC LIMIT 1
+                            """,
+                            (d['id'],)
+                        )
+                        rr = c.fetchone()
+                        if rr:
+                            content = json.loads(rr[0]) if isinstance(rr[0], str) else (rr[0] or {})
+                            image = content.get('image_url') or content.get('img') or content.get('thumbnail_path')
+                            def _normalize_port(url: str) -> str:
+                                try:
+                                    if isinstance(url, str):
+                                        if url.startswith('http://127.0.0.1:8000'):
+                                            return url.replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
+                                        if url.startswith('http://localhost:8000'):
+                                            return url.replace('http://localhost:8000', 'http://localhost:8001')
+                                except Exception:
+                                    pass
+                                return url
+                            image = _normalize_port(image) if image else image
+                            if image:
+                                d['image_url'] = image
+                    except Exception:
+                        pass
+                d['liked_by_me'] = bool(d.get('liked_by_me'))
+                d['followed_by_me'] = bool(d.get('followed_by_me'))
+                from models.types import Collection
+                out.append(Collection(**d))
+            return out
+
+    def list_user_public_collections(self, owner_username: str, viewer_id: Optional[int]) -> List[dict]:
+        with self.get_connection() as conn:
+            c = conn.cursor()
+            c.execute(
+                """
+                SELECT col.id, col.owner_id, col.title, col.description, col.image_url, col.visibility, col.created_at,
+                       col.rating_average, col.rating_count, col.likes_count, col.followers_count,
+                       u.full_name as owner_name, u.avatar_url as owner_avatar, u.username as owner_username,
+                       (SELECT COUNT(*) FROM collection_recipes cr WHERE cr.collection_id = col.id) as recipes_count,
+                       CASE WHEN ? IS NULL THEN 0 ELSE EXISTS(SELECT 1 FROM collection_likes cl WHERE cl.collection_id = col.id AND cl.user_id = ?) END as liked_by_me,
+                       CASE WHEN ? IS NULL THEN 0 ELSE EXISTS(SELECT 1 FROM collection_follows cf WHERE cf.collection_id = col.id AND cf.user_id = ?) END as followed_by_me
+                FROM collections col
+                JOIN users u ON u.id = col.owner_id
+                WHERE (col.visibility = 'public' OR col.owner_id = ?) AND LOWER(u.username) = LOWER(?)
+                ORDER BY col.created_at DESC
+                """,
+                (viewer_id, viewer_id, viewer_id, viewer_id, viewer_id or 0, owner_username,)
+            )
+            rows = c.fetchall()
+            out = []
+            for r in rows:
+                d = dict(r)
+                # Fallback cover from first recipe if missing
+                if not d.get('image_url'):
+                    try:
+                        c.execute(
+                            """
+                            SELECT sr.recipe_content FROM saved_recipes sr
+                            JOIN collection_recipes cr ON cr.recipe_id = sr.id
+                            WHERE cr.collection_id = ?
+                            ORDER BY cr.created_at ASC LIMIT 1
+                            """,
+                            (d['id'],)
+                        )
+                        rr = c.fetchone()
+                        if rr:
+                            content = json.loads(rr[0]) if isinstance(rr[0], str) else (rr[0] or {})
+                            image = content.get('image_url') or content.get('img') or content.get('thumbnail_path')
+                            def _normalize_port(url: str) -> str:
+                                try:
+                                    if isinstance(url, str):
+                                        if url.startswith('http://127.0.0.1:8000'):
+                                            return url.replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
+                                        if url.startswith('http://localhost:8000'):
+                                            return url.replace('http://localhost:8000', 'http://localhost:8001')
+                                except Exception:
+                                    pass
+                                return url
+                            image = _normalize_port(image) if image else image
+                            if image:
+                                d['image_url'] = image
+                    except Exception:
+                        pass
+                d['liked_by_me'] = bool(d.get('liked_by_me'))
+                d['followed_by_me'] = bool(d.get('followed_by_me'))
+                from models.types import Collection
+                out.append(Collection(**d))
+            return out
+
+    def add_recipe_to_collection(self, collection_id: int, recipe_id: int):
+        with self.get_connection() as conn:
+            c = conn.cursor()
+            try:
+                c.execute("SELECT COALESCE(MAX(position), -1) + 1 FROM collection_recipes WHERE collection_id = ?", (collection_id,))
+                next_pos_row = c.fetchone()
+                next_pos = int(next_pos_row[0] if next_pos_row and next_pos_row[0] is not None else 0)
+            except Exception:
+                next_pos = 0
+            c.execute("INSERT OR IGNORE INTO collection_recipes (collection_id, recipe_id, position) VALUES (?,?,?)", (collection_id, recipe_id, next_pos))
+            # If the collection has no cover image yet, adopt the recipe's image as cover
+            try:
+                c.execute("SELECT image_url FROM collections WHERE id = ?", (collection_id,))
+                row = c.fetchone()
+                current_cover = row[0] if row else None
+                if not current_cover:
+                    c.execute("SELECT recipe_content FROM saved_recipes WHERE id = ?", (recipe_id,))
+                    r = c.fetchone()
+                    if r:
+                        try:
+                            content = json.loads(r[0])
+                        except Exception:
+                            content = {}
+                        image = content.get('image_url') or content.get('img') or content.get('thumbnail_path')
+                        # Normalize port like elsewhere
+                        def _normalize_port(url: str) -> str:
+                            try:
+                                if isinstance(url, str):
+                                    if url.startswith('http://127.0.0.1:8000'):
+                                        return url.replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
+                                    if url.startswith('http://localhost:8000'):
+                                        return url.replace('http://localhost:8000', 'http://localhost:8001')
+                            except Exception:
+                                pass
+                            return url
+                        image = _normalize_port(image) if image else image
+                        if image:
+                            c.execute("UPDATE collections SET image_url = ? WHERE id = ?", (image, collection_id))
+            except Exception:
+                pass
+            conn.commit()
+            return {"ok": True}
+
+    def list_collection_recipes(self, collection_id: int) -> List[SavedRecipe]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    """
+                    SELECT sr.* FROM saved_recipes sr
+                    JOIN collection_recipes cr ON cr.recipe_id = sr.id
+                    WHERE cr.collection_id = ?
+                    ORDER BY COALESCE(cr.position, 1000000) ASC, cr.created_at DESC
+                    """,
+                    (collection_id,)
+                )
+                rows = c.fetchall()
+                items: List[SavedRecipe] = []
+                for row in rows:
+                    content_dict = json.loads(row['recipe_content'])
+                    # Normalize image url
+                    def _normalize_port(url: str) -> str:
+                        try:
+                            if isinstance(url, str):
+                                if url.startswith('http://127.0.0.1:8000'):
+                                    return url.replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
+                                if url.startswith('http://localhost:8000'):
+                                    return url.replace('http://localhost:8000', 'http://localhost:8001')
+                        except Exception:
+                            pass
+                        return url
+                    image = content_dict.get('image_url') or content_dict.get('img') or content_dict.get('thumbnail_path')
+                    image = _normalize_port(image) if image else image
+                    if image:
+                        content_dict['image_url'] = image
+                        content_dict['thumbnail_path'] = image
+                    try:
+                        tags = self.list_recipe_tags(row['id'])
+                    except Exception:
+                        tags = {"approved": [], "pending": []}
+                    items.append(
+                        SavedRecipe(
+                            id=row['id'],
+                            user_id=row['user_id'],
+                            source_url=row['source_url'],
+                            created_at=datetime.fromisoformat(row['created_at']),
+                            recipe_content=RecipeContent.model_validate(content_dict),
+                            tags=tags
+                        )
+                    )
+                return items
+        except Exception as e:
+            logger.error(f"Error listing recipes for collection {collection_id}: {e}")
+            return []
+
+    def update_collection(self, collection_id: int, **fields) -> bool:
+        allowed = {'title', 'description', 'visibility', 'image_url'}
+        updates = {k: v for k, v in fields.items() if k in allowed}
+        if not updates:
+            return False
+        sets = ", ".join([f"{k} = ?" for k in updates.keys()])
+        values = list(updates.values()) + [collection_id]
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(f"UPDATE collections SET {sets} WHERE id = ?", values)
+                conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update collection {collection_id}: {e}")
+            return False
+
+    def remove_recipe_from_collection(self, collection_id: int, recipe_id: int) -> bool:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("DELETE FROM collection_recipes WHERE collection_id = ? AND recipe_id = ?", (collection_id, recipe_id))
+                # Compact positions
+                try:
+                    c.execute("SELECT recipe_id FROM collection_recipes WHERE collection_id = ? ORDER BY COALESCE(position, 1000000) ASC, created_at DESC", (collection_id,))
+                    ids = [row[0] for row in c.fetchall()]
+                    for idx, rid in enumerate(ids):
+                        c.execute("UPDATE collection_recipes SET position = ? WHERE collection_id = ? AND recipe_id = ?", (idx, collection_id, rid))
+                except Exception:
+                    pass
+                conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to remove recipe {recipe_id} from collection {collection_id}: {e}")
+            return False
+
+    def reorder_collection_recipes(self, collection_id: int, recipe_ids: List[int]) -> bool:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                for idx, rid in enumerate(recipe_ids or []):
+                    c.execute("UPDATE collection_recipes SET position = ? WHERE collection_id = ? AND recipe_id = ?", (idx, collection_id, rid))
+                # Update cover image from first recipe
+                if recipe_ids:
+                    top_id = recipe_ids[0]
+                    try:
+                        c.execute("SELECT recipe_content FROM saved_recipes WHERE id = ?", (top_id,))
+                        r = c.fetchone()
+                        if r:
+                            content = json.loads(r[0]) if isinstance(r[0], str) else (r[0] or {})
+                            image = content.get('image_url') or content.get('img') or content.get('thumbnail_path')
+                            def _normalize_port(url: str) -> str:
+                                try:
+                                    if isinstance(url, str):
+                                        if url.startswith('http://127.0.0.1:8000'):
+                                            return url.replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
+                                        if url.startswith('http://localhost:8000'):
+                                            return url.replace('http://localhost:8000', 'http://localhost:8001')
+                                except Exception:
+                                    pass
+                                return url
+                            image = _normalize_port(image) if image else image
+                            if image:
+                                c.execute("UPDATE collections SET image_url = ? WHERE id = ?", (image, collection_id))
+                    except Exception:
+                        pass
+                conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to reorder recipes for collection {collection_id}: {e}")
+            return False
 
     # --- Tagging helpers ---
     def _normalize_keyword(self, raw: str) -> Optional[str]:

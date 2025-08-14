@@ -1,10 +1,10 @@
 // Thin client wrapper for DeepSeek Chat Completions
 // This file does NOT contain API keys. Expect the caller to provide baseURL and apiKey via env/runtime.
 
-export async function convertRecipeWithDeepSeek({ apiKey, baseURL = 'https://api.deepseek.com', model = 'deepseek-chat', systemPrompt, userPayload, fast = true, timeoutMs = 25000 }) {
+export async function convertRecipeWithDeepSeek({ apiKey, baseURL = 'https://api.deepseek.com', model = 'deepseek-chat', systemPrompt, userPayload, fast = true, timeoutMs = 120000 }) {
   // Först: försök via backend-proxy (enklast & säkrast)
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), Math.max(5000, timeoutMs));
+  const controller = timeoutMs && timeoutMs > 0 ? new AbortController() : null;
+  const id = controller ? setTimeout(() => controller.abort(), Math.max(5000, timeoutMs)) : null;
   const startedAt = Date.now();
   console.info('[Convert] Preview → calling proxy (fast=%s)...', fast);
   try {
@@ -12,7 +12,7 @@ export async function convertRecipeWithDeepSeek({ apiKey, baseURL = 'https://api
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      signal: controller.signal,
+      ...(controller ? { signal: controller.signal } : {}),
       body: JSON.stringify({ systemPrompt, userPayload, model, baseURL, fast })
     });
     const text = await proxy.text();
@@ -27,13 +27,14 @@ export async function convertRecipeWithDeepSeek({ apiKey, baseURL = 'https://api
   } catch (e) {
     if (e?.name === 'AbortError') {
       console.error('[Convert] Preview timeout after %dms', Date.now() - startedAt);
-      throw new Error('Preview timed out. Please try again.');
+      // Do not surface as timeout; mark as proxy unavailable so UI can retry
+      throw new Error('DeepSeek proxy timeout');
     }
     console.warn('DeepSeek proxy error:', e?.message || e);
     // Surface the proxy error to the caller.
     throw new Error(e?.message || 'DeepSeek proxy unavailable');
   } finally {
-    clearTimeout(id);
+    if (id) clearTimeout(id);
   }
 }
 

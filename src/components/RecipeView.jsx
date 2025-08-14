@@ -1,29 +1,100 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { detectLanguage } from '../lib/tts/index.js';
+import { audio, getCached, setCached } from '../lib/tts/index.js';
+import { init as piperInit, synthesize as piperSynthesize } from '../lib/tts/providers/piper.js';
+import { useStepTTS } from '../hooks/useStepTTS.js';
 import { 
   LinkIcon,
   ArrowDownTrayIcon,
   BookmarkIcon,
   PlusCircleIcon,
+  BookOpenIcon,
+  PencilSquareIcon,
+  SpeakerWaveIcon,
+  SpeakerXMarkIcon,
+  FireIcon,
 } from '@heroicons/react/24/outline';
-import { ClockIcon, UserGroupIcon, PencilSquareIcon, TrashIcon } from '@heroicons/react/24/outline';
+import RecipeSubnav from './RecipeSubnav';
+import useScrollSpy from './useScrollSpy';
+import RecipeSection from './RecipeSection';
+import { ClockIcon, UserGroupIcon, TrashIcon, EllipsisVerticalIcon, XMarkIcon, ExclamationTriangleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import TagInput from './TagInput';
 import RecipeConvertPanel from './RecipeConvertPanel';
 import { convertRecipeWithDeepSeek, validateConversionSchema } from './deepseekClient';
-import { SYSTEM_PROMPT, buildUserPayload } from './DeepSeekPrompts';
+import { SYSTEM_PROMPT, buildUserPayload, buildSystemPrompt } from './DeepSeekPrompts';
 import DeepSeekPreviewDiff from './DeepSeekPreviewDiff';
 import VariantsList from './VariantsList';
 
 const API_BASE = 'http://localhost:8001/api/v1';
 const STATIC_BASE = 'http://localhost:8001';
 
-const chipCls = (type) => ({
-  dish: 'bg-sky-50 text-sky-700 border-sky-200',
-  method: 'bg-violet-50 text-violet-700 border-violet-200',
-  meal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  cuisine: 'bg-blue-50 text-blue-700 border-blue-200',
-  diet: 'bg-rose-50 text-rose-700 border-rose-200',
-  theme: 'bg-amber-50 text-amber-800 border-amber-200',
-}[type] || 'bg-gray-50 text-gray-700 border-gray-200');
+// --- Helpers: split quantity from ingredient line ---
+const UNIT_WORDS = new Set([
+  // English
+  'cup','cups','tbsp','tablespoon','tablespoons','tsp','teaspoon','teaspoons','oz','ounce','ounces','lb','lbs','pound','pounds','g','gram','grams','kg','ml','l','liter','liters','slice','slices','clove','cloves','can','cans','package','packages','pinch','dash','head','heads','stalk','stalks','bunch','bunches','piece','pieces',
+  // Swedish
+  'dl','cl','msk','tsk','krm','hg','kg','l','ml','stycken','stycke','st','påse','påsar','burk','burkar','förpackning','förpackningar','klyfta','klyftor','skiva','skivor','förp'
+]);
+
+const isNumberLike = (token) => {
+  if (!token) return false;
+  const t = token.replace(/[()]/g, '').trim();
+  // unicode fractions
+  const unicodeFracs = '¼½¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞';
+  if (unicodeFracs.includes(t)) return true;
+  // simple number or decimal
+  if (/^\d+(?:[\.,]\d+)?$/.test(t)) return true;
+  // simple fraction
+  if(/^\d+\/\d+$/.test(t)) return true;
+  // ranges like 1-2 or 1–2
+  if(/^\d+(?:[\.,]\d+)?\s*[–-]\s*\d+(?:[\.,]\d+)?$/.test(t)) return true;
+  // mixed number with fraction 1 1/2
+  if(/^\d+\s+\d+\/\d+$/.test(t)) return true;
+  return false;
+};
+
+const splitQuantityFromText = (raw) => {
+  const line = String(raw || '').trim();
+  if (!line) return { quantity: '', name: '' };
+  const tokens = line.split(/\s+/);
+  const picked = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    const tok = tokens[i];
+    if (i === 0) {
+      if (!isNumberLike(tok)) break; // no leading number → no qty
+      picked.push(tok);
+      continue;
+    }
+    const normalized = tok.toLowerCase().replace(/[.,]/g, '');
+    if (isNumberLike(tok) || UNIT_WORDS.has(normalized)) {
+      picked.push(tok);
+    } else {
+      break;
+    }
+  }
+  if (picked.length === 0) return { quantity: '', name: line };
+  const quantity = picked.join(' ');
+  const name = line.slice(quantity.length).trim();
+  return { quantity, name };
+};
+
+// Chip colors unified with card chips
+const chipCls = (type, label) => {
+  const l = String(label || '').toLowerCase();
+  if (l === 'variant') return 'bg-blue-600 text-white border-blue-600';
+  if (l === 'vegan') return 'bg-emerald-600 text-white border-emerald-600';
+  if (l === 'vegetarian') return 'bg-lime-600 text-white border-lime-600';
+  if (l === 'pescetarian') return 'bg-sky-600 text-white border-sky-600';
+  const map = {
+    dish: 'bg-sky-50 text-sky-700 border-sky-200',
+    method: 'bg-violet-50 text-violet-700 border-violet-200',
+    meal: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    cuisine: 'bg-blue-50 text-blue-700 border-blue-200',
+    diet: 'bg-rose-50 text-rose-700 border-rose-200',
+    theme: 'bg-amber-50 text-amber-800 border-amber-200',
+  };
+  return map[type] || 'bg-gray-50 text-gray-700 border-gray-200';
+};
 
 function MetaBadge({ label, value }) {
   if (!value) return null;
@@ -35,10 +106,12 @@ function MetaBadge({ label, value }) {
   );
 }
 
-function Section({ title, children, className = '', padded = false }) {
+function Section({ title, children, className = '', padded = false, showTitle = true }) {
   return (
     <div className={`mb-6 ${padded ? 'px-4 lg:px-8' : ''} ${className}`}>
-      <h3 className="text-2xl font-bold text-gray-900 mb-4">{title}</h3>
+      {showTitle && (
+        <h3 className="text-2xl font-bold text-gray-900 mb-4">{title}</h3>
+      )}
       {children}
     </div>
   );
@@ -53,17 +126,24 @@ export default function RecipeView({
   onSave,
   onDownload,
   onCreateNew,
+  onAddToCollection,
+  onEditRecipe,
   onOpenRecipeInModal,
+  onRequestCloseModal,
   sourceFrom: sourceFromProp,
+  onTagsUpdated,
+  onSaved, // optional callback invoked after successful save with updated SavedRecipe
 }) {
   const [rating, setRating] = useState({ average: 0, count: 0, userValue: null });
   const [tags, setTags] = useState({ approved: [], pending: [] });
   const [comments, setComments] = useState([]);
   const [commentInput, setCommentInput] = useState('');
+  const [replyToId, setReplyToId] = useState(null);
+  const [replyText, setReplyText] = useState('');
   const [nextCursor, setNextCursor] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [editValue, setEditValue] = useState('');
-  const isSticky = variant !== 'inline';
+  const isSticky = false;
   const [convertOpen, setConvertOpen] = useState(false);
   const [convertBusy, setConvertBusy] = useState(false);
   const [lastConstraints, setLastConstraints] = useState(null);
@@ -73,6 +153,155 @@ export default function RecipeView({
   const [activeConstraints, setActiveConstraints] = useState(null);
   const sourceFrom = sourceFromProp || null;
   const [visibilitySaving, setVisibilitySaving] = useState(false);
+  const [justSavedVariant, setJustSavedVariant] = useState(false);
+  const [savedVariantId, setSavedVariantId] = useState(null);
+  // Inline edit mode
+  const [isEditing, setIsEditing] = useState(false);
+  const [edited, setEdited] = useState(null);
+  const [busySave, setBusySave] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [gallery, setGallery] = useState([]);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [hoverHighlight, setHoverHighlight] = useState(true);
+  const [ttsActive, setTtsActive] = useState(false);
+  const [isTtsPlaying, setIsTtsPlaying] = useState(false);
+  const utterRef = useRef(null);
+  const { onStepClick } = useStepTTS();
+  const [dragItem, setDragItem] = useState(null); // { type: 'ingredients'|'instructions', index: number }
+  const [dropIndicator, setDropIndicator] = useState(null); // { type, index, pos: 'before'|'after' }
+  const [confirmDelete, setConfirmDelete] = useState(null); // { type: 'ingredient'|'instruction', index }
+  const [sort, setSort] = useState('popular');
+
+  const moveArrayItem = (array, fromIndex, toIndex) => {
+    const list = Array.isArray(array) ? [...array] : [];
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= list.length || toIndex > list.length) return list;
+    const [moved] = list.splice(fromIndex, 1);
+    list.splice(toIndex, 0, moved);
+    return list;
+  };
+
+  const handleDragStart = (type, index) => (e) => {
+    setDragItem({ type, index });
+    try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(index)); } catch {}
+  };
+  const handleDragOver = (type, index) => (e) => {
+    if (dragItem && dragItem.type === type) {
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = 'move'; } catch {}
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pos = (e.clientY - rect.top) < rect.height / 2 ? 'before' : 'after';
+      setDropIndicator({ type, index, pos });
+    }
+  };
+  const handleDrop = (type, index) => (e) => {
+    e.preventDefault();
+    if (!dragItem || dragItem.type !== type) return;
+    const using = (dropIndicator && dropIndicator.type === type) ? dropIndicator : { type, index, pos: 'after' };
+    const toIndex = using.pos === 'after' ? (using.index + 1) : using.index;
+    setEdited(prev => {
+      const current = Array.isArray(prev?.[type]) ? prev[type] : [];
+      const reordered = moveArrayItem(current, dragItem.index, toIndex);
+      return { ...(prev || {}), [type]: reordered };
+    });
+    setDragItem(null);
+    setDropIndicator(null);
+  };
+  const clearDrag = () => { setDragItem(null); setDropIndicator(null); };
+
+  // ----- Add/Remove rows -----
+  const addIngredientRow = () => {
+    setEdited(prev => {
+      const arr = Array.isArray(prev?.ingredients) ? [...prev.ingredients] : [];
+      arr.push({ quantity: '', name: '' });
+      return { ...(prev || {}), ingredients: arr };
+    });
+  };
+  const removeIngredientAt = (idx) => {
+    setEdited(prev => {
+      const arr = Array.isArray(prev?.ingredients) ? [...prev.ingredients] : [];
+      if (idx >= 0 && idx < arr.length) arr.splice(idx, 1);
+      return { ...(prev || {}), ingredients: arr };
+    });
+  };
+  const confirmAndRemoveIngredient = (idx) => { setConfirmDelete({ type: 'ingredient', index: idx }); };
+  const addInstructionRow = () => {
+    setEdited(prev => {
+      const arr = Array.isArray(prev?.instructions) ? [...prev.instructions] : [];
+      arr.push({ description: '' });
+      return { ...(prev || {}), instructions: arr };
+    });
+  };
+  const removeInstructionAt = (idx) => {
+    setEdited(prev => {
+      const arr = Array.isArray(prev?.instructions) ? [...prev.instructions] : [];
+      if (idx >= 0 && idx < arr.length) arr.splice(idx, 1);
+      return { ...(prev || {}), instructions: arr };
+    });
+  };
+  const confirmAndRemoveInstruction = (idx) => { setConfirmDelete({ type: 'instruction', index: idx }); };
+
+  const onConfirmDelete = () => {
+    if (!confirmDelete) return;
+    if (confirmDelete.type === 'ingredient') removeIngredientAt(confirmDelete.index);
+    else removeInstructionAt(confirmDelete.index);
+    setConfirmDelete(null);
+  };
+  const onCancelDelete = () => setConfirmDelete(null);
+
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const onKey = (e) => { if (e.key === 'Escape') setConfirmDelete(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [confirmDelete]);
+
+  // Cleanup speech on unmount
+  useEffect(() => {
+    return () => {
+      try { if (typeof window !== 'undefined' && window.speechSynthesis) { window.speechSynthesis.cancel(); } } catch {}
+    };
+  }, []);
+
+  const speakText = (text, stepId) => {
+    try {
+      if (!ttsActive || !text) return;
+      setIsTtsPlaying(true);
+      onStepClick(stepId || `step-${Math.random()}`, String(text));
+    } catch {}
+  };
+
+  useEffect(() => {
+    const handler = () => setIsTtsPlaying(false);
+    window.addEventListener('tts:ended', handler);
+    return () => window.removeEventListener('tts:ended', handler);
+  }, []);
+
+  // Prefetch TTS for steps (Piper), once per mount
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const list = Array.isArray(instructions) ? instructions : [];
+        for (let idx = 0; idx < list.length; idx += 1) {
+          if (cancelled) break;
+          const txt = typeof list[idx] === 'string' ? list[idx] : (list[idx]?.description || '');
+          const stepId = `pf-${recipeId}-${idx}`;
+          if (!txt || getCached(stepId)) { await new Promise(r=>setTimeout(r,250)); continue; }
+          const locale = detectLanguage(txt);
+          try { await piperInit(locale); } catch {}
+          try {
+            const wav = await piperSynthesize(txt, { locale, rate: 1.0 });
+            if (cancelled) break;
+            const url = URL.createObjectURL(wav);
+            setCached(stepId, { url, locale, createdAt: Date.now() });
+          } catch {}
+          await new Promise(r=>setTimeout(r,250));
+        }
+      } catch {}
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [recipeId]);
 
   const content = useMemo(() => overrideRecipe || recipe || {}, [recipe, overrideRecipe]);
   const title = content.title || '';
@@ -80,8 +309,117 @@ export default function RecipeView({
   const description = content.description || '';
   const ingredients = Array.isArray(content.ingredients) ? content.ingredients : [];
   const instructions = Array.isArray(content.instructions) ? content.instructions : [];
+  const ingredientsToRender = useMemo(() => (variant === 'modal' ? ingredients.slice(0, 8) : ingredients), [variant, ingredients]);
+  const instructionsToRender = useMemo(() => (variant === 'modal' ? instructions.slice(0, 3) : instructions), [variant, instructions]);
   const nutrition = content.nutritional_information || content.nutrition || content.nutritionPerServing || {};
   const sourceUrl = content.source_url || content.source || null;
+
+  // Auto-hide toast
+  useEffect(() => {
+    if (justSavedVariant) {
+      const t = setTimeout(() => setJustSavedVariant(false), 3000);
+      return () => clearTimeout(t);
+    }
+  }, [justSavedVariant]);
+
+  // Dynamic document title (restore on unmount) without site suffix
+  const prevTitleRef = useRef(typeof document !== 'undefined' ? document.title : '');
+  useEffect(() => {
+    const base = content?.title || title || 'Recipe';
+    const withSuffix = variant === 'page' ? `${base}  Site` : base;
+    if (typeof document !== 'undefined') document.title = withSuffix;
+    return () => {
+      if (typeof document !== 'undefined') document.title = prevTitleRef.current || 'Clip2Cook';
+    };
+  }, [content?.title, title]);
+
+  // ----- Edit helpers -----
+  const startEdit = () => {
+    setIsEditing(true);
+    setEdited({
+      title,
+      description,
+      image_url: image,
+      ingredients: (ingredients || []).map((i) => {
+        if (typeof i === 'string') {
+          const { quantity, name } = splitQuantityFromText(i);
+          return { quantity, name };
+        }
+        const q0 = (i && i.quantity) ? String(i.quantity) : '';
+        const n0 = (i && i.name) ? String(i.name) : '';
+        if (!q0 && n0) {
+          const { quantity, name } = splitQuantityFromText(n0);
+          if (quantity) return { ...i, quantity, name };
+        }
+        return { ...i };
+      }),
+      instructions: (instructions || []).map(s => ({ ...(typeof s === 'string' ? { step: s.step, description: s } : s) })),
+    });
+    const base = image ? (String(image).startsWith('http') ? image : STATIC_BASE + image) : null;
+    setGallery(base ? [base] : []);
+    setGalleryIndex(0);
+  };
+
+  const saveEdits = async () => {
+    try {
+      setBusySave(true);
+      // Build updated content
+      const updatedContent = {
+        ...content,
+        title: edited.title,
+        description: edited.description,
+        image_url: edited.image_url,
+        ingredients: edited.ingredients,
+        instructions: edited.instructions,
+      };
+      if (isSaved && recipeId) {
+        // Update existing saved recipe
+        const params = new URLSearchParams();
+        if (typeof window !== 'undefined') {
+          const p = new URLSearchParams(window.location.search);
+          if (p.get('open')) params.set('collectionId', p.get('open'));
+        }
+        const res = await fetch(`${API_BASE}/recipes/${recipeId}?${params.toString()}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ recipe_content: updatedContent })
+        });
+        const updated = await res.json().catch(()=>null);
+        if (updated && typeof onSaved === 'function') onSaved(updated);
+      } else {
+        // Create new saved recipe (extract flow)
+        const payload = { source_url: content.source_url || '', recipe_content: updatedContent };
+        const res = await fetch(`${API_BASE}/recipes/save`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(payload)
+        });
+        const created = await res.json().catch(()=>null);
+        if (created && typeof onSaved === 'function') onSaved(created);
+      }
+      setOverrideRecipe(updatedContent);
+      setIsEditing(false);
+    } catch (e) {
+      alert('Failed to save changes');
+    } finally {
+      setBusySave(false);
+    }
+  };
+
+  const generateAiImage = async () => {
+    try {
+      setAiBusy(true);
+      const names = (edited?.ingredients || []).map(i => (i.name || '').trim()).filter(Boolean).slice(0,5);
+      const body = { title: edited?.title || title, ingredients: names, allow_placeholder: false };
+      const res = await fetch(`${API_BASE}/images/generate`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
+      const json = await res.json();
+      if (json?.url) {
+        setEdited(prev => ({ ...(prev || {}), image_url: json.url }));
+        const abs = json.url.startsWith('http') ? json.url : STATIC_BASE + json.url;
+        setGallery(g => { const ng = g && g.length ? [...g, abs] : [abs]; setGalleryIndex(ng.length-1); return ng; });
+      }
+    } catch { alert('AI image generation failed'); }
+    finally { setAiBusy(false); }
+  };
 
   // Load social data for saved recipes
   useEffect(() => {
@@ -125,6 +463,7 @@ export default function RecipeView({
           approved: [...t.approved, ...(json.data.added || []).map(k => ({ keyword: k, type: 'theme' }))],
           pending: [...t.pending, ...(json.data.pending || []).map(k => ({ keyword: k, type: 'theme' }))],
         }));
+        try { if (typeof onTagsUpdated === 'function') onTagsUpdated({ approved: json.data.added || [], pending: json.data.pending || [] }); } catch {}
       }
     } catch {}
   };
@@ -138,6 +477,19 @@ export default function RecipeView({
       if (json.ok) {
         setComments((prev) => [json.data, ...prev]);
         setCommentInput('');
+      }
+    } catch {}
+  };
+
+  const postReply = async (parentId) => {
+    const body = (replyText || '').trim();
+    if (!body || !parentId) return;
+    try {
+      const res = await fetch(`${API_BASE}/recipes/${recipeId}/comments`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ body, parentId }) });
+      const json = await res.json();
+      if (json.ok) {
+        setComments((prev) => [json.data, ...prev]);
+        setReplyToId(null); setReplyText('');
       }
     } catch {}
   };
@@ -206,12 +558,35 @@ export default function RecipeView({
     return raw;
   };
 
+  // --- Subnav (page only) ---
+  const subnavItems = [
+    { id: 'ingredients', label: 'Ingredients' },
+    { id: 'instructions', label: 'Instructions' },
+  ];
+  if (nutrition && Object.keys(nutrition).length > 0) subnavItems.push({ id: 'nutrition', label: 'Nutrition' });
+  if (isSaved && !content?.conversion?.isVariant) subnavItems.push({ id: 'variants', label: 'Variants' });
+  subnavItems.push({ id: 'tags', label: 'Tags' });
+  subnavItems.push({ id: 'ratings', label: 'Ratings' });
+  subnavItems.push({ id: 'comments', label: 'Comments' });
+
+  const activeId = useScrollSpy(subnavItems.map(i => i.id), 88);
+  
+  const scrollToId = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const topOffset = 88; // TODO: read actual topbar height dynamically
+    const target = el.querySelector('h2') || el;
+    const y = target.getBoundingClientRect().top + window.pageYOffset - topOffset;
+    window.scrollTo({ top: y, behavior: 'smooth' });
+    try { target?.focus?.(); } catch {}
+  };
+
   return (
     <div className={`w-full ${variant === 'modal' ? 'max-w-[1180px]' : ''}`}>
       <div className="px-4 lg:px-8">
         {/* Header */}
       <div className="mb-8">
-        {variant === 'modal' && sourceFrom && (
+        {variant === 'modal' && sourceFrom && !recipe?.conversion?.isVariant && (
           <div className="mb-2">
             <button className="text-sm text-blue-600 hover:underline"
               onClick={() => {
@@ -228,14 +603,14 @@ export default function RecipeView({
             {(activeConstraints.presets || []).map(p => (
               <span key={`p-${p}`} className="px-2 py-1 rounded-full text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">{p}</span>
             ))}
-            {(() => {
+              {(() => {
               const n = activeConstraints.nutrition || {};
               const chips = [];
               if (n.maxCalories != null) chips.push({ k: 'kcal', label: `≤ ${n.maxCalories} kcal` });
               if (n.minProtein != null) chips.push({ k: 'protein', label: `≥ ${n.minProtein} g protein` });
               if (n.maxCarbs != null) chips.push({ k: 'carbs', label: `≤ ${n.maxCarbs} g carbs` });
               if (n.maxFat != null) chips.push({ k: 'fat', label: `≤ ${n.maxFat} g fat` });
-              if (n.maxSodium != null) chips.push({ k: 'sodium', label: `≤ ${n.maxSodium} mg sodium` });
+              
               return chips.map(c => (
                 <span key={`n-${c.k}`} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">{c.label}</span>
               ));
@@ -244,10 +619,21 @@ export default function RecipeView({
         )}
           <div className="flex items-center gap-3">
             <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              <span>{title || 'Untitled Recipe'}</span>
+              {isEditing ? (
+                <input
+                  value={edited?.title || ''}
+                  onChange={(e)=>setEdited(v=>({...(v||{}), title: e.target.value}))}
+                  className="flex-1 w-[60vw] max-w-[900px] min-w-[40ch] text-3xl font-extrabold leading-tight border-b-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-sm px-1"
+                  placeholder="Title"
+                  aria-label="Recipe title"
+                />
+              ) : (
+                <span>{title || 'Untitled Recipe'}</span>
+              )}
               {content?.conversion?.isVariant && (
                 <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Variant</span>
               )}
+              {/* removed variant title tag near header */}
               {content?.conversion?.isVariant && (
                 <button
                   className={`text-xs px-2 py-1 rounded-full border ${content?.conversion?.visibility === 'public' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-700 border-gray-300'}`}
@@ -297,120 +683,320 @@ export default function RecipeView({
         {/* Media + Description */}
         <div className="flex flex-col md:flex-row md:items-stretch gap-6 mb-8 lg:mb-10">
           <div className="md:w-1/3">
-              {image && (
-              <img src={image.startsWith('http') ? image : STATIC_BASE + image} alt={title} className="w-full h-auto object-cover rounded-lg shadow-md" />
+            {(image || edited?.image_url) && (
+              <div className={`${isEditing ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+                <div className={`${variant === 'modal' ? 'relative w-full aspect-[4/3]' : ''}`}>
+                  <img
+                    src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((isEditing ? (edited?.image_url || image) : image).startsWith('http') ? (isEditing ? (edited?.image_url || image) : image) : STATIC_BASE + (isEditing ? (edited?.image_url || image) : image))}
+                    alt={title}
+                    className={`w-full ${variant === 'modal' ? 'h-full absolute inset-0' : 'h-auto'} object-cover rounded-lg shadow-md`}
+                    loading={variant === 'modal' ? 'lazy' : 'eager'}
+                    decoding="async"
+                  />
+                </div>
+                {isEditing && gallery.length > 1 && (
+                  <>
+                    <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev">‹</button>
+                    <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next">›</button>
+                  </>
+                )}
+                {isEditing && (
+                  <div className="mt-3 flex items-center gap-2">
+                    <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate Image'}</button>
+                    <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
+                      const f = e.target.files && e.target.files[0];
+                      if(!f) return;
+                      try {
+                        const form = new FormData();
+                        form.append('file', f);
+                        const r = await fetch(`${API_BASE}/images/upload`, { method: 'POST', credentials: 'include', body: form });
+                        const j = await r.json();
+                        if (j?.url) {
+                          setEdited(prev => ({ ...(prev||{}), image_url: j.url }));
+                          const abs = j.url.startsWith('http') ? j.url : STATIC_BASE + j.url;
+                          setGallery(g => { const ng = g && g.length ? [...g, abs] : [abs]; setGalleryIndex(ng.length-1); return ng; });
+                        } else {
+                          alert('Upload failed');
+                        }
+                      } catch {
+                        alert('Upload failed');
+                      } finally {
+                        e.target.value = '';
+                      }
+                    }} />
+                    <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300" onClick={()=>document.getElementById('rv-upload')?.click()}>Upload</button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           <div className="md:w-2/3 flex flex-col">
-            <Section title="Description">
-              <p className="text-gray-700 leading-relaxed">{description}</p>
+            <Section title="Description" showTitle={false}>
+              {isEditing ? (
+                <textarea
+                  value={edited?.description||''}
+                  onChange={(e)=>setEdited(v=>({...(v||{}), description:e.target.value}))}
+                  className="w-full border rounded-lg px-4 py-3 text-base leading-relaxed min-h-[180px] resize-y ring-amber-200 focus:ring-2"
+                  rows={6}
+                  placeholder="Add description"
+                />
+              ) : (
+                <p className="text-gray-700 leading-relaxed hover:bg-yellow-50 rounded-lg p-2 transition-colors">{description}</p>
+              )}
             </Section>
-            {/* Desktop-only meta badges directly under description */}
-            <div className="hidden lg:block mt-4 mb-6">
-              <MetaCards />
+          </div>
+        </div>
+
+        {/* Stats bar on its own row */}
+        <div className="mb-8">
+          <div className="flex flex-wrap items-center justify-between gap-4 md:gap-6">
+            <div className="inline-flex items-center gap-2 px-4 py-3 bg-blue-50 rounded-lg border border-blue-100">
+              <UserGroupIcon className="w-5 h-5 text-blue-600" aria-hidden="true" />
+              <span className="text-sm text-blue-700">Servings</span>
+              <span className="text-sm font-semibold text-blue-900">{content.servings || content.serves || '—'}</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-3 bg-amber-50 rounded-lg border border-amber-100">
+              <ClockIcon className="w-5 h-5 text-amber-600" aria-hidden="true" />
+              <span className="text-sm text-amber-700">Prep Time</span>
+              <span className="text-sm font-semibold text-amber-900">{(() => { const v = content.prep_time ?? content.prep_time_minutes; return v != null && String(v) !== '' ? `${v} min` : '—'; })()}</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-3 bg-orange-50 rounded-lg border border-orange-100">
+              <FireIcon className="w-5 h-5 text-orange-600" aria-hidden="true" />
+              <span className="text-sm text-orange-700">Cook Time</span>
+              <span className="text-sm font-semibold text-orange-900">{(() => { const v = content.cook_time ?? content.cook_time_minutes; return v != null && String(v) !== '' ? `${v} min` : '—'; })()}</span>
+            </div>
+            <div className="inline-flex items-center gap-2 px-4 py-3 bg-green-50 rounded-lg border border-green-100">
+              <span className="text-sm text-green-700">Difficulty</span>
+              <span className="text-sm font-semibold text-green-900">Easy</span>
             </div>
           </div>
         </div>
+
         {/* Mobile/tablet full-width badges below image, above ingredients */}
-        <div className="block lg:hidden mt-4 mb-6">
-          <MetaCards />
-        </div>
+        {/* removed MetaCards duplicate for mobile in favor of unified stats bar */}
 
-        {/* Two column body */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mb-6">
-          <div className="lg:col-span-5">
-            <Section title="Ingredients">
-            <ul className="space-y-2">
-              {ingredients.map((ing, idx) => {
-                const text = typeof ing === 'string' ? ing : `${ing.quantity || ''} ${ing.name || ''} ${ing.notes ? `(${ing.notes})` : ''}`.trim();
-                // emphasize qty/units by bolding leading tokens
-                const m = /^(\S+\s+\S+)(.*)$/i.exec(text);
-                return (
-                  <li key={idx} className="flex items-start">
-                    <span className="text-green-600 mr-3 mt-1 flex-shrink-0">•</span>
-                    <span className="text-gray-700">
-                      {m ? (<><strong className="font-semibold text-gray-900">{m[1]}</strong>{m[2]}</>) : text}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </Section>
-        </div>
-          <div className="lg:col-span-7">
-            <Section title="Instructions">
-            <div className="space-y-3">
-              {instructions.map((inst, idx) => (
-                <div key={idx} className="grid grid-cols-[2rem,1fr] gap-3 items-start">
-                  <div className="w-8 h-8 rounded-full bg-blue-600 text-white inline-flex items-center justify-center font-bold shrink-0">{idx + 1}</div>
-                  <p className="text-gray-700 leading-relaxed">{typeof inst === 'string' ? inst : (inst.description || `Step ${idx + 1}`)}</p>
+        {/* Ingredients & Instructions as separate white cards; no outer visual title */}
+        <RecipeSection id="ingredients-section" title="Ingredients & Instructions" titleHidden variant="plain" className="px-0">
+          <div className="grid gap-6 md:grid-cols-[2fr,3fr]">
+            {/* Ingredients column */}
+            <div className="rounded-2xl border border-black/5 shadow-sm p-4 sm:p-6" style={{ background: 'rgb(250 250 250 / 95%)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 id="ingredients" className="text-lg font-semibold flex items-center gap-2 scroll-mt-[88px]">
+                  Ingredients
+                </h3>
+              </div>
+              {isEditing ? (
+                <div className="space-y-2" onDragEnd={clearDrag}>
+                  {(edited?.ingredients||[]).map((ing, idx) => (
+                    <div key={idx}
+                         className={`relative flex items-center gap-2 p-2 rounded hover:bg-yellow-50 ${dragItem&&dragItem.type==='ingredients'&&dragItem.index===idx? 'ring-2 ring-amber-300' : ''}`}
+                         draggable
+                         onDragStart={handleDragStart('ingredients', idx)}
+                         onDragOver={handleDragOver('ingredients', idx)}
+                         onDrop={handleDrop('ingredients', idx)}
+                    >
+                      {dropIndicator && dropIndicator.type==='ingredients' && (
+                        ((dropIndicator.pos==='before' && dropIndicator.index===idx) || (dropIndicator.pos==='after' && dropIndicator.index+1===idx)) && (
+                          <div className="absolute -top-1 left-0 right-0 h-0.5 bg-amber-500" />
+                        )
+                      )}
+                      <input value={ing.quantity||''} onChange={(e)=>setEdited(v=>{ const arr=[...(v?.ingredients||[])]; arr[idx]={...arr[idx], quantity:e.target.value}; return {...v, ingredients:arr}; })} className="w-24 border rounded-lg px-2 py-1" placeholder="Qty" />
+                      <input value={ing.name||''} onChange={(e)=>setEdited(v=>{ const arr=[...(v?.ingredients||[])]; arr[idx]={...arr[idx], name:e.target.value}; return {...v, ingredients:arr}; })} className="flex-1 border rounded-lg px-3 py-1.5" placeholder="Ingredient" />
+                      <button type="button" className="text-gray-500 hover:text-red-600 p-1" title="Remove ingredient" onClick={()=>confirmAndRemoveIngredient(idx)}>
+                        <TrashIcon className="w-5 h-5" />
+                      </button>
+                      {dropIndicator && dropIndicator.type==='ingredients' && dropIndicator.pos==='after' && dropIndicator.index===idx && idx === (edited?.ingredients?.length||0) - 1 && (
+                        <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-amber-500" />
+                      )}
+                    </div>
+                  ))}
+                  <div className="pt-1">
+                    <button type="button" className="mt-2 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700" onClick={addIngredientRow}>+ Add ingredient</button>
+                  </div>
                 </div>
-              ))}
+               ) : (
+                <ul className="space-y-2">
+                  {ingredientsToRender.map((ing, idx) => {
+                    const text = typeof ing === 'string' ? ing : `${ing.quantity || ''} ${ing.name || ''} ${ing.notes ? `(${ing.notes})` : ''}`.trim();
+                    const m = /^(\S+\s+\S+)(.*)$/i.exec(text);
+                    return (
+                      <li key={idx} className={`flex items-start p-1 rounded ${hoverHighlight ? 'hover:bg-yellow-50' : ''} transition-colors`}>
+                        <span className="text-green-600 mr-3 mt-1 flex-shrink-0">•</span>
+                        <span className="text-gray-700">{m ? (<><strong className="font-semibold text-gray-900">{m[1]}</strong>{m[2]}</>) : text}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
-          </Section>
-          </div>
-        </div>
 
-      {/* Nutrition */}
-      <Section title="Nutrition Information (per serving)">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-2">
+            {/* Instructions column */}
+            <div className="rounded-2xl border border-black/5 shadow-sm p-4 sm:p-6" style={{ background: 'rgb(250 250 250 / 95%)' }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold flex items-center gap-2 scroll-mt-[88px]">
+                  Instructions
+                </h3>
+              </div>
+              <div className="sr-only" aria-hidden="true"></div>
+              {isEditing ? (
+                    <div className="space-y-2" onDragEnd={clearDrag}>
+                  {(edited?.instructions||[]).map((st, idx) => (
+                    <div key={idx}
+                         className={`relative p-2 rounded hover:bg-yellow-50 ${dragItem&&dragItem.type==='instructions'&&dragItem.index===idx? 'ring-2 ring-amber-300' : ''}`}
+                         draggable
+                         onDragStart={handleDragStart('instructions', idx)}
+                         onDragOver={handleDragOver('instructions', idx)}
+                          onDrop={handleDrop('instructions', idx)}
+                         onClick={() => { if (ttsActive) speakText(st.description || '', `st-${recipeId}-${idx}`); }}
+                    >
+                      {dropIndicator && dropIndicator.type==='instructions' && (
+                        ((dropIndicator.pos==='before' && dropIndicator.index===idx) || (dropIndicator.pos==='after' && dropIndicator.index+1===idx)) && (
+                          <div className="absolute -top-1 left-0 right-0 h-0.5 bg-amber-500" />
+                        )
+                      )}
+                      <div className="flex items-start gap-3">
+                        <div className="w-8 h-8 mt-1 rounded-full bg-[#e87b35] text-white inline-flex items-center justify-center font-bold shrink-0">{idx + 1}</div>
+                        <div className="flex-1">
+                          <textarea value={st.description||''} onChange={(e)=>setEdited(v=>{ const arr=[...(v?.instructions||[])]; arr[idx]={...arr[idx], description:e.target.value}; return {...v, instructions:arr}; })} className="w-full border rounded-lg px-3 py-2 focus:ring-2 ring-amber-200" rows={2} />
+                        </div>
+                        <div className="shrink-0">
+                          <button type="button" className="text-gray-500 hover:text-red-600 p-1" title="Remove step" onClick={()=>confirmAndRemoveInstruction(idx)}>
+                            <TrashIcon className="w-5 h-5" />
+                          </button>
+                        </div>
+                      </div>
+                      {dropIndicator && dropIndicator.type==='instructions' && dropIndicator.pos==='after' && dropIndicator.index===idx && idx === (edited?.instructions?.length||0) - 1 && (
+                        <div className="absolute -bottom-1 left-0 right-0 h-0.5 bg-amber-500" />
+                      )}
+                    </div>
+                  ))}
+                  <div className="pt-1">
+                    <button type="button" className="mt-2 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700" onClick={addInstructionRow}>+ Add step</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {instructionsToRender.map((inst, idx) => (
+                    <div key={idx} className={`grid grid-cols-[2rem,1fr] gap-3 items-start p-1 rounded ${hoverHighlight ? 'hover:bg-yellow-50' : ''} transition-colors`} onClick={() => { if (ttsActive) speakText(typeof inst === 'string' ? inst : (inst.description || ''), `st-${recipeId}-${idx}`); }}>
+                      <div className="w-8 h-8 rounded-full bg-[#e87b35] text-white inline-flex items-center justify-center font-bold shrink-0">{idx + 1}</div>
+                      <p className="text-gray-700 leading-relaxed">{typeof inst === 'string' ? inst : (inst.description || `Step ${idx + 1}`)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </RecipeSection>
+
+        {/* Confirm delete modal */}
+        {isEditing && confirmDelete && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={onCancelDelete} />
+            <div className="relative z-50 w-[92vw] max-w-md bg-white rounded-2xl shadow-xl p-6">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center">
+                  <ExclamationTriangleIcon className="h-6 w-6 text-amber-600" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-1">Ta bort {confirmDelete.type === 'ingredient' ? 'ingrediens' : 'steg'}?</h4>
+                  <p className="text-gray-600 text-sm">Detta går inte att ångra. Vill du fortsätta?</p>
+                </div>
+                <button onClick={onCancelDelete} className="text-gray-400 hover:text-gray-600">
+                  <XMarkIcon className="w-6 h-6" />
+                </button>
+              </div>
+              <div className="mt-5 flex justify-end gap-3">
+                <button onClick={onCancelDelete} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200">Avbryt</button>
+                <button onClick={onConfirmDelete} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700">Ta bort</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      {variant !== 'modal' && (
+      <RecipeSection id="nutrition" title="Nutrition Information (per serving)">
+        <div className="flex flex-wrap items-center gap-2 mb-2">
           {[{k:'calories', l:'Calories'},{k:'protein',l:'Protein'},{k:'fat',l:'Fat'},{k:'carbs',l:'Carbs'}].map(({k,l}) => (
-            <div key={k} className="bg-white border border-gray-200 rounded-xl p-4 text-center shadow-sm">
-              <p className="text-sm text-gray-500">{l}</p>
-              <p className="text-2xl font-bold text-gray-900">{(() => {
+            <div key={k} className="inline-flex items-center gap-2 bg-white text-gray-800 rounded-full px-3 py-1 border border-gray-200">
+              <span className="text-sm text-gray-600">{l}</span>
+              <span className="text-sm font-medium">{(() => {
                 const val = resolveNutritionValue(nutrition, k);
                 if (val === 0 || val === '0' || val === 0.0) return ['protein','fat','carbs'].includes(k) ? '0g' : '0';
                 const formatted = (val !== undefined && val !== null && String(val).trim() !== '') ? formatNutritionValue(k, val) : '—';
-                return formatted;
-              })()}</p>
+                return k === 'calories' ? `${formatted} kcal` : formatted;
+              })()}</span>
             </div>
           ))}
         </div>
-      </Section>
-
-      {/* Divider between Nutrition and social sections (only when social exists) */}
-      {isSaved && (
-        <div className="border-t border-gray-200 my-8" />
+      </RecipeSection>
       )}
+
+      {/* Removed divider between Nutrition and social sections to keep seamless flow */}
 
         {/* Variants section for original recipes */}
         {isSaved && !content?.conversion?.isVariant && (
-          <VariantsList parentId={recipeId} onOpenRecipeInModal={variant === 'modal' ? (id)=>onOpenRecipeInModal?.(id) : undefined} />
+          <RecipeSection id="variants" title="Variants" titleHidden>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="scroll-mt-[88px] text-xl font-semibold">Variants</h2>
+              <select 
+                value={sort} 
+                onChange={(e) => setSort(e.target.value)} 
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+              >
+                <option value="popular">Most popular</option>
+                <option value="newest">Newest</option>
+                <option value="closest">Closest to your filters</option>
+              </select>
+            </div>
+            <VariantsList 
+              parentId={recipeId} 
+              onOpenRecipeInModal={variant === 'modal' ? (id)=>onOpenRecipeInModal?.(id) : undefined}
+              sort={sort}
+            />
+          </RecipeSection>
         )}
 
-      {/* Source */}
-      {sourceUrl && (
-        <Section title="Source">
+
+      {/* Source directly between Nutrition and Tags (omit in quick view) */}
+      {variant !== 'modal' && sourceUrl && (
+        <RecipeSection id="source" title="Source">
           <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-3">
             <LinkIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
             <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">{sourceUrl}</a>
           </div>
-        </Section>
+        </RecipeSection>
       )}
 
-      {/* Social section for saved recipes */}
+      {/* Social section for saved recipes (omit in quick view via isSaved=false) */}
       {isSaved && (
         <div className="mt-8 mb-24">
           {/* Tags */}
-          <Section title="Tags" className="mt-8">
+          <RecipeSection id="tags" title="Tags" className="mt-8">
             <div className="flex flex-wrap gap-2 mb-3">
-              {(tags.approved||[]).map(t => (
-                <span key={`a-${t.keyword}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(t.type)}`}>
-                  <span className="font-medium">{t.keyword}</span>
-                </span>
-              ))}
-              {(tags.pending||[]).map(t => (
-                <span key={`p-${t.keyword}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(t.type)}`}> 
-                  <span className="font-medium">{t.keyword}</span>
-                </span>
-              ))}
+              {(() => {
+                const approved = (tags.approved||[]);
+                const out = [...approved];
+                try {
+                  const rc = recipe || {};
+                  const conv = rc.conversion || {};
+                  if (conv.isVariant) out.push({ keyword: 'Variant', type: 'variant' });
+                  const presets = ((conv.constraints||{}).presets||[]).map(p=>String(p).toLowerCase());
+                  const label = (p)=> p==='plant-based' ? 'Plant based' : p.charAt(0).toUpperCase()+p.slice(1);
+                  ['vegan','vegetarian','pescetarian'].forEach(p=>{ if (presets.includes(p)) out.push({ keyword: label(p), type: 'diet' }); });
+                } catch {}
+                return out.map((t, idx) => (
+                  <span key={`tag-${idx}-${t.keyword}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(t.type, t.keyword)}`}>
+                    <span className="font-medium">{t.keyword}</span>
+                  </span>
+                ));
+              })()}
             </div>
-            {/* Input */}
-            <TagInput tags={[]} setTags={(ts)=>addTags((ts||[]).map(x=>x.label))} placeholder="Add new tag and press Add" />
-          </Section>
+            {/* Input: no required validation in view/edit; only enforce on create */}
+            <TagInput required={false} tags={[]} setTags={(ts)=>addTags((ts||[]).map(x=>x.label))} placeholder="Add new tag and press Add" />
+          </RecipeSection>
 
           {/* Ratings */}
-          <Section title="Ratings" className="mt-4">
+          <RecipeSection id="ratings" title="Ratings" className="mt-4">
             <div className="flex items-center gap-2" role="radiogroup" aria-label="Rate 1 to 5">
               {[1,2,3,4,5].map(v => (
                 <button key={v} className={`w-6 h-6 ${v <= (rating.userValue || Math.round(rating.average)) ? 'text-yellow-400' : 'text-gray-300'}`} onClick={()=>putRating(v)}>
@@ -419,103 +1005,176 @@ export default function RecipeView({
               ))}
               <span className="text-sm text-gray-600 ml-2">{Number(rating.average||0).toFixed(2)} ({rating.count})</span>
             </div>
-          </Section>
+          </RecipeSection>
 
-          {/* Comments */}
-          <Section title="Comments" className="mt-8">
+      {/* Comments */}
+      <RecipeSection id="comments" title="Comments" className="mt-8">
             <div className="bg-gray-50 rounded-lg p-4">
               <textarea value={commentInput} onChange={(e)=>setCommentInput(e.target.value)} rows={3} className="w-full bg-white px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Write a comment..." />
               <div className="flex justify-end mt-2">
                 <button onClick={postComment} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Send</button>
               </div>
               <div className="mt-6">
-                {comments.length === 0 ? (<p className="text-gray-500">Be the first to comment.</p>) : comments.map(c => (
-                  <div key={c.id} className="border border-gray-200 rounded-lg p-3 bg-white mb-3">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {c.user?.avatar && (
-                        <img src={(String(c.user.avatar).startsWith('http') ? c.user.avatar : `${STATIC_BASE}${c.user.avatar}`)} alt="avatar" className="h-6 w-6 rounded-full object-cover" onError={(e)=>{e.currentTarget.style.display='none';}} />
-                      )}
-                      <span className="font-medium text-gray-900">{c.user?.username || c.user?.displayName || 'Anonymous'}</span>
+                {(() => {
+                  if (comments.length === 0) return (<p className="text-gray-500">Be the first to comment.</p>);
+                  const byParent = new Map();
+                  comments.forEach(cm => {
+                    const pid = cm.parentId || 0; if (!byParent.has(pid)) byParent.set(pid, []); byParent.get(pid).push(cm);
+                  });
+                  const renderThread = (list, level=0) => (
+                    <div>
+                      {list.map((c) => (
+                        <div key={c.id} className={`border border-gray-200 rounded-lg p-3 bg-white mb-3 ${level>0? 'ml-6 md:ml-10' : ''}`}>
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              {c.user?.avatar && (
+                                <img src={(String(c.user.avatar).startsWith('http') ? c.user.avatar : `${STATIC_BASE}${c.user.avatar}`)} alt="avatar" className="h-6 w-6 rounded-full object-cover" onError={(e)=>{e.currentTarget.style.display='none';}} />
+                              )}
+                              <span className="font-medium text-gray-900">{c.user?.username || c.user?.displayName || 'Anonymous'}</span>
+                            </div>
+                            <span className="text-xs text-gray-500">{new Date(c.createdAt).toLocaleString()}</span>
+                          </div>
+                          {editingId === c.id ? (
+                            <div>
+                              <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2" rows={3} value={editValue} onChange={(e)=>setEditValue(e.target.value)} />
+                              <div className="flex justify-end gap-2 mt-2">
+                                <button onClick={async ()=>{ try{ const r= await fetch(`${API_BASE}/comments/${c.id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({body: editValue})}); const j= await r.json(); if(j.ok){ setComments(list => list.map(x => x.id===c.id? j.data : x)); } } finally { setEditingId(null); } }} className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm hover:bg-green-700">Save</button>
+                                <button onClick={()=>{ setEditingId(null); }} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm">Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-gray-700">{c.body}</p>
+                          )}
+                          <div className="flex justify-between items-center mt-2">
+                            <div className="flex items-center gap-3">
+                              <button onClick={()=>{ setReplyToId(c.id === replyToId ? null : c.id); setReplyText(''); }} className="text-sm text-blue-600 hover:underline">Reply</button>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {isOwner(c) && editingId !== c.id && (
+                                <>
+                                  <button onClick={()=>{ setEditingId(c.id); setEditValue(c.body || ''); }} title="Edit" className="text-gray-500 hover:text-gray-700">
+                                    <PencilSquareIcon className="w-5 h-5" />
+                                  </button>
+                                  <button onClick={async ()=>{ if(!confirm('Delete this comment?')) return; try{ const r= await fetch(`${API_BASE}/comments/${c.id}`, {method:'DELETE', credentials:'include'}); const j= await r.json(); if(j.ok){ setComments(list => list.filter(x => x.id !== c.id)); } } catch{} }} title="Delete" className="text-red-500 hover:text-red-600">
+                                    <TrashIcon className="w-5 h-5" />
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const res = await fetch(`${API_BASE}/comments/${c.id}/like`, { method: 'POST', credentials: 'include' });
+                                    const json = await res.json();
+                                    if (!json.ok) throw new Error();
+                                    setComments(list => list.map(x => x.id === c.id ? { ...x, likesCount: json.data.count, likedByMe: json.data.liked } : x));
+                                  } catch {}
+                                }}
+                                className={`flex items-center gap-1 text-sm ${c.likedByMe ? 'text-red-600' : 'text-gray-500'} hover:text-red-600`}
+                                title={c.likedByMe ? 'Unlike' : 'Like'}
+                              >
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                                <span>{c.likesCount || 0}</span>
+                              </button>
+                            </div>
+                          </div>
+                          {replyToId === c.id && (
+                            <div className="mt-3">
+                              <textarea value={replyText} onChange={(e)=>setReplyText(e.target.value)} rows={2} className="w-full bg-white px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Write a reply..." />
+                              <div className="flex justify-end gap-2 mt-2">
+                                <button onClick={()=>setReplyToId(null)} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm">Cancel</button>
+                                <button onClick={()=>postReply(c.id)} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700">Reply</button>
+                              </div>
+                            </div>
+                          )}
+                          {byParent.has(c.id) && (
+                            <div className="mt-3 border-l-2 border-gray-200 pl-3">
+                              {renderThread(byParent.get(c.id), level+1)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
-                    <span className="text-xs text-gray-500">{new Date(c.createdAt).toLocaleString()}</span>
-                  </div>
-                   {editingId === c.id ? (
-                     <div>
-                       <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2" rows={3} value={editValue} onChange={(e)=>setEditValue(e.target.value)} />
-                       <div className="flex justify-end gap-2 mt-2">
-                         <button onClick={async ()=>{ try{ const r= await fetch(`${API_BASE}/comments/${c.id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({body: editValue})}); const j= await r.json(); if(j.ok){ setComments(list => list.map(x => x.id===c.id? j.data : x)); } } finally { setEditingId(null); } }} className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm hover:bg-green-700">Save</button>
-                         <button onClick={()=>{ setEditingId(null); }} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm">Cancel</button>
-                       </div>
-                     </div>
-                   ) : (
-                     <p className="text-gray-700">{c.body}</p>
-                   )}
-                    <div className="flex justify-end items-center gap-3 mt-2">
-                     {isOwner(c) && editingId !== c.id && (
-                       <>
-                         <button onClick={()=>{ setEditingId(c.id); setEditValue(c.body || ''); }} title="Edit" className="text-gray-500 hover:text-gray-700">
-                           <PencilSquareIcon className="w-5 h-5" />
-                         </button>
-                          <button onClick={async ()=>{ if(!confirm('Delete this comment?')) return; try{ const r= await fetch(`${API_BASE}/comments/${c.id}`, {method:'DELETE', credentials:'include'}); const j= await r.json(); if(j.ok){ setComments(list => list.filter(x => x.id !== c.id)); } } catch{} }} title="Delete" className="text-red-500 hover:text-red-600">
-                           <TrashIcon className="w-5 h-5" />
-                         </button>
-                       </>
-                     )}
-                     <button
-                      onClick={async () => {
-                        try {
-                          const res = await fetch(`${API_BASE}/comments/${c.id}/like`, { method: 'POST', credentials: 'include' });
-                          const json = await res.json();
-                          if (!json.ok) throw new Error();
-                          setComments(list => list.map(x => x.id === c.id ? { ...x, likesCount: json.data.count, likedByMe: json.data.liked } : x));
-                        } catch {}
-                      }}
-                      className={`flex items-center gap-1 text-sm ${c.likedByMe ? 'text-red-600' : 'text-gray-500'} hover:text-red-600`}
-                      title={c.likedByMe ? 'Unlike' : 'Like'}
-                    >
-                      <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                      <span>{c.likesCount || 0}</span>
-                    </button>
-                   </div>
-                </div>
-              ))}
+                  );
+                  return renderThread(byParent.get(0) || byParent.get(null) || []);
+                })()}
               </div>
             </div>
-          </Section>
+      </RecipeSection>
           {isSticky && <div className="h-24" />}
         </div>
       )}
       </div>
 
-      {/* Action Bar */}
-      <div className={`${isSticky ? `sticky left-0 right-0 bg-white border-t border-gray-200 z-30 ${variant === 'modal' ? '-bottom-6 -mx-6 px-6' : 'bottom-0'}` : ''} mt-8`}> 
-        <div className="flex flex-wrap justify-end gap-4 py-4 ${variant === 'modal' ? '' : 'px-4 lg:px-8'}">
-          <button onClick={() => onDownload?.(content)} className="flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors">
-            <ArrowDownTrayIcon className="h-5 w-5" />
-            <span>Download PDF</span>
-          </button>
-          {!isSaved && (
-            <button onClick={() => onSave?.(content)} className="flex items-center justify-center gap-2 bg-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-purple-700 transition-colors">
-              <BookmarkIcon className="h-5 w-5" />
-              <span>Save to Recipes</span>
+      {/* Action Bar after content */}
+      {variant !== 'modal' && (
+      <div className={`mt-8`}>
+          <div className="flex items-center justify-between py-4 ${variant === 'modal' ? '' : 'px-4 lg:px-8'}">
+          <div className="flex-1">
+            {variant === 'modal' && !isEditing && (
+              <div className="inline-flex items-center gap-3">
+                <button onClick={()=>setHoverHighlight(v=>!v)} className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900">
+                  {hoverHighlight ? (<EyeIcon className="h-5 w-5" />) : (<EyeSlashIcon className="h-5 w-5" />)}
+                  <span className="text-sm">Highlight</span>
+                </button>
+                <div className="inline-flex items-center gap-2">
+                  <button aria-pressed={ttsActive} onClick={()=>setTtsActive(v=>!v)} className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border ${ttsActive ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-gray-300 text-gray-700'} hover:bg-gray-50`} title="Text-to-Speech">
+                    {ttsActive ? (<SpeakerWaveIcon className="h-5 w-5" />) : (<SpeakerXMarkIcon className="h-5 w-5" />)}
+                  </button>
+                  {isTtsPlaying && (
+                    <button onClick={()=>{ try{ if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch {}; setIsTtsPlaying(false); }} className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 text-red-600 border border-red-200" title="Stop">
+                      <span className="block w-3 h-3 bg-red-600" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-wrap justify-end gap-3">
+            <button onClick={() => onDownload?.(content)} className="flex items-center justify-center gap-2 bg-[#00b5c3] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
+              <ArrowDownTrayIcon className="h-5 w-5" />
+              <span>Download PDF</span>
             </button>
-          )}
-          {isSaved && (
-            <button onClick={()=>setConvertOpen(true)} className="flex items-center justify-center gap-2 bg-amber-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-amber-700 transition-colors">
-              <span>Convert</span>
-            </button>
-          )}
-          {!isSaved && (
-            <button onClick={() => onCreateNew?.()} className="flex items-center justify-center gap-2 bg-amber-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-amber-700 transition-colors">
-              <PlusCircleIcon className="h-5 w-5" />
-              <span>Create New Recipe</span>
-            </button>
-          )}
+            {!isSaved && (
+              <button onClick={() => onSave?.(content)} className="flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                <BookmarkIcon className="h-5 w-5" />
+                <span>Save to Recipes</span>
+              </button>
+            )}
+            {isSaved && (
+              <>
+                <button onClick={()=>setConvertOpen(true)} className="flex items-center justify-center gap-2 bg-[#e87b35] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
+                  <span>Convert</span>
+                </button>
+              <button onClick={() => { isEditing ? saveEdits() : startEdit(); }} disabled={busySave} className={`flex items-center justify-center gap-2 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'} text-white font-semibold py-2.5 px-5 rounded-lg transition-colors disabled:opacity-60 text-sm`}>
+                  <PencilSquareIcon className="h-5 w-5" />
+                  <span>{isEditing ? (busySave ? 'Saving…' : 'Save Changes') : 'Edit Recipe'}</span>
+                </button>
+              </>
+            )}
+            {justSavedVariant && (
+              <>
+                <button onClick={()=>{ if (variant==='modal' && typeof onOpenRecipeInModal==='function') { onOpenRecipeInModal(null); } }} className="flex items-center justify-center gap-2 bg-gray-100 text-gray-800 font-semibold py-3 px-6 rounded-lg hover:bg-gray-200 transition-colors">Close</button>
+                <button onClick={()=>{ window.location.href = '/'; }} className="flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors">View in My Recipes</button>
+              </>
+            )}
+            {!isSaved && (
+              <>
+                <button onClick={() => onAddToCollection?.()} className="flex items-center justify-center gap-2 bg-[#da8146] text-white font-semibold py-3 px-6 rounded-lg hover:brightness-110 transition-colors">
+                  <BookOpenIcon className="h-5 w-5" />
+                  <span>Add to Collection</span>
+                </button>
+              <button onClick={() => { isEditing ? saveEdits() : startEdit(); }} disabled={busySave} className={`flex items-center justify-center gap-2 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'} text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-60`}>
+                  <PencilSquareIcon className="h-5 w-5" />
+                  <span>{isEditing ? (busySave ? 'Saving…' : 'Save Changes') : 'Edit Recipe'}</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
+      )}
       {convertOpen && (
-          <RecipeConvertPanel
+           <RecipeConvertPanel
           isOpen={convertOpen}
           busy={convertBusy}
           initialConstraints={lastConstraints}
@@ -526,21 +1185,26 @@ export default function RecipeView({
               {...props}
               baseIngredients={ingredients}
               baseInstructions={instructions}
+              constraints={lastConstraints}
             />
           )}
-          recipeId={recipeId}
+           recipeId={recipeId}
+           originalImage={image}
+           baseTitle={title}
           onClose={()=>setConvertOpen(false)}
+          onBack={()=>setPreviewResult(null)}
           onPreview={async (constraints)=>{
             try {
               setConvertBusy(true); setLastConstraints(constraints);
               setConvertError(''); setPreviewResult(null);
+              console.info('[Convert] Building compact payload for preview...');
               const payload = buildUserPayload({
                 title, description, ingredients, instructions,
                 nutritionPerServing: nutrition
               }, constraints);
               const result = await convertRecipeWithDeepSeek({
                 apiKey: process.env.DEEPSEEK_API_KEY || '',
-                systemPrompt: SYSTEM_PROMPT,
+                systemPrompt: (buildSystemPrompt ? buildSystemPrompt(constraints, constraints?.locale || 'sv') : SYSTEM_PROMPT),
                 userPayload: payload,
                 fast: true
               });
@@ -586,8 +1250,34 @@ export default function RecipeView({
                 nutritionPerServing: result.nutritionPerServing || nutrition
               });
               setActiveConstraints(constraints);
+              // Switch modal to saved variant and show toast + deep-link + optimistic broadcast
+              if (saved?.id) {
+                setSavedVariantId(saved.id);
+                try {
+                  const parentId = saved.parentRecipeId || recipeId;
+                  const url = `/recipes/${parentId}?variant=${saved.id}`;
+                  window.history.pushState({}, '', url);
+                } catch {}
+                try {
+                  window.dispatchEvent(new CustomEvent('recipes:variant-saved', { detail: { recipe: saved } }));
+                } catch {}
+                // Open saved variant in the same modal (desktop) or navigate in inline/page
+                if (variant === 'modal' && typeof onOpenRecipeInModal === 'function') {
+                  onOpenRecipeInModal(saved.id, { sourceRecipeId: recipeId, sourceTitle: title });
+                } else if (variant === 'inline') {
+                  try {
+                    window.location.href = `/recipes/${saved.id}`;
+                  } catch {}
+                }
+                // If this RecipeView is rendered inside Collections modal without onOpenRecipeInModal, broadcast an intent
+                if (variant === 'modal' && typeof onOpenRecipeInModal !== 'function') {
+                  try {
+                    window.dispatchEvent(new CustomEvent('collections:open-recipe', { detail: { id: saved.id, fromId: recipeId, fromTitle: title } }));
+                  } catch {}
+                }
+              }
+              setJustSavedVariant(true);
               setConvertOpen(false);
-              // Optionellt: trigga refresh utanför panelen
             } catch (e) {
               setConvertError(String(e?.message || 'Failed to save variant'));
             } finally { setConvertBusy(false); }

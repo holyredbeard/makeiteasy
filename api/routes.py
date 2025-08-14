@@ -6,11 +6,11 @@ import tempfile
 import time
 from typing import Optional, List, Dict, Any
 from pathlib import Path
-from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, BackgroundTasks, Body
+from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, BackgroundTasks, Body, File
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.requests import Request
-from models.types import User, RecipeContent, SavedRecipe, Recipe, SaveRecipeRequest, YouTubeVideo, YouTubeSearchRequest, Step
+from models.types import User, RecipeContent, SavedRecipe, Recipe, SaveRecipeRequest, YouTubeVideo, YouTubeSearchRequest, Step, Collection
 from core.auth import get_current_active_user
 from core.database import db
 from core.limiter import limiter
@@ -31,6 +31,8 @@ import json
 import asyncio
 from pydantic import BaseModel
 import re
+import asyncio
+import json as _json
 import os
 import yt_dlp
 import httpx
@@ -45,7 +47,7 @@ class TagAction(BaseModel):
 
 router = APIRouter()
 class ImageGenRequest(BaseModel):
-    recipe_id: int
+    recipe_id: Optional[int] = None
     seed: Optional[int] = None
     # Optional hint; if omitted we infer from recipe (if no original image → allow placeholder)
     allow_placeholder: Optional[bool] = None
@@ -55,6 +57,8 @@ class ImageGenRequest(BaseModel):
     constraints: Optional[Dict[str, Any]] = None
     aspect: Optional[str] = None  # '1:1','4:3','3:2','16:9'
     fast_mode: Optional[bool] = None
+    mode: Optional[str] = None  # 'auto'|'img2img'|'txt2img'
+    image_url: Optional[str] = None  # original image to condition on (optional)
 
 from typing import Optional as _Optional
 
@@ -120,14 +124,51 @@ def _build_image_prompt(recipe_title: str, ingredients: list, presets: _Optional
         'fast_mode': bool(fast_mode),
     }
 
+# ---- Update existing recipe (owner only) ----
+class UpdateRecipeRequest(BaseModel):
+    recipe_content: Dict[str, Any]
+
+@router.put("/recipes/{recipe_id}", tags=["Recipes"])
+@limiter.limit("30/minute")
+async def update_saved_recipe_api(request: Request, recipe_id: int, payload: UpdateRecipeRequest, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    owner_id = db.get_recipe_owner_id(recipe_id)
+    if owner_id != current_user.id and not getattr(current_user, 'is_admin', False):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    try:
+        from models.types import RecipeContent
+        validated = RecipeContent.model_validate(payload.recipe_content or {})
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("UPDATE saved_recipes SET recipe_content = ? WHERE id = ? AND user_id = ?", (validated.model_dump_json(), recipe_id, owner_id))
+            conn.commit()
+        updated = db.get_saved_recipe(recipe_id)
+        # attempt: if collection id provided as query param and collection has no image, adopt
+        try:
+            col = request.query_params.get('collectionId')
+            if col and updated and updated.recipe_content and not (await _has_collection_image(int(col))):
+                await _adopt_collection_cover_from_recipe(int(col), updated)
+        except Exception:
+            pass
+        return jsonable_encoder(updated)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not update recipe")
+
 @router.post("/images/generate")
 async def generate_recipe_image(payload: ImageGenRequest):
     try:
-        base = db.get_saved_recipe(payload.recipe_id)
-        if not base:
-            raise HTTPException(status_code=404, detail="Recipe not found")
-        rc = base.recipe_content.model_dump()
-        has_original_image = bool((rc.get('image_url') or rc.get('thumbnail_path')))
+        rc = {}
+        has_original_image = False
+        if payload.recipe_id is not None:
+            base = db.get_saved_recipe(payload.recipe_id)
+            if not base:
+                raise HTTPException(status_code=404, detail="Recipe not found")
+            rc = base.recipe_content.model_dump()
+            has_original_image = bool((rc.get('image_url') or rc.get('thumbnail_path')))
         allow_placeholder = payload.allow_placeholder if payload.allow_placeholder is not None else (not has_original_image)
         # include presets from payload or conversion metadata
         conv_presets = []
@@ -154,18 +195,153 @@ async def generate_recipe_image(payload: ImageGenRequest):
             raise HTTPException(status_code=500, detail="Missing REPLICATE_API_TOKEN/REPLICA_API_KEY on server")
 
         headers = {
-            'Authorization': f'Bearer {api_token}',
+            'Authorization': f'Token {api_token}',
             'Content-Type': 'application/json',
         }
-        timeout = httpx.Timeout(60.0, connect=10.0, read=60.0)
-        # Use a fast, general model. Default to Flux Schnell endpoint path which doesn't require version pin.
-        create_url = 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions'
+        timeout = httpx.Timeout(90.0, connect=10.0, read=90.0)
 
-        # Build minimal input; many hosted models ignore unsupported fields safely
-        replicate_input = {
-            'prompt': prompt_info['prompt'],
-        }
-        # Try to pass dimensions if supported by model; otherwise ignored
+        # Decide mode
+        requested_mode = (payload.mode or 'auto')
+        do_img2img = False
+        if requested_mode == 'img2img':
+            do_img2img = True
+        elif requested_mode == 'auto':
+            do_img2img = bool(has_original_image or payload.image_url)
+
+        # Try image-to-image first (SDXL img2img) using data URI so no public URL is required
+        if do_img2img:
+            try:
+                # Prepare source image bytes
+                source_bytes = None
+                src_url = payload.image_url
+                if not src_url:
+                    src_url = (rc.get('image_url') or rc.get('thumbnail_path'))
+                if src_url:
+                    if isinstance(src_url, str) and src_url.startswith('http'):
+                        async with httpx.AsyncClient(timeout=timeout) as _hc:
+                            ir = await _hc.get(src_url)
+                            ir.raise_for_status()
+                            source_bytes = ir.content
+                    else:
+                        # Local path served under /images
+                        local_path = None
+                        if isinstance(src_url, str) and src_url.startswith('/'):
+                            local_path = os.path.join('public', src_url.lstrip('/')) if src_url.startswith('/images') else src_url.lstrip('/')
+                        if local_path and os.path.exists(local_path):
+                            with open(local_path, 'rb') as f:
+                                source_bytes = f.read()
+                if not source_bytes:
+                    raise RuntimeError('No source image bytes for img2img')
+                import base64 as _b64
+                data_uri = 'data:image/png;base64,' + _b64.b64encode(source_bytes).decode('utf-8')
+
+                # Try multiple img2img providers on Replicate
+                width = int(prompt_info.get('width') or 384)
+                height = int(prompt_info.get('height') or 384)
+                # Strengthen composition preservation: favor baking tray casserole, disallow plates
+                # Derive style hints dynamically from constraints (no hardcoding diet): if constraints include
+                # baked/casserole keywords, strengthen composition; otherwise keep general.
+                base_prompt_img2img = prompt_info['prompt']
+                neg_base = (prompt_info.get('negative_prompt') or '')
+                compost_prompt = base_prompt_img2img
+                neg_common = neg_base
+                img2img_candidates = [
+                    ('stability-ai/stable-diffusion', {
+                        'image': data_uri,
+                        'prompt': compost_prompt,
+                        'negative_prompt': neg_common,
+                        'width': width,
+                        'height': height,
+                        'strength': 0.18,
+                        'num_inference_steps': 28,
+                        'guidance_scale': 4.0
+                    }),
+                    ('stability-ai/stable-diffusion-2-1', {
+                        'image': data_uri,
+                        'prompt': compost_prompt,
+                        'negative_prompt': neg_common,
+                        'width': width,
+                        'height': height,
+                        'strength': 0.2,
+                        'num_inference_steps': 28,
+                        'guidance_scale': 4.0
+                    })
+                ]
+
+                async with httpx.AsyncClient(timeout=timeout, headers=headers) as client:
+                    # Replicate predictions endpoint for stable-diffusion-img2img (versioned)
+                    predictions_url = 'https://api.replicate.com/v1/predictions'
+                    # Ensure external URL: upload to Replicate files if needed
+                    image_input = src_url if (src_url and src_url.startswith('http')) else None
+                    if not image_input:
+                        try:
+                            # Request presigned file slot
+                            fmeta = await client.post('https://api.replicate.com/v1/files', json={'filename': 'input.png'})
+                            fmeta.raise_for_status()
+                            info = fmeta.json()
+                            upload_url = info.get('upload_url'); serving_url = info.get('serving_url')
+                            if not upload_url or not serving_url:
+                                raise RuntimeError('Missing upload_url/serving_url')
+                            # Upload original bytes
+                            putr = await client.put(upload_url, content=source_bytes, headers={'Content-Type': 'application/octet-stream'})
+                            putr.raise_for_status()
+                            image_input = serving_url
+                        except Exception as _uerr:
+                            logger.warning(f"Replicate upload failed: {_uerr}; trying data URI")
+                            image_input = data_uri
+                    # Minimal, validated payload first to avoid 422
+                    sd_payload = {
+                        'version': '15a3689ee13bd02616e98280eca31d4c3abcd3672df6afce5cb6feb1d66087d',
+                        'input': {
+                            'image': image_input,
+                            'num_inference_steps': 25
+                        }
+                    }
+                    try:
+                        create = await client.post(predictions_url, json=sd_payload)
+                        create.raise_for_status()
+                    except httpx.HTTPStatusError as he:
+                        body = (he.response.text or '')
+                        logger.error(f"Replicate predictions error {he.response.status_code}: {body[:500]}")
+                        raise HTTPException(status_code=he.response.status_code, detail=f"Replicate predictions error: {body[:500]}")
+                    pred = create.json()
+                    get_url = (pred.get('urls') or {}).get('get')
+                    if not get_url:
+                        raise HTTPException(status_code=502, detail='Replicate did not return a status URL')
+                    status = pred.get('status')
+                    started = time.time()
+                    while status not in ('succeeded','failed','canceled'):
+                        if time.time() - started > 120:
+                            raise HTTPException(status_code=504, detail='Replicate timeout')
+                        await asyncio.sleep(1.0)
+                        r = await client.get(get_url)
+                        r.raise_for_status()
+                        pred = r.json()
+                        status = pred.get('status')
+                    if status != 'succeeded':
+                        raise RuntimeError(f'img2img stable-diffusion status={status}')
+                    output = pred.get('output')
+                    image_url = output[0] if isinstance(output, list) else output
+                    if not image_url:
+                        raise RuntimeError('Replicate returned no output image')
+                    ir = await client.get(image_url)
+                    ir.raise_for_status()
+                    img_bytes = ir.content
+                    import uuid as _uuid, os as _os
+                    uid = str(_uuid.uuid4())
+                    rel_dir = os.path.join('public', 'images', 'recipes')
+                    os.makedirs(rel_dir, exist_ok=True)
+                    path = os.path.join(rel_dir, f"{uid}.png")
+                    with open(path, 'wb') as f:
+                        f.write(img_bytes)
+                    url = f"/images/recipes/{uid}.png"
+                    return {'url': url}
+            except Exception as e:
+                logger.warning(f"img2img attempt failed, falling back to txt2img: {e}")
+
+        # Fallback to fast txt2img (Flux Schnell)
+        create_url = 'https://api.replicate.com/v1/models/black-forest-labs/flux-schnell/predictions'
+        replicate_input = {'prompt': prompt_info['prompt']}
         if prompt_info.get('width') and prompt_info.get('height'):
             replicate_input['width'] = int(prompt_info['width'])
             replicate_input['height'] = int(prompt_info['height'])
@@ -258,6 +434,50 @@ async def generate_recipe_image(payload: ImageGenRequest):
         logger.error(f"Image generation failed: {e}")
         raise
 
+@router.post("/images/upload")
+async def upload_recipe_image(file: UploadFile = File(...)):
+    try:
+        if not file or not getattr(file, 'content_type', '').startswith('image/'):
+            raise HTTPException(status_code=400, detail="Only image uploads are allowed")
+        # Determine extension
+        import os as _os, uuid as _uuid
+        ext = 'png'
+        try:
+            name = file.filename or ''
+            if '.' in name:
+                ext = name.rsplit('.', 1)[-1].lower()
+                if len(ext) > 5: ext = 'png'
+        except Exception:
+            ext = 'png'
+
+        uid = str(_uuid.uuid4())
+        rel_dir = _os.path.join('public', 'images', 'recipes')
+        _os.makedirs(rel_dir, exist_ok=True)
+        out_path = _os.path.join(rel_dir, f"{uid}.{ext}")
+
+        # Save in chunks; enforce simple size cap (~12MB)
+        size = 0
+        with open(out_path, 'wb') as out:
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > 12 * 1024 * 1024:
+                    try:
+                        _os.remove(out_path)
+                    except Exception:
+                        pass
+                    raise HTTPException(status_code=413, detail="Image too large (max 12MB)")
+                out.write(chunk)
+        url = f"/images/recipes/{uid}.{ext}"
+        return { 'url': url }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload failed: {e}")
+        raise HTTPException(status_code=500, detail="Upload failed")
+
 @router.get("/proxy-image")
 async def proxy_image(url: str):
     try:
@@ -329,6 +549,178 @@ def is_transcript_sufficient(transcript: Optional[str]) -> bool:
             return False
     logger.info("[VALIDATION] Transkribering bedöms vara tillräcklig.")
     return True
+
+_SUBS_CACHE: dict = {}
+
+async def _deepseek_classify_ingredient(text: str, locale: str = 'sv', timeout_s: float = 6.0, mode: str = 'vegan'):
+    key = os.getenv('DEEPSEEK_API_KEY') or ''
+    if not key:
+        return None
+    cache_key = (text.strip().lower(), locale)
+    if cache_key in _SUBS_CACHE:
+        return _SUBS_CACHE[cache_key]
+    system = "You are a culinary diet checker. Output strict JSON only."
+    if mode == 'vegan':
+        rule = "contains any animal-derived product for a vegan diet"
+        repl_hint = "vegan replacement"
+    elif mode == 'vegetarian':
+        rule = "is meat or poultry (fish/seafood allowed) for a vegetarian diet"
+        repl_hint = "vegetarian replacement"
+    else:
+        rule = "is meat or poultry (fish/seafood allowed) for a pescetarian diet"
+        repl_hint = "pescetarian replacement"
+    user = (
+        f"Classify if this ingredient {rule}. "
+        f"Respond as JSON object: {{\"animal\": boolean, \"replacement\": string }}. "
+        f"Ingredient: {text}. Locale={locale}. If animal=false, set replacement to empty string. "
+        f"If animal=true, propose a realistic Nordic-available {repl_hint} phrase."
+    )
+    payload = {
+        "model": os.getenv('DEEPSEEK_MODEL', 'deepseek-chat'),
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": 0.1,
+        "max_tokens": 120,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s)) as client:
+            resp = await client.post("https://api.deepseek.com/v1/chat/completions", headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json"
+            }, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            content = (data.get('choices') or [{}])[0].get('message', {}).get('content', '')
+            # Extract JSON
+            start = content.find('{')
+            end = content.rfind('}')
+            if start != -1 and end != -1:
+                obj = _json.loads(content[start:end+1])
+                _SUBS_CACHE[cache_key] = obj
+                return obj
+    except Exception:
+        return None
+
+    return None
+
+async def _enforce_diet_constraints(parsed: dict, constraints: dict) -> dict:
+    try:
+        presets = set((constraints or {}).get('presets') or [])
+        if not presets.intersection({'vegan','plant-based','vegetarian','pescetarian'}):
+            return parsed
+        ingredients = list(parsed.get('ingredients') or [])
+        subs = list(parsed.get('substitutions') or [])
+        banned_map = {
+            'vegan': [
+                # Swedish
+                'bacon','korv','skinka','kött','nötfärs','fläsk','kyckling','lax','torsk','fisk','räkor','tonfisk','ägg','mjölk','ost','grädde','smör','yoghurt','gelatin','honung',
+                # English/common
+                'beef','pork','chicken','turkey','steak','ground beef','minced beef','minced meat','ham','sausage','salami','anchovy','anchovies','shrimp','prawn','tuna','salmon','cod','fish','gelatin','honey',
+                # Named dishes/phrases that imply animal protein
+                'carne asada','al pastor','barbacoa','tinga','chorizo'
+            ],
+            'vegetarian': [
+                # Meat/fish only (allow dairy/eggs)
+                'bacon','korv','skinka','kött','nötfärs','fläsk','kyckling','lax','torsk','fisk','räkor','tonfisk',
+                'beef','pork','chicken','turkey','steak','ground beef','ham','sausage','salami','anchovy','anchovies','shrimp','prawn','tuna','salmon','cod','fish','carne asada','al pastor','barbacoa','tinga','chorizo'
+            ],
+            'pesc': [
+                # Ban meat/poultry; allow fish/seafood
+                'bacon','korv','skinka','kött','nötfärs','fläsk','kyckling',
+                'beef','pork','chicken','turkey','steak','ground beef','ham','sausage','salami','carne asada','al pastor','barbacoa','tinga','chorizo'
+            ]
+        }
+        repl = {
+            # Swedish
+            'bacon':'rökt tofu','korv':'vegokorv','skinka':'växtbaserad skinka','kött':'sojafärs','nötfärs':'sojafärs','fläsk':'sojabitar','kyckling':'sojabitar','lax':'fiskfri ersättning','torsk':'fiskfri ersättning','fisk':'fiskfri ersättning','räkor':'tofuräkor','tonfisk':'kikärtsröra','ägg':'kikärtsmjöl','mjölk':'havredryck','ost':'vegansk ost','grädde':'havregrädde','smör':'växtsmör','yoghurt':'sojayoghurt','gelatin':'pektin','honung':'lönnsirap',
+            # English/common
+            'beef':'sojafärs','ground beef':'sojafärs','minced beef':'sojafärs','minced meat':'sojafärs','pork':'sojabitar','chicken':'sojabitar','turkey':'sojabitar','steak':'portabello eller sojabitar',
+            'ham':'växtbaserad skinka','sausage':'vegokorv','salami':'vegosalami','anchovy':'kapris','anchovies':'kapris','shrimp':'tofuräkor','prawn':'tofuräkor','tuna':'kikärtsröra','salmon':'fiskfri ersättning','cod':'fiskfri ersättning','fish':'fiskfri ersättning',
+            # Phrases
+            'carne asada':'svamp/soja-asada','al pastor':'svamp/soja al pastor','barbacoa':'svamp/soja barbacoa','tinga':'pulled jackfruit tinga','chorizo':'veganchorizo'
+        }
+        if 'vegan' in presets or 'plant-based' in presets:
+            mode = 'vegan'
+        elif 'vegetarian' in presets:
+            mode = 'vegetarian'
+        elif 'pescetarian' in presets:
+            mode = 'pesc'
+        else:
+            mode = 'vegetarian'
+        banned_list = banned_map.get(mode, banned_map['vegetarian'])
+        cleaned = []
+        to_check_llm = []
+        for item in ingredients:
+            # Accept dict ingredients and collapse to a single text field for matching
+            if isinstance(item, dict):
+                name = str(item.get('name') or item.get('ingredient') or '')
+                qty = str(item.get('quantity') or '')
+                text = (name if qty == '' else f"{qty} {name}").strip()
+            else:
+                text = str(item)
+            low = text.lower()
+            replaced_flag = False
+            for b in banned_list:
+                if b in low:
+                    to = repl.get(b, 'växtbaserat alternativ')
+                    cleaned.append(re.sub(b, to, text, flags=re.IGNORECASE))
+                    subs.append({'from': b, 'to': to, 'reason': f'{mode} preset'})
+                    replaced_flag = True
+                    break
+            if not replaced_flag:
+                # Skip obviously plant-based words to reduce unnecessary checks
+                if mode == 'vegan' and not any(tok in low for tok in ['tofu','soja','soy','svamp','mushroom','tempeh','seitan','quorn','vegansk','plant','växt']):
+                    to_check_llm.append((len(cleaned), text))
+                cleaned.append(text)
+        # LLM fallback for up to 5 questionable items
+        if mode in ('vegan','vegetarian','pesc') and to_check_llm:
+            limited = to_check_llm[:5]
+            results = await asyncio.gather(*[
+                _deepseek_classify_ingredient(txt, 'sv', mode=mode) for _, txt in limited
+            ], return_exceptions=True)
+            for (idx, original), res in zip(limited, results):
+                try:
+                    if isinstance(res, dict) and res.get('animal') is True:
+                        replacement = str(res.get('replacement') or 'växtbaserat alternativ')
+                        cleaned[idx] = re.sub(re.escape(original), replacement, cleaned[idx], flags=re.IGNORECASE) if isinstance(cleaned[idx], str) else replacement
+                        subs.append({'from': original, 'to': replacement, 'reason': f'{mode} LLM check'})
+                except Exception:
+                    pass
+        parsed['ingredients'] = cleaned
+        
+        # Also normalize instructions text (strings or dicts with 'description')
+        try:
+            instr = list(parsed.get('instructions') or [])
+            norm = []
+            for item in instr:
+                if isinstance(item, dict):
+                    text = str(item.get('description') or '')
+                    low = text.lower()
+                    for b in banned_list:
+                        if b in low:
+                            to = repl.get(b, 'växtbaserat alternativ')
+                            text = re.sub(b, to, text, flags=re.IGNORECASE)
+                            low = text.lower()
+                    item['description'] = text
+                    norm.append(item)
+                else:
+                    text = str(item)
+                    low = text.lower()
+                    for b in banned_list:
+                        if b in low:
+                            to = repl.get(b, 'växtbaserat alternativ')
+                            text = re.sub(b, to, text, flags=re.IGNORECASE)
+                            low = text.lower()
+                    norm.append(text)
+            parsed['instructions'] = norm
+        except Exception:
+            pass
+        parsed['substitutions'] = subs
+    except Exception:
+        return parsed
+    return parsed
 
 @router.get("/generate-stream")
 async def generate_stream_endpoint(request: Request, video_url: str, language: str = "en", show_top_image: bool = True, show_step_images: bool = True):
@@ -524,15 +916,272 @@ async def save_user_recipe(request: Request, payload: SaveRecipeRequest, current
 @router.get("/recipes", response_model=List[SavedRecipe], tags=["Recipes"])
 @limiter.limit("60/minute")
 async def get_user_recipes(request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
-    if not current_user:
-        return []
     try:
         sort = request.query_params.get('sort') or 'latest'
-        recipes = db.get_user_saved_recipes(current_user.id, sort=sort)
+        scope = request.query_params.get('scope') or 'mine'
+        if scope == 'all':
+            recipes = db.get_all_saved_recipes(sort=sort)
+        else:
+            if current_user:
+                recipes = db.get_user_saved_recipes(current_user.id, sort=sort)
+            else:
+                recipes = db.get_all_saved_recipes(sort=sort)
         return recipes
     except Exception as e:
-        logger.error(f"Failed to get recipes for user {current_user.email}: {e}")
+        logger.error("Failed to get recipes: %s", e)
         raise HTTPException(status_code=500, detail="Could not fetch recipes.")
+
+# Lightweight single-recipe fetch (public for now; used by modals/navigation)
+@router.get("/recipes/{recipe_id}", response_model=SavedRecipe, tags=["Recipes"])
+@limiter.limit("120/minute")
+async def get_recipe_by_id(request: Request, recipe_id: int):
+    try:
+        item = db.get_saved_recipe(recipe_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="Recipe not found")
+        return item
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch recipe")
+
+# --- Public user profile endpoints ---
+@router.get("/users/{username}", response_model=User, tags=["Users"])
+@limiter.limit("120/minute")
+async def get_public_user(username: str, request: Request):
+    u = db.get_user_by_username(username)
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    # enrich with followed_by_me if viewer is logged in
+    viewer = await get_current_active_user(request)
+    try:
+        if viewer:
+            with db.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT 1 FROM user_follows WHERE follower_id = ? AND followee_id = ?", (viewer.id, u.id))
+                fbm = c.fetchone() is not None
+            u.followed_by_me = fbm
+        else:
+            u.followed_by_me = False
+    except Exception:
+        u.followed_by_me = False
+    return u
+
+@router.get("/users/{username}/recipes", response_model=List[SavedRecipe], tags=["Users"])
+@limiter.limit("120/minute")
+async def list_public_user_recipes(username: str, request: Request):
+    try:
+        u = db.get_user_by_username(username)
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        sort = request.query_params.get('sort') or 'latest'
+        return db.get_user_saved_recipes(u.id, sort=sort)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to list recipes for user {username}: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch user's recipes")
+
+@router.post("/users/{username}/follow", tags=["Users"]) 
+@limiter.limit("120/minute")
+async def toggle_user_follow(username: str, request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        u = db.get_user_by_username(username)
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        if u.id == current_user.id:
+            raise HTTPException(status_code=400, detail="Cannot follow yourself")
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM user_follows WHERE follower_id = ? AND followee_id = ?", (current_user.id, u.id))
+            exists = c.fetchone() is not None
+            if exists:
+                c.execute("DELETE FROM user_follows WHERE follower_id = ? AND followee_id = ?", (current_user.id, u.id))
+                following = False
+            else:
+                c.execute("INSERT OR IGNORE INTO user_follows (follower_id, followee_id) VALUES (?, ?)", (current_user.id, u.id))
+                following = True
+            conn.commit()
+        return {"ok": True, "data": {"following": following}}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to toggle follow for user {username}: {e}")
+        raise HTTPException(status_code=500, detail="Could not update follow state")
+
+@router.get("/users/{username}/collections", response_model=List[Collection], tags=["Users"]) 
+@limiter.limit("120/minute")
+async def list_public_user_collections(username: str, request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
+    try:
+        viewer_id = current_user.id if current_user else None
+        items = db.list_user_public_collections(username, viewer_id)
+        return items
+    except Exception as e:
+        logger.error(f"Failed to list collections for user {username}: {e}")
+        raise HTTPException(status_code=500, detail="Could not fetch user's collections")
+
+# --- Collections endpoints ---
+@router.get("/collections", response_model=List[Collection], tags=["Collections"])
+@limiter.limit("60/minute")
+async def list_collections(request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
+    viewer_id = current_user.id if current_user else None
+    return db.list_collections(viewer_id)
+
+@router.post("/collections", tags=["Collections"]) 
+@limiter.limit("20/minute")
+async def create_collection(request: Request, payload: dict = Body(...), current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    title = (payload.get('title') or '').strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="Title is required")
+    description = payload.get('description')
+    visibility = payload.get('visibility') or 'public'
+    image_url = payload.get('image_url')
+    cid = db.create_collection(current_user.id, title, description, visibility, image_url)
+    return {"ok": True, "id": cid}
+
+@router.post("/collections/{collection_id}/like", tags=["Collections"])
+@limiter.limit("120/minute")
+async def toggle_collection_like(collection_id: int, request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM collection_likes WHERE collection_id = ? AND user_id = ?", (collection_id, current_user.id))
+            exists = c.fetchone() is not None
+            if exists:
+                c.execute("DELETE FROM collection_likes WHERE collection_id = ? AND user_id = ?", (collection_id, current_user.id))
+                liked = False
+                c.execute("UPDATE collections SET likes_count = CASE WHEN likes_count > 0 THEN likes_count - 1 ELSE 0 END WHERE id = ?", (collection_id,))
+            else:
+                c.execute("INSERT OR IGNORE INTO collection_likes (collection_id, user_id) VALUES (?, ?)", (collection_id, current_user.id))
+                liked = True
+                c.execute("UPDATE collections SET likes_count = likes_count + 1 WHERE id = ?", (collection_id,))
+            conn.commit()
+        return {"ok": True, "data": {"liked": liked}}
+    except Exception as e:
+        logger.error(f"Failed to toggle like for collection {collection_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not toggle like")
+
+@router.post("/collections/{collection_id}/follow", tags=["Collections"])
+@limiter.limit("120/minute")
+async def toggle_collection_follow(collection_id: int, request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM collection_follows WHERE collection_id = ? AND user_id = ?", (collection_id, current_user.id))
+            exists = c.fetchone() is not None
+            if exists:
+                c.execute("DELETE FROM collection_follows WHERE collection_id = ? AND user_id = ?", (collection_id, current_user.id))
+                following = False
+                c.execute("UPDATE collections SET followers_count = CASE WHEN followers_count > 0 THEN followers_count - 1 ELSE 0 END WHERE id = ?", (collection_id,))
+            else:
+                c.execute("INSERT OR IGNORE INTO collection_follows (collection_id, user_id) VALUES (?, ?)", (collection_id, current_user.id))
+                following = True
+                c.execute("UPDATE collections SET followers_count = followers_count + 1 WHERE id = ?", (collection_id,))
+            conn.commit()
+        return {"ok": True, "data": {"following": following}}
+    except Exception as e:
+        logger.error(f"Failed to toggle follow for collection {collection_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not toggle follow")
+
+@router.post("/collections/{collection_id}/recipes", tags=["Collections"]) 
+@limiter.limit("60/minute")
+async def add_recipe_to_collection(request: Request, collection_id: int, payload: dict = Body(...), current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    recipe_id = int(payload.get('recipe_id'))
+    return db.add_recipe_to_collection(collection_id, recipe_id)
+
+async def _has_collection_image(collection_id: int) -> bool:
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT image_url FROM collections WHERE id = ?", (collection_id,))
+            row = c.fetchone()
+            return bool(row and row[0])
+    except Exception:
+        return False
+
+async def _adopt_collection_cover_from_recipe(collection_id: int, saved_recipe):
+    try:
+        image = (saved_recipe.recipe_content or {}).get('image_url')
+        if image:
+            with db.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("UPDATE collections SET image_url = ? WHERE id = ? AND (image_url IS NULL OR image_url = '')", (image, collection_id))
+                conn.commit()
+    except Exception:
+        return
+
+@router.get("/collections/{collection_id}/recipes", response_model=List[SavedRecipe], tags=["Collections"]) 
+@limiter.limit("60/minute")
+async def list_collection_recipes(request: Request, collection_id: int):
+    return db.list_collection_recipes(collection_id)
+
+class UpdateCollectionPayload(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    visibility: Optional[str] = None
+    image_url: Optional[str] = None
+
+@router.put("/collections/{collection_id}", tags=["Collections"])
+@limiter.limit("30/minute")
+async def update_collection(collection_id: int, request: Request, payload: UpdateCollectionPayload, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        ok = db.update_collection(collection_id, **{k: v for k, v in payload.model_dump().items() if v is not None})
+        if not ok:
+            raise HTTPException(status_code=400, detail="No valid fields to update")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update collection {collection_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not update collection")
+
+class ReorderPayload(BaseModel):
+    recipe_ids: List[int]
+
+@router.post("/collections/{collection_id}/reorder", tags=["Collections"])
+@limiter.limit("60/minute")
+async def reorder_collection(collection_id: int, request: Request, payload: ReorderPayload, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        ok = db.reorder_collection_recipes(collection_id, payload.recipe_ids or [])
+        if not ok:
+            raise HTTPException(status_code=400, detail="Reorder failed")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to reorder recipes for collection {collection_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not reorder collection")
+
+@router.delete("/collections/{collection_id}/recipes/{recipe_id}", tags=["Collections"])
+@limiter.limit("60/minute")
+async def remove_recipe_from_collection(collection_id: int, recipe_id: int, request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        ok = db.remove_recipe_from_collection(collection_id, recipe_id)
+        if not ok:
+            raise HTTPException(status_code=400, detail="Remove failed")
+        return {"ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to remove recipe {recipe_id} from collection {collection_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not remove from collection")
 
 @router.delete("/recipes/{recipe_id}", tags=["Recipes"])
 @limiter.limit("30/minute")
@@ -934,6 +1583,11 @@ async def convert_recipe_variant(recipe_id: int, request: Request, payload: dict
 
         result = payload.get('result') or {}
         constraints = payload.get('constraints') or {}
+        # Nutrition feasibility + tolerance
+        tol = int((constraints.get('nutrition') or {}).get('tolerance') or constraints.get('tolerance') or 5)
+        status, reason = _feasibility_check(constraints.get('nutrition') or {}, tol)
+        if status == 'impossible':
+            raise HTTPException(status_code=400, detail=f"Impossible nutrition targets: {reason}")
         # Normalize and validate presets using same logic as frontend
         presets = constraints.get('presets') or []
         normalized, adjustments = _normalize_presets_backend(presets)
@@ -1128,13 +1782,13 @@ def _normalize_presets_backend(selected):
     # Backend mirror of preset rules to ensure consistency
     selected = list(dict.fromkeys(selected or []))
     groups = {
-        'dietStyle': ['omnivore','plant-based','vegan','vegetarian','pescetarian'],
+        'dietStyle': ['vegan','vegetarian','pescetarian'],
         'addOns': ['add-meat','add-fish','add-dairy'],
         'exclusions': ['dairy-free','lactose-free','gluten-free','nut-free','soy-free','egg-free','fish-free','shellfish-free','halal','kosher','paleo'],
-        'macros': ['low-carb','keto','low-fat','high-protein','low-sodium'],
+        'macros': ['low-carb','keto','low-fat','high-protein'],
         'programs': ['Mediterranean','Whole30']
     }
-    diet_priority = ['vegan','plant-based','vegetarian','pescetarian','omnivore']
+    diet_priority = ['vegan','vegetarian','pescetarian']
     macro_priority = ['keto','low-carb']
     resolved = set(selected)
     auto_unselected, auto_added, auto_disabled = set(), set(), set()
@@ -1156,8 +1810,13 @@ def _normalize_presets_backend(selected):
         for p in ['add-meat','add-fish','add-dairy']:
             if p in resolved: resolved.discard(p); auto_unselected.add(p)
             auto_disabled.add(p)
+        # Auto-add and lock exclusions for vegan (locking is UI-side; backend just adds)
+        for ex in ['dairy-free','egg-free','fish-free','shellfish-free']:
+            if ex not in resolved:
+                resolved.add(ex)
+                auto_added.add(ex)
     elif chosen_diet == 'plant-based':
-        for p in ['add-meat','add-fish','add-dairy']:
+        for p in ['add-meat','add-fish']:
             if p in resolved: resolved.discard(p); auto_unselected.add(p)
             auto_disabled.add(p)
     elif chosen_diet == 'vegetarian':
@@ -1177,6 +1836,41 @@ def _normalize_presets_backend(selected):
         resolved.discard('vegan'); auto_unselected.add('vegan'); auto_disabled.add('vegan')
 
     return list(resolved), { 'autoUnselected': list(auto_unselected), 'autoAdded': list(auto_added), 'autoDisabled': list(auto_disabled) }
+
+def _feasibility_check(nutrition: dict, tolerance_pct: int = 5):
+    try:
+        n = nutrition or {}
+        kcal_min = n.get('minCalories')
+        kcal_max = n.get('maxCalories')
+        prot_min = float(n.get('minProtein') or 0)
+        carb_min = float(n.get('minCarbs') or 0)
+        fat_min  = float(n.get('minFat') or 0)
+        prot_max = n.get('maxProtein')
+        carb_max = n.get('maxCarbs')
+        fat_max  = n.get('maxFat')
+        lowest_possible = 4*(prot_min + carb_min) + 9*fat_min
+        highest_possible = None
+        if prot_max is None and carb_max is None and fat_max is None:
+            highest_possible = float('inf')
+        else:
+            highest_possible = 4*float(prot_max or 0) + 4*float(carb_max or 0) + 9*float(fat_max or 0)
+        if kcal_max is not None and lowest_possible > float(kcal_max):
+            return ('impossible', 'min macros exceed kcal max')
+        if kcal_min is not None and highest_possible != float('inf') and highest_possible < float(kcal_min):
+            return ('impossible', 'max macros below kcal min')
+        tol = max(0, int(tolerance_pct or 0))/100.0
+        tight = False
+        if kcal_max is not None:
+            margin = max(0.0, float(kcal_max) - lowest_possible)
+            if margin <= float(kcal_max) * tol:
+                tight = True
+        if not tight and kcal_min is not None and highest_possible != float('inf'):
+            margin = max(0.0, highest_possible - float(kcal_min))
+            if margin <= float(kcal_min) * tol:
+                tight = True
+        return ('tight' if tight else 'possible', '')
+    except Exception as e:
+        return ('possible', '')
 
 # --- LLM proxy: DeepSeek convert (server-side to avoid CORS and key exposure) ---
 @router.post("/llm/deepseek/convert")
@@ -1328,7 +2022,7 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
                 ]
                 content = await _call(msgs_fast, max_tokens=550, temperature=0.2, timeout_s=40.0)
             else:
-                content = await _call(msgs, max_tokens=900, temperature=0.4, timeout_s=65.0)
+                content = await _call(msgs, max_tokens=900, temperature=0.2, timeout_s=65.0)
         except (httpx.ReadTimeout, httpx.TimeoutException):
             # Fallback: compact instructions to force short, fast JSON
             compact_system = "Return STRICT JSON only. Keys: title, substitutions, ingredients, instructions, notes, nutritionPerServing, compliance. No markdown. Keep output concise."
@@ -1340,6 +2034,12 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
         parsed = _extract_json(content)
         if parsed is not None:
             try:
+                # Server-side diet enforcement to avoid non-compliant outputs
+                try:
+                    constraints = (payload.get('userPayload') or {}).get('constraints') or {}
+                    parsed = await _enforce_diet_constraints(parsed, constraints)
+                except Exception as _e:
+                    logger.warning(f"Diet postprocess failed: {_e}")
                 _cache_set(key, parsed)
                 if not future.done():
                     future.set_result(parsed)
@@ -1348,11 +2048,16 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
             return JSONResponse(parsed)
 
         # Second attempt: add strict instruction and retry
-        msgs.append({"role": "user", "content": "Return STRICT JSON only. No markdown, no prose."})
+        msgs.append({"role": "user", "content": "Return STRICT JSON only. No markdown, no prose. Enforce vegan/vegetarian rules strictly when requested; do not leave animal products in ingredients."})
         content = await _call(msgs)
         parsed = _extract_json(content)
         if parsed is not None:
             try:
+                try:
+                    constraints = (payload.get('userPayload') or {}).get('constraints') or {}
+                    parsed = await _enforce_diet_constraints(parsed, constraints)
+                except Exception as _e:
+                    logger.warning(f"Diet postprocess failed: {_e}")
                 _cache_set(key, parsed)
                 if not future.done():
                     future.set_result(parsed)
@@ -1369,6 +2074,11 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
         parsed = _extract_json(content2)
         if parsed is not None:
             try:
+                try:
+                    constraints = (payload.get('userPayload') or {}).get('constraints') or {}
+                    parsed = await _enforce_diet_constraints(parsed, constraints)
+                except Exception as _e:
+                    logger.warning(f"Diet postprocess failed: {_e}")
                 _cache_set(key, parsed)
                 if not future.done():
                     future.set_result(parsed)

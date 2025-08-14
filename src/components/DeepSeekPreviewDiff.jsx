@@ -1,11 +1,12 @@
 import React from 'react';
 
-export default function DeepSeekPreviewDiff({ result, baseIngredients = [], baseInstructions = [] }) {
+export default function DeepSeekPreviewDiff({ result, baseIngredients = [], baseInstructions = [], constraints }) {
   if (!result) return null;
   const { substitutions = [], ingredients = [], instructions = [], notes = [], nutritionPerServing = {}, compliance = {} } = result;
   // Normalize notes to array to avoid "notes.map is not a function" when a string is returned
   const noteList = Array.isArray(notes) ? notes : (notes ? [String(notes)] : []);
   const hasSubs = Array.isArray(substitutions) && substitutions.length > 0;
+  const presetList = (constraints?.presets || []).map(String);
   return (
     <div className="grid gap-4">
       {hasSubs && (
@@ -21,7 +22,11 @@ export default function DeepSeekPreviewDiff({ result, baseIngredients = [], base
       {!hasSubs && (Array.isArray(baseIngredients) && baseIngredients.length > 0) && (
         <section>
           <h4 className="font-semibold mb-2">Substitutions</h4>
-          <p className="text-sm text-gray-600">No explicit substitutions provided. If the recipe was already compliant (e.g., vegan), ingredients are copied as-is.</p>
+          <p className="text-sm text-gray-600">
+            {presetList.includes('vegan') || presetList.includes('plant-based') ?
+              'Converted to vegan: Base ingredients kept but ensure no animal products remain.' :
+              'No explicit substitutions provided. If the recipe was already compliant, ingredients are copied as-is.'}
+          </p>
         </section>
       )}
       <section>
