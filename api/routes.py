@@ -25,6 +25,7 @@ from logic.video_processing import (
     extract_and_save_frames,
     analyze_frames_with_blip
 )
+from backend.transcribe.faster_whisper_engine import transcribe_audio_stream
 from logic.recipe_parser import analyze_video_content
 from logic.pdf_generator import generate_pdf
 import json
@@ -777,7 +778,51 @@ async def generate_stream_endpoint(request: Request, video_url: str, language: s
                 if audio_path:
                     temp_files.append(audio_path)
                     yield await send_event("transcribing", "Transcribing audio...")
-                    transcript = await asyncio.to_thread(transcribe_audio, audio_path, job_id, language)
+
+                    # Stream transcription: convert to 16k mono WAV in a thread and stream segments
+                    queue: "asyncio.Queue" = asyncio.Queue()
+                    loop = asyncio.get_running_loop()
+
+                    def _blocking_transcribe():
+                        wav_tmp = None
+                        try:
+                            import tempfile, subprocess, os
+                            wav_tmpf = tempfile.NamedTemporaryFile(prefix=f"{job_id}_", suffix=".wav", delete=False)
+                            wav_tmp = wav_tmpf.name
+                            wav_tmpf.close()
+                            ffmpeg_cmd = ["ffmpeg", "-y", "-i", audio_path, "-ac", "1", "-ar", "16000", "-vn", "-f", "wav", wav_tmp]
+                            subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            for seg in transcribe_audio_stream(wav_tmp, lang_hint=language):
+                                # pass segment to async queue
+                                loop.call_soon_threadsafe(queue.put_nowait, seg)
+                        except Exception as e:
+                            logger.error(f"[STREAM_TRANSCRIBE] Error during blocking transcribe: {e}")
+                        finally:
+                            # signal completion
+                            try:
+                                loop.call_soon_threadsafe(queue.put_nowait, None)
+                            except Exception:
+                                pass
+                            try:
+                                if wav_tmp and os.path.exists(wav_tmp):
+                                    os.unlink(wav_tmp)
+                            except Exception:
+                                pass
+
+                    # kickoff blocking transcription
+                    _ = loop.run_in_executor(None, _blocking_transcribe)
+
+                    collected_text_parts = []
+                    while True:
+                        seg = await queue.get()
+                        if seg is None:
+                            break
+                        text_seg = seg.get("text", "")
+                        collected_text_parts.append(text_seg)
+                        # stream segment to frontend
+                        yield await send_event("transcribing", text_seg, debug_info={"start": seg.get("start"), "end": seg.get("end")})
+
+                    transcript = " ".join([p.strip() for p in collected_text_parts if p and p.strip()])
                     if is_transcript_sufficient(transcript):
                         text_for_analysis = f"Title: {metadata.get('title', '')}\nDescription: {description}\nTranscript: {transcript}"
                 
