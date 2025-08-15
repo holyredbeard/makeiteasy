@@ -727,6 +727,7 @@ async def _enforce_diet_constraints(parsed: dict, constraints: dict) -> dict:
 async def generate_stream_endpoint(request: Request, video_url: str, language: str = "en", show_top_image: bool = True, show_step_images: bool = True):
     job_id = str(uuid.uuid4())
     base_url = str(request.base_url)
+    timings = {}
 
     async def send_event(status: str, message: str = None, recipe: dict = None, is_error: bool = False, debug_info: dict = None):
         data = {"status": status, "message": message, "timestamp": int(time.time() * 1000)}
@@ -738,145 +739,259 @@ async def generate_stream_endpoint(request: Request, video_url: str, language: s
         logger.info(f"[FRONTEND_EVENT] {log_message}", extra={"data": data})
         return f"data: {json.dumps(data)}\n\n"
 
+    async def send_struct_event(ev_type: str, payload: dict):
+        """Send structured events with jobId, type, payload format"""
+        body = {"jobId": job_id, "type": ev_type, "payload": payload}
+        logger.info(f"[FRONTEND_EVENT_STRUCT] {ev_type}")
+        return f"data: {json.dumps(body)}\n\n"
+
     async def generator():
         temp_files = []
         thumbnail_url = None
         try:
+            timings['t_init'] = int(time.time() * 1000)
             logger.info(f"[JOB {job_id}] ===== STARTAR RECEPTGENERERING =====")
             logger.info(f"[JOB {job_id}] Video URL: {video_url}, Språk: {language}, Toppbild: {show_top_image}, Stegbilder: {show_step_images}")
-            
+
+            # Metadata extraction
             yield await send_event("processing", "Extracting video metadata...", debug_info={"step": "metadata_extraction"})
             metadata = await asyncio.to_thread(extract_video_metadata, video_url)
             if not metadata:
-                logger.error(f"[JOB {job_id}] Misslyckades att hämta metadata")
                 yield await send_event("error", "Could not retrieve video metadata.", is_error=True)
                 return
-            
-            logger.info(f"[JOB {job_id}] Metadata hämtad: {metadata.get('title', 'Okänd titel')[:100]}")
             yield await send_event("processing", f'Processing: {metadata.get("title", "video")[:50]}...', debug_info={"metadata": metadata})
 
+            # Thumbnail (Stage A needs thumbnail quickly)
             if show_top_image:
                 yield await send_event("processing", "Downloading thumbnail...", debug_info={"step": "thumbnail_download"})
                 thumbnail_path = await asyncio.to_thread(download_thumbnail, video_url, job_id)
                 if thumbnail_path:
                     temp_files.append(thumbnail_path)
                     thumbnail_url = f"{base_url.strip('/')}/{thumbnail_path.strip('/')}"
-                    logger.info(f"[JOB {job_id}] Thumbnail nedladdad: {thumbnail_url}")
-            
-            logger.info(f"[JOB {job_id}] ===== CONTENT EXTRACTION PHASE =====")
-            text_for_analysis, frame_paths = "", []
-            description = metadata.get("description", "")
-            
-            if contains_ingredients(description):
-                logger.info(f"[JOB {job_id}] Beskrivning innehåller ingredienser.")
-                yield await send_event("processing", "Description contains recipe. Using it.")
-                text_for_analysis = description
+                    timings['t_image_ready'] = int(time.time() * 1000)
+                    yield await send_struct_event('image_ready', {"thumbnail_url": thumbnail_url})
+
+            # Stage A: description -> captions -> faster-whisper (audio-only)
+            video_id = None
+            try:
+                video_id = re.search(r"(?<=v=)[^&#]+", video_url) or re.search(r"(?<=be/)[^&#]+", video_url)
+                video_id = video_id.group(0) if video_id else None
+            except Exception:
+                video_id = None
+
+            pipeline_version = os.getenv('PIPELINE_VERSION', 'fw_v1')
+            cache_key_a = f"stageA:{video_id or job_id}:{pipeline_version}"
+            cached_a = None
+            try:
+                from logic.video_processing import cache_get, cache_set, try_fetch_captions
+                cached_a = cache_get(cache_key_a)
+            except Exception:
+                cached_a = None
+
+            yield await send_struct_event('recipe_init', {"title": metadata.get('title', ''), "description": metadata.get('description', '')})
+
+            if cached_a:
+                # Fast path: send cached Stage A
+                timings['t_first_patch'] = int(time.time() * 1000)
+                yield await send_struct_event('recipe_patch', cached_a.get('recipe_patch', {}))
+                yield await send_struct_event('stageA_done', {"cached": True})
             else:
-                logger.info(f"[JOB {job_id}] Beskrivning saknar ingredienser, fortsätter med ljud/video.")
-                yield await send_event("downloading", "Downloading audio...")
-                audio_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=True)
-                if audio_path:
-                    temp_files.append(audio_path)
-                    yield await send_event("transcribing", "Transcribing audio...")
+                # Attempt captions first
+                captions = None
+                try:
+                    captions = try_fetch_captions(video_url, job_id)
+                except Exception:
+                    captions = None
 
-                    # Stream transcription: convert to 16k mono WAV in a thread and stream segments
-                    queue: "asyncio.Queue" = asyncio.Queue()
-                    loop = asyncio.get_running_loop()
+                transcript_text = ''
+                timeline = []
 
-                    def _blocking_transcribe():
-                        wav_tmp = None
+                if captions and captions.get('confidence', 0) >= 0.75:
+                    transcript_text = captions.get('text', '')
+                    timings['t_first_patch'] = int(time.time() * 1000)
+                    # Start streaming recipe LLM from captions
+                    async for chunk in analyze_video_content(transcript_text, language, stream=True, thumbnail_path=thumbnail_url):
+                        if isinstance(chunk, dict) and 'error' not in chunk:
+                            yield await send_struct_event('recipe_patch', chunk)
+                    timings['t_stageA_done'] = int(time.time() * 1000)
+                    cache_set(cache_key_a, {"recipe_patch": chunk, "transcript": transcript_text})
+                else:
+                    # No good captions -> do audio download + streaming ASR
+                    yield await send_event('downloading', 'Downloading audio...')
+                    audio_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=True)
+                    if audio_path:
+                        temp_files.append(audio_path)
+                        yield await send_event('transcribing', 'Transcribing audio...')
+
+                        # Set up queues for segments and recipe patches
+                        seg_q = asyncio.Queue()
+                        recipe_q = asyncio.Queue()
+
+                        loop = asyncio.get_running_loop()
+
+                        def _blocking_transcribe_and_stream():
+                            wav_tmp = None
+                            try:
+                                import tempfile, subprocess, os
+                                wav_tmpf = tempfile.NamedTemporaryFile(prefix=f"{job_id}_", suffix=".wav", delete=False)
+                                wav_tmp = wav_tmpf.name
+                                wav_tmpf.close()
+                                ffmpeg_cmd = ["ffmpeg", "-y", "-i", audio_path, "-ac", "1", "-ar", "16000", "-vn", "-f", "wav", wav_tmp]
+                                subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                                for seg in transcribe_audio_stream(wav_tmp, lang_hint=language):
+                                    loop.call_soon_threadsafe(seg_q.put_nowait, seg)
+                                loop.call_soon_threadsafe(seg_q.put_nowait, None)
+                            except Exception as e:
+                                logger.error(f"[STREAM_ASR] error: {e}")
+                                loop.call_soon_threadsafe(seg_q.put_nowait, None)
+                            finally:
+                                try:
+                                    if wav_tmp and os.path.exists(wav_tmp):
+                                        os.unlink(wav_tmp)
+                                except Exception:
+                                    pass
+
+                        _ = loop.run_in_executor(None, _blocking_transcribe_and_stream)
+
+                        # Background coroutine to run LLM when enough transcript accumulated
+                        analyze_started = False
+                        collected_parts = []
+                        first_seg_start = None
+                        last_seg_end = None
+
+                        async def _analyze_from_text(text_snippet: str):
+                            async for chunk in analyze_video_content(text_snippet, language, stream=True, thumbnail_path=thumbnail_url):
+                                await recipe_q.put(chunk)
+                            await recipe_q.put(None)
+
+                        analyze_task = None
+
+                        # Main loop: consume seg_q and recipe_q
+                        recipe_first_sent = False
+                        while True:
+                            get_seg = asyncio.create_task(seg_q.get())
+                            get_patch = asyncio.create_task(recipe_q.get())
+                            done, pending = await asyncio.wait({get_seg, get_patch}, return_when=asyncio.FIRST_COMPLETED)
+                            
+                            if get_patch in done:
+                                patch = get_patch.result()
+                                if patch is None:
+                                    # recipe stream finished
+                                    pass
+                                else:
+                                    # forward recipe patch
+                                    timings.setdefault('t_first_patch', int(time.time() * 1000))
+                                    yield await send_struct_event('recipe_patch', patch)
+                                    recipe_first_sent = True
+                                # cancel seg task if pending
+                                if get_seg in pending:
+                                    get_seg.cancel()
+                                    
+                            if get_seg in done:
+                                seg = get_seg.result()
+                                if seg is None:
+                                    # transcription finished
+                                    # ensure analyze finishes
+                                    if analyze_task:
+                                        # wait for recipe queue to drain
+                                        while True:
+                                            p = await recipe_q.get()
+                                            if p is None:
+                                                break
+                                    break
+                                # process segment
+                                collected_parts.append(seg.get('text',''))
+                                if first_seg_start is None:
+                                    first_seg_start = seg.get('start')
+                                last_seg_end = seg.get('end')
+                                # stream raw transcribe segment to frontend as progress
+                                yield await send_struct_event('transcribe_segment', {"text": seg.get('text'), "start": seg.get('start'), "end": seg.get('end')})
+                                # decide to start analyze when we have ~30s audio or >=250 chars
+                                cur_text = ' '.join([p for p in collected_parts if p])
+                                cur_dur = (last_seg_end - first_seg_start) if (first_seg_start is not None and last_seg_end is not None) else 0
+                                if (not analyze_started) and (cur_dur >= 30 or len(cur_text) > 250):
+                                    analyze_started = True
+                                    analyze_task = asyncio.create_task(_analyze_from_text(cur_text))
+                                # cancel patch task if pending
+                                if get_patch in pending:
+                                    get_patch.cancel()
+
+                        # after transcription loop
+                        # collect final transcript
+                        transcript_text = ' '.join([p for p in collected_parts if p])
+                        timings['t_stageA_done'] = int(time.time() * 1000)
+                        # cache stage A
                         try:
-                            import tempfile, subprocess, os
-                            wav_tmpf = tempfile.NamedTemporaryFile(prefix=f"{job_id}_", suffix=".wav", delete=False)
-                            wav_tmp = wav_tmpf.name
-                            wav_tmpf.close()
-                            ffmpeg_cmd = ["ffmpeg", "-y", "-i", audio_path, "-ac", "1", "-ar", "16000", "-vn", "-f", "wav", wav_tmp]
-                            subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                            for seg in transcribe_audio_stream(wav_tmp, lang_hint=language):
-                                # pass segment to async queue
-                                loop.call_soon_threadsafe(queue.put_nowait, seg)
-                        except Exception as e:
-                            logger.error(f"[STREAM_TRANSCRIBE] Error during blocking transcribe: {e}")
-                        finally:
-                            # signal completion
-                            try:
-                                loop.call_soon_threadsafe(queue.put_nowait, None)
-                            except Exception:
-                                pass
-                            try:
-                                if wav_tmp and os.path.exists(wav_tmp):
-                                    os.unlink(wav_tmp)
-                            except Exception:
-                                pass
+                            cache_set(cache_key_a, {"recipe_patch": None, "transcript": transcript_text})
+                        except Exception:
+                            pass
 
-                    # kickoff blocking transcription
-                    _ = loop.run_in_executor(None, _blocking_transcribe)
+            # Stage B: alignment + enrich
+            timings['t_video_ready'] = int(time.time() * 1000)
+            # ensure video downloaded for any further processing
+            video_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=False)
+            if video_path:
+                temp_files.append(video_path)
+                duration = await asyncio.to_thread(get_media_duration, video_path, False)
+                yield await send_struct_event('video_ready', {"videoId": video_id or job_id, "durationSec": duration or 0})
 
-                    collected_text_parts = []
-                    while True:
-                        seg = await queue.get()
-                        if seg is None:
-                            break
-                        text_seg = seg.get("text", "")
-                        collected_text_parts.append(text_seg)
-                        # stream segment to frontend
-                        yield await send_event("transcribing", text_seg, debug_info={"start": seg.get("start"), "end": seg.get("end")})
+            # Alignment: simple fuzzy matching of steps to transcript segments
+            # retrieve Stage A recipe from cache if present
+            stageA = None
+            try:
+                stageA = cache_get(cache_key_a)
+            except Exception:
+                stageA = None
 
-                    transcript = " ".join([p.strip() for p in collected_text_parts if p and p.strip()])
-                    if is_transcript_sufficient(transcript):
-                        text_for_analysis = f"Title: {metadata.get('title', '')}\nDescription: {description}\nTranscript: {transcript}"
-                
-                if not text_for_analysis:
-                     yield await send_event("warning", "Audio analysis insufficient. Switching to video.")
-                     yield await send_event("downloading", "Downloading video...")
-                     video_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=False)
-                     if not video_path:
-                         yield await send_event("error", "Failed to download video.", is_error=True)
-                         return
-                     temp_files.append(video_path)
-                     yield await send_event("analyzing", "Analyzing video frames...")
-                     ocr_text = await asyncio.to_thread(extract_text_from_frames, video_path, job_id)
-                     text_for_analysis = ocr_text or ""
-                     
-                     frame_paths = await asyncio.to_thread(extract_and_save_frames, video_path, job_id)
-                     temp_files.extend(frame_paths)
-                     
-                     if len(text_for_analysis.strip()) < 50 and frame_paths:
-                         yield await send_event("analyzing", "Using AI to analyze video content...")
-                         blip_analysis = await asyncio.to_thread(analyze_frames_with_blip, frame_paths, job_id)
-                         if blip_analysis:
-                             text_for_analysis = f"Title: {metadata.get('title', '')}\nDescription: {description}\nVideo Analysis: {blip_analysis}"
-            
-            if len(text_for_analysis.strip()) < 30:
-                yield await send_event("error", "Could not extract enough information for a recipe.", is_error=True)
-                return
+            timestamps = []
+            if stageA and 'transcript' in stageA and 'recipe_patch' in stageA:
+                recipe_obj = stageA.get('recipe_patch')
+                transcript_full = stageA.get('transcript')
+            else:
+                # fallback: use transcript_text if available
+                recipe_obj = None
+                transcript_full = locals().get('transcript_text', '')
 
-            yield await send_event("generating", "Starting AI recipe generation...")
-            recipe_task = asyncio.create_task(
-                analyze_video_content(text_for_analysis, language, stream=False, thumbnail_path=thumbnail_url if show_top_image else None, frame_paths=[f"{base_url.strip('/')}/{p.strip('/')}" for p in frame_paths] if frame_paths else None)
-            )
-            
-            status_steps = [
-                {"status": "analyzing", "message": "Analyzing ingredients..."},
-                {"status": "generating", "message": "Creating recipe structure..."},
-                {"status": "generating", "message": "Writing cooking instructions..."},
-                {"status": "generating", "message": "Finalizing recipe..."}
-            ]
-            
-            while not recipe_task.done():
-                for step in status_steps:
-                    if recipe_task.done(): break
-                    yield await send_event(step["status"], step["message"])
-                    await asyncio.sleep(2)
+            # For accept criteria, align quickly (<2s). We'll use a heuristic over timeline if available.
+            try:
+                from difflib import SequenceMatcher
+                steps = []
+                if recipe_obj and isinstance(recipe_obj, dict) and 'instructions' in recipe_obj:
+                    steps = recipe_obj['instructions']
+                # naive: split transcript into words and map approximate positions by searching substrings in collected segments
+                # Here we attempt to find each step in transcript_full and approximate times using timeline segments
+                if transcript_full and 'timeline' in locals():
+                    # build concatenated text with segment boundaries
+                    concat = ''
+                    seg_map = []
+                    for seg in timeline:
+                        seg_map.append((len(concat), seg))
+                        concat += ' ' + seg.get('text','')
+                    for i, step in enumerate(steps):
+                        step_text = step.get('description') if isinstance(step, dict) else str(step)
+                        # fuzzy search by sliding window over concat
+                        best = (0, 0, 0.0)
+                        for j, (pos, seg) in enumerate(seg_map):
+                            window = concat[pos:pos+max(200, len(step_text)+50)]
+                            ratio = SequenceMatcher(None, step_text.lower(), window.lower()).ratio()
+                            if ratio > best[2]:
+                                best = (j, j, ratio)
+                        if best[2] > 0:
+                            segc = seg_map[best[0]][1]
+                            timestamps.append({"index": i, "start_sec": segc.get('start'), "end_sec": segc.get('end'), "confidence": round(best[2], 2)})
+                timings['t_timestamps_ready'] = int(time.time() * 1000)
+                yield await send_struct_event('timestamps_ready', {"steps": timestamps})
+            except Exception as e:
+                logger.warning(f"Alignment failed: {e}")
 
-            final_recipe = await recipe_task
-            if not final_recipe or "error" in final_recipe:
-                yield await send_event("error", final_recipe.get("error", "Recipe generation failed."), is_error=True)
-                return
-            
-            yield await send_event("completed", "Recipe generation complete!", recipe=final_recipe)
+            # Enrich: attach timestamps to recipe and send enrich_patch
+            enrich_payload = {"timestamps": timestamps}
+            yield await send_struct_event('enrich_patch', enrich_payload)
+            timings['t_done'] = int(time.time() * 1000)
+            yield await send_struct_event('enrich_done', {"timings": timings})
+
         except Exception as e:
-            logger.error(f"Error in stream for job {job_id}: {e}\n{traceback.format_exc()}")
+            logger.error(f"Error in structured stream for job {job_id}: {e}\n{traceback.format_exc()}")
             yield await send_event("error", f"An unexpected server error occurred: {e}", is_error=True)
         finally:
             logger.info(f"Stream finished for job {job_id}")
