@@ -583,7 +583,7 @@ export default function Layout() {
   };
 
   return (
-    <div className={`font-poppins bg-[#FAF9F7] min-h-screen`}>
+    <div className={`font-poppins min-h-screen`}>
       <Header 
         currentUser={currentUser} 
         handleLogout={handleLogout} 

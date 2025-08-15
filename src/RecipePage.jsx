@@ -133,9 +133,9 @@ export default function RecipePage() {
   if (error || !recipe) return <div className="p-8 text-center text-red-600">{error || 'Recipe not found'}</div>;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-6 md:py-8">
+    <div className="min-h-screen py-1 md:py-2">
       <div className="max-w-3xl lg:max-w-4xl mx-auto px-4">
-        <div className="mb-4">
+        <div className="mb-2 flex justify-between items-center">
           <button
             onClick={() => {
               const s = location.state || {};
@@ -144,8 +144,22 @@ export default function RecipePage() {
               // Default fallback
               return navigate('/collections');
             }}
-            className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-100"
+            className="px-3 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-300"
           >Back</button>
+          <button
+            onClick={() => {
+              // This will trigger the save function in RecipeView
+              const saveButton = document.querySelector('[data-save-button]');
+              if (saveButton) saveButton.click();
+            }}
+            className="px-3 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 font-semibold hidden flex items-center justify-center gap-2"
+            id="top-save-button"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+            </svg>
+            Save Changes
+          </button>
         </div>
         <div className="bg-white rounded-2xl shadow px-5 md:px-6 lg:px-8 py-6 md:py-8">
           <RecipeView 
@@ -154,6 +168,12 @@ export default function RecipePage() {
             variant="page" 
             isSaved={true} 
             currentUser={recipe.user || null}
+            onEditStateChange={(isEditing) => {
+              const topSaveButton = document.getElementById('top-save-button');
+              if (topSaveButton) {
+                topSaveButton.classList.toggle('hidden', !isEditing);
+              }
+            }}
           />
         </div>
       </div>

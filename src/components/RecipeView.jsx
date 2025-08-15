@@ -133,6 +133,7 @@ export default function RecipeView({
   sourceFrom: sourceFromProp,
   onTagsUpdated,
   onSaved, // optional callback invoked after successful save with updated SavedRecipe
+  onEditStateChange, // callback for edit state changes
 }) {
   const [rating, setRating] = useState({ average: 0, count: 0, userValue: null });
   const [tags, setTags] = useState({ approved: [], pending: [] });
@@ -158,11 +159,12 @@ export default function RecipeView({
   // Inline edit mode
   const [isEditing, setIsEditing] = useState(false);
   const [edited, setEdited] = useState(null);
+  const [activeEditField, setActiveEditField] = useState(null); // 'title', 'image', 'description', 'ingredients', 'instructions'
   const [busySave, setBusySave] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
-  const [hoverHighlight, setHoverHighlight] = useState(true);
+  const [hoverHighlight, setHoverHighlight] = useState(false);
   const [ttsActive, setTtsActive] = useState(false);
   const [isTtsPlaying, setIsTtsPlaying] = useState(false);
   const utterRef = useRef(null);
@@ -171,6 +173,9 @@ export default function RecipeView({
   const [dropIndicator, setDropIndicator] = useState(null); // { type, index, pos: 'before'|'after' }
   const [confirmDelete, setConfirmDelete] = useState(null); // { type: 'ingredient'|'instruction', index }
   const [sort, setSort] = useState('popular');
+  const [hoveredItem, setHoveredItem] = useState(null); // { type: 'ingredients'|'instructions', index: number }
+  const [keyboardFocusedItem, setKeyboardFocusedItem] = useState(null); // { type: 'ingredients'|'instructions', index: number }
+  const hoverTimeoutRef = useRef(null);
 
   const moveArrayItem = (array, fromIndex, toIndex) => {
     const list = Array.isArray(array) ? [...array] : [];
@@ -248,6 +253,82 @@ export default function RecipeView({
   };
   const onCancelDelete = () => setConfirmDelete(null);
 
+  // Auto-resize textarea function
+  const autoResizeTextarea = (element) => {
+    if (element) {
+      element.style.height = 'auto';
+      element.style.height = element.scrollHeight + 'px';
+    }
+  };
+
+  // Handle clicks outside active edit field
+  const handleOutsideClick = (e) => {
+    if (isEditing && activeEditField) {
+      // Check if click is outside the active edit field
+      const activeField = e.target.closest('[data-edit-field]');
+      if (!activeField || activeField.dataset.editField !== activeEditField) {
+        setActiveEditField(null);
+      }
+    }
+  };
+
+  // Debounced hover handler
+  const handleHover = (type, index) => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoveredItem({ type, index });
+    }, 100);
+  };
+
+  const handleHoverLeave = () => {
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+    }
+    setHoveredItem(null);
+  };
+
+  // Keyboard navigation handlers
+  const handleKeyDown = (e) => {
+    console.log('Key pressed:', e.key, 'hoverHighlight:', hoverHighlight);
+    if (!hoverHighlight) return;
+    
+    const currentItem = keyboardFocusedItem || hoveredItem;
+    console.log('Current item:', currentItem);
+    if (!currentItem) return;
+
+    let newIndex = currentItem.index;
+    const maxIndex = instructionsToRender.length - 1;
+
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        newIndex = Math.max(0, newIndex - 1);
+        console.log('ArrowUp - new index:', newIndex);
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        newIndex = Math.min(maxIndex, newIndex + 1);
+        console.log('ArrowDown - new index:', newIndex);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        setKeyboardFocusedItem(null);
+        setHoveredItem(null);
+        console.log('Escape - cleared focus');
+        return;
+      default:
+        return;
+    }
+
+    const newItem = { type: 'instructions', index: newIndex };
+    console.log('Setting new item:', newItem);
+
+    setKeyboardFocusedItem(newItem);
+    setHoveredItem(newItem);
+  };
+
   useEffect(() => {
     if (!confirmDelete) return;
     const onKey = (e) => { if (e.key === 'Escape') setConfirmDelete(null); };
@@ -309,8 +390,14 @@ export default function RecipeView({
   const description = content.description || '';
   const ingredients = Array.isArray(content.ingredients) ? content.ingredients : [];
   const instructions = Array.isArray(content.instructions) ? content.instructions : [];
-  const ingredientsToRender = useMemo(() => (variant === 'modal' ? ingredients.slice(0, 8) : ingredients), [variant, ingredients]);
-  const instructionsToRender = useMemo(() => (variant === 'modal' ? instructions.slice(0, 3) : instructions), [variant, instructions]);
+  const ingredientsToRender = useMemo(() => {
+    const ingredientsToUse = edited?.ingredients || ingredients;
+    return variant === 'modal' ? ingredientsToUse.slice(0, 8) : ingredientsToUse;
+  }, [variant, ingredients, edited?.ingredients]);
+  const instructionsToRender = useMemo(() => {
+    const instructionsToUse = edited?.instructions || instructions;
+    return variant === 'modal' ? instructionsToUse.slice(0, 3) : instructionsToUse;
+  }, [variant, instructions, edited?.instructions]);
   const nutrition = content.nutritional_information || content.nutrition || content.nutritionPerServing || {};
   const sourceUrl = content.source_url || content.source || null;
 
@@ -360,6 +447,13 @@ export default function RecipeView({
     setGalleryIndex(0);
   };
 
+  const activateFieldEdit = (fieldName) => {
+    if (!isEditing) {
+      startEdit();
+    }
+    setActiveEditField(fieldName);
+  };
+
   const saveEdits = async () => {
     try {
       setBusySave(true);
@@ -398,6 +492,7 @@ export default function RecipeView({
       }
       setOverrideRecipe(updatedContent);
       setIsEditing(false);
+      setActiveEditField(null);
     } catch (e) {
       alert('Failed to save changes');
     } finally {
@@ -422,6 +517,38 @@ export default function RecipeView({
   };
 
   // Load social data for saved recipes
+  // Add global click listener for outside clicks
+  useEffect(() => {
+    if (isEditing && activeEditField) {
+      document.addEventListener('click', handleOutsideClick);
+      return () => document.removeEventListener('click', handleOutsideClick);
+    }
+  }, [isEditing, activeEditField]);
+
+  // Add global keyboard listener for navigation
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [hoverHighlight, keyboardFocusedItem, hoveredItem, ingredientsToRender.length, instructionsToRender.length]);
+
+  // Notify parent of edit state changes
+  useEffect(() => {
+    if (onEditStateChange) {
+      onEditStateChange(isEditing);
+    }
+  }, [isEditing, onEditStateChange]);
+
+
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!isSaved || !recipeId) return;
     const fetchAll = async () => {
@@ -505,7 +632,13 @@ export default function RecipeView({
     const formatTime = (val) => {
       if (val == null) return '—';
       const str = String(val).trim();
-      if (/[a-zA-Z]/.test(str)) return str; // already has units like 'min'
+      // Extract number from strings like "20 minutes" or "20 min"
+      const numMatch = str.match(/(\d+)/);
+      if (numMatch) {
+        return `${numMatch[1]} min`;
+      }
+      // If already has units like 'min', keep as is
+      if (/[a-zA-Z]/.test(str)) return str;
       const num = parseInt(str, 10);
       return Number.isFinite(num) ? `${num} min` : str;
     };
@@ -619,16 +752,25 @@ export default function RecipeView({
         )}
           <div className="flex items-center gap-3">
             <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              {isEditing ? (
-                <input
-                  value={edited?.title || ''}
-                  onChange={(e)=>setEdited(v=>({...(v||{}), title: e.target.value}))}
-                  className="flex-1 w-[60vw] max-w-[900px] min-w-[40ch] text-3xl font-extrabold leading-tight border-b-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-sm px-1"
-                  placeholder="Title"
-                  aria-label="Recipe title"
-                />
+              {isEditing && activeEditField === 'title' ? (
+                <div data-edit-field="title">
+                  <input
+                    value={edited?.title || ''}
+                    onChange={(e)=>setEdited(v=>({...(v||{}), title: e.target.value}))}
+                    className="flex-1 w-[50vw] max-w-[730px] min-w-[35ch] text-3xl font-extrabold leading-tight border-b-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-sm px-1"
+                    placeholder="Title"
+                    aria-label="Recipe title"
+                    onBlur={() => setActiveEditField(null)}
+                  />
+                </div>
               ) : (
-                <span>{title || 'Untitled Recipe'}</span>
+                <span 
+                  className={isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}
+                  onClick={isEditing ? () => activateFieldEdit('title') : undefined}
+                  data-edit-field="title"
+                >
+                  {edited?.title || title || 'Untitled Recipe'}
+                </span>
               )}
               {content?.conversion?.isVariant && (
                 <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Variant</span>
@@ -657,7 +799,7 @@ export default function RecipeView({
                 >{content?.conversion?.visibility === 'public' ? 'Public' : 'Private'}</button>
               )}
             </h2>
-            {Number(rating.count || 0) > 0 && (
+            {!isEditing && Number(rating.count || 0) > 0 && (
               <div className="flex items-center gap-1 text-gray-700">
                 <svg viewBox="0 0 24 24" width="18" height="18" fill="#facc15" aria-hidden="true"><path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/></svg>
                 <span className="font-medium">{Number(rating.average || 0).toFixed(1)}</span>
@@ -684,25 +826,27 @@ export default function RecipeView({
         <div className="flex flex-col md:flex-row md:items-stretch gap-6 mb-8 lg:mb-10">
           <div className="md:w-1/3">
             {(image || edited?.image_url) && (
-              <div className={`${isEditing ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+              <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
                 <div className={`${variant === 'modal' ? 'relative w-full aspect-[4/3]' : ''}`}>
                   <img
-                    src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((isEditing ? (edited?.image_url || image) : image).startsWith('http') ? (isEditing ? (edited?.image_url || image) : image) : STATIC_BASE + (isEditing ? (edited?.image_url || image) : image))}
-                    alt={title}
-                    className={`w-full ${variant === 'modal' ? 'h-full absolute inset-0' : 'h-auto'} object-cover rounded-lg shadow-md`}
+                    src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
+                    alt={edited?.title || title}
+                    className={`w-full ${variant === 'modal' ? 'h-full absolute inset-0' : 'h-auto'} object-cover rounded-lg shadow-md ${isEditing ? 'cursor-pointer' : ''}`}
                     loading={variant === 'modal' ? 'lazy' : 'eager'}
                     decoding="async"
+                    onClick={isEditing ? () => activateFieldEdit('image') : undefined}
+                    data-edit-field="image"
                   />
                 </div>
-                {isEditing && gallery.length > 1 && (
+                {isEditing && activeEditField === 'image' && gallery.length > 1 && (
                   <>
                     <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev">‹</button>
                     <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next">›</button>
                   </>
                 )}
-                {isEditing && (
+                {isEditing && activeEditField === 'image' && (
                   <div className="mt-3 flex items-center gap-2">
-                    <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate Image'}</button>
+                    <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate'}</button>
                     <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
                       const f = e.target.files && e.target.files[0];
                       if(!f) return;
@@ -732,16 +876,25 @@ export default function RecipeView({
           </div>
           <div className="md:w-2/3 flex flex-col">
             <Section title="Description" showTitle={false}>
-              {isEditing ? (
-                <textarea
-                  value={edited?.description||''}
-                  onChange={(e)=>setEdited(v=>({...(v||{}), description:e.target.value}))}
-                  className="w-full border rounded-lg px-4 py-3 text-base leading-relaxed min-h-[180px] resize-y ring-amber-200 focus:ring-2"
-                  rows={6}
-                  placeholder="Add description"
-                />
+              {isEditing && activeEditField === 'description' ? (
+                <div data-edit-field="description">
+                  <textarea
+                    value={edited?.description||''}
+                    onChange={(e)=>setEdited(v=>({...(v||{}), description:e.target.value}))}
+                    className="w-full border rounded-lg px-4 py-3 text-base leading-relaxed min-h-[200px] resize-y ring-amber-200 focus:ring-2"
+                    rows={8}
+                    placeholder="Add description"
+                    onBlur={() => setActiveEditField(null)}
+                  />
+                </div>
               ) : (
-                <p className="text-gray-700 leading-relaxed hover:bg-yellow-50 rounded-lg p-2 transition-colors">{description}</p>
+                <p 
+                  className={`text-gray-700 leading-relaxed ${isEditing ? 'cursor-pointer hover:bg-yellow-50 rounded-lg p-2 transition-colors' : ''}`}
+                  onClick={isEditing ? () => activateFieldEdit('description') : undefined}
+                  data-edit-field="description"
+                >
+                  {edited?.description || description}
+                </p>
               )}
             </Section>
           </div>
@@ -758,12 +911,12 @@ export default function RecipeView({
             <div className="inline-flex items-center gap-2 px-4 py-3 bg-amber-50 rounded-lg border border-amber-100">
               <ClockIcon className="w-5 h-5 text-amber-600" aria-hidden="true" />
               <span className="text-sm text-amber-700">Prep Time</span>
-              <span className="text-sm font-semibold text-amber-900">{(() => { const v = content.prep_time ?? content.prep_time_minutes; return v != null && String(v) !== '' ? `${v} min` : '—'; })()}</span>
+              <span className="text-sm font-semibold text-amber-900">{(() => { const v = content.prep_time ?? content.prep_time_minutes; return v != null && String(v) !== '' ? `${String(v).replace(/\s*minutes?\s*/i, '')} min` : '—'; })()}</span>
             </div>
             <div className="inline-flex items-center gap-2 px-4 py-3 bg-orange-50 rounded-lg border border-orange-100">
               <FireIcon className="w-5 h-5 text-orange-600" aria-hidden="true" />
               <span className="text-sm text-orange-700">Cook Time</span>
-              <span className="text-sm font-semibold text-orange-900">{(() => { const v = content.cook_time ?? content.cook_time_minutes; return v != null && String(v) !== '' ? `${v} min` : '—'; })()}</span>
+              <span className="text-sm font-semibold text-orange-900">{(() => { const v = content.cook_time ?? content.cook_time_minutes; return v != null && String(v) !== '' ? `${String(v).replace(/\s*minutes?\s*/i, '')} min` : '—'; })()}</span>
             </div>
             <div className="inline-flex items-center gap-2 px-4 py-3 bg-green-50 rounded-lg border border-green-100">
               <span className="text-sm text-green-700">Difficulty</span>
@@ -779,13 +932,18 @@ export default function RecipeView({
         <RecipeSection id="ingredients-section" title="Ingredients & Instructions" titleHidden variant="plain" className="px-0">
           <div className="grid gap-6 md:grid-cols-[2fr,3fr]">
             {/* Ingredients column */}
-            <div className="rounded-2xl border border-black/5 shadow-sm p-4 sm:p-6" style={{ background: 'rgb(250 250 250 / 95%)' }}>
+            <div 
+              className={`rounded-2xl border border-black/5 shadow-sm p-4 sm:p-6 ${isEditing ? 'cursor-pointer' : ''}`}
+              style={{ background: 'rgb(250 250 250 / 95%)' }}
+              onClick={isEditing && activeEditField !== 'ingredients' ? () => activateFieldEdit('ingredients') : undefined}
+              data-edit-field="ingredients"
+            >
               <div className="flex items-center justify-between mb-3">
                 <h3 id="ingredients" className="text-lg font-semibold flex items-center gap-2 scroll-mt-[88px]">
                   Ingredients
                 </h3>
               </div>
-              {isEditing ? (
+              {isEditing && activeEditField === 'ingredients' ? (
                 <div className="space-y-2" onDragEnd={clearDrag}>
                   {(edited?.ingredients||[]).map((ing, idx) => (
                     <div key={idx}
@@ -819,8 +977,17 @@ export default function RecipeView({
                   {ingredientsToRender.map((ing, idx) => {
                     const text = typeof ing === 'string' ? ing : `${ing.quantity || ''} ${ing.name || ''} ${ing.notes ? `(${ing.notes})` : ''}`.trim();
                     const m = /^(\S+\s+\S+)(.*)$/i.exec(text);
+                    const shouldDim = false;
                     return (
-                      <li key={idx} className={`flex items-start p-1 rounded ${hoverHighlight ? 'hover:bg-yellow-50' : ''} transition-colors`}>
+                      <li 
+                        key={idx} 
+                        className={`flex items-start p-1 rounded ${isEditing ? 'hover:bg-yellow-50 cursor-pointer' : ''} focus:outline-none focus:ring-0 focus:border-0`}
+                        onClick={isEditing ? () => activateFieldEdit('ingredients') : undefined}
+                        onFocus={undefined}
+                        onBlur={undefined}
+                        tabIndex={-1}
+                        data-edit-field="ingredients"
+                      >
                         <span className="text-green-600 mr-3 mt-1 flex-shrink-0">•</span>
                         <span className="text-gray-700">{m ? (<><strong className="font-semibold text-gray-900">{m[1]}</strong>{m[2]}</>) : text}</span>
                       </li>
@@ -831,14 +998,40 @@ export default function RecipeView({
             </div>
 
             {/* Instructions column */}
-            <div className="rounded-2xl border border-black/5 shadow-sm p-4 sm:p-6" style={{ background: 'rgb(250 250 250 / 95%)' }}>
+            <div 
+              className={`rounded-2xl border border-black/5 shadow-sm p-4 sm:p-6 ${isEditing ? 'cursor-pointer' : ''}`}
+              style={{ background: 'rgb(250 250 250 / 95%)' }}
+              onClick={isEditing && activeEditField !== 'instructions' ? () => activateFieldEdit('instructions') : undefined}
+              data-edit-field="instructions"
+            >
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold flex items-center gap-2 scroll-mt-[88px]">
                   Instructions
                 </h3>
+                {!isEditing && (
+                  <button 
+                    onClick={() => setHoverHighlight(v => !v)} 
+                    aria-pressed={hoverHighlight}
+                    className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg transition-colors ${
+                      hoverHighlight 
+                        ? 'text-blue-700 bg-blue-50 hover:bg-blue-100' 
+                        : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                    title={hoverHighlight ? "Disable focus mode" : "Enable focus mode (instructions only)"}
+                  >
+                    {hoverHighlight ? (
+                      <EyeIcon className="h-5 w-5 text-blue-600" />
+                    ) : (
+                      <EyeSlashIcon className="h-5 w-5" />
+                    )}
+                    <span className="text-sm font-medium">
+                      {hoverHighlight ? 'Focus mode ON' : 'Focus mode'}
+                    </span>
+                  </button>
+                )}
               </div>
               <div className="sr-only" aria-hidden="true"></div>
-              {isEditing ? (
+              {isEditing && activeEditField === 'instructions' ? (
                     <div className="space-y-2" onDragEnd={clearDrag}>
                   {(edited?.instructions||[]).map((st, idx) => (
                     <div key={idx}
@@ -857,7 +1050,23 @@ export default function RecipeView({
                       <div className="flex items-start gap-3">
                         <div className="w-8 h-8 mt-1 rounded-full bg-[#e87b35] text-white inline-flex items-center justify-center font-bold shrink-0">{idx + 1}</div>
                         <div className="flex-1">
-                          <textarea value={st.description||''} onChange={(e)=>setEdited(v=>{ const arr=[...(v?.instructions||[])]; arr[idx]={...arr[idx], description:e.target.value}; return {...v, instructions:arr}; })} className="w-full border rounded-lg px-3 py-2 focus:ring-2 ring-amber-200" rows={2} />
+                          <textarea 
+                            value={st.description||''} 
+                            onChange={(e)=>{
+                              setEdited(v=>{ 
+                                const arr=[...(v?.instructions||[])]; 
+                                arr[idx]={...arr[idx], description:e.target.value}; 
+                                return {...v, instructions:arr}; 
+                              });
+                              autoResizeTextarea(e.target);
+                            }} 
+                            onInput={(e) => autoResizeTextarea(e.target)}
+                            ref={(el) => {
+                              if (el) autoResizeTextarea(el);
+                            }}
+                            className="w-full border rounded-lg px-3 py-2 focus:ring-2 ring-amber-200 resize-none overflow-hidden" 
+                            rows={1}
+                          />
                         </div>
                         <div className="shrink-0">
                           <button type="button" className="text-gray-500 hover:text-red-600 p-1" title="Remove step" onClick={()=>confirmAndRemoveInstruction(idx)}>
@@ -876,12 +1085,38 @@ export default function RecipeView({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {instructionsToRender.map((inst, idx) => (
-                    <div key={idx} className={`grid grid-cols-[2rem,1fr] gap-3 items-start p-1 rounded ${hoverHighlight ? 'hover:bg-yellow-50' : ''} transition-colors`} onClick={() => { if (ttsActive) speakText(typeof inst === 'string' ? inst : (inst.description || ''), `st-${recipeId}-${idx}`); }}>
-                      <div className="w-8 h-8 rounded-full bg-[#e87b35] text-white inline-flex items-center justify-center font-bold shrink-0">{idx + 1}</div>
-                      <p className="text-gray-700 leading-relaxed">{typeof inst === 'string' ? inst : (inst.description || `Step ${idx + 1}`)}</p>
-                    </div>
-                  ))}
+                  {instructionsToRender.map((inst, idx) => {
+                    const isActive = hoverHighlight && (
+                      (keyboardFocusedItem?.type === 'instructions' && keyboardFocusedItem?.index === idx) ||
+                      (!keyboardFocusedItem && hoveredItem?.type === 'instructions' && hoveredItem?.index === idx)
+                    );
+                    const hasAnyFocus = hoverHighlight && (hoveredItem?.type === 'instructions' || keyboardFocusedItem?.type === 'instructions');
+                    const shouldDim = hasAnyFocus && !isActive;
+                    return (
+                      <div 
+                        key={idx} 
+                        className={`grid grid-cols-[2rem,1fr] gap-3 items-start p-1 rounded ${isEditing ? 'hover:bg-yellow-50 cursor-pointer' : ''} transition-all duration-200 will-change-opacity ${shouldDim ? 'opacity-40 blur-[1px]' : ''} focus:outline-none focus:ring-0 focus:border-0`} 
+                        onClick={(e) => { 
+                          if (isEditing) {
+                            activateFieldEdit('instructions');
+                          } else if (ttsActive) {
+                            speakText(typeof inst === 'string' ? inst : (inst.description || ''), `st-${recipeId}-${idx}`);
+                          }
+                        }}
+                        onMouseEnter={hoverHighlight ? () => handleHover('instructions', idx) : undefined}
+                        onMouseLeave={hoverHighlight ? handleHoverLeave : undefined}
+                        onFocus={hoverHighlight ? () => {
+                          setKeyboardFocusedItem({ type: 'instructions', index: idx });
+                        } : undefined}
+                        onBlur={() => setKeyboardFocusedItem(null)}
+                        tabIndex={hoverHighlight ? 0 : -1}
+                        data-edit-field="instructions"
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#e87b35] text-white inline-flex items-center justify-center font-bold shrink-0">{idx + 1}</div>
+                        <p className="text-gray-700 leading-relaxed">{typeof inst === 'string' ? inst : (inst.description || `Step ${idx + 1}`)}</p>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -915,7 +1150,7 @@ export default function RecipeView({
 
       {variant !== 'modal' && (
       <RecipeSection id="nutrition" title="Nutrition Information (per serving)">
-        <div className="flex flex-wrap items-center gap-2 mb-2">
+        <div className="flex flex-wrap items-center gap-2 mb-2 mt-6">
           {[{k:'calories', l:'Calories'},{k:'protein',l:'Protein'},{k:'fat',l:'Fat'},{k:'carbs',l:'Carbs'}].map(({k,l}) => (
             <div key={k} className="inline-flex items-center gap-2 bg-white text-gray-800 rounded-full px-3 py-1 border border-gray-200">
               <span className="text-sm text-gray-600">{l}</span>
@@ -1110,22 +1345,16 @@ export default function RecipeView({
       <div className={`mt-8`}>
           <div className="flex items-center justify-between py-4 ${variant === 'modal' ? '' : 'px-4 lg:px-8'}">
           <div className="flex-1">
-            {variant === 'modal' && !isEditing && (
-              <div className="inline-flex items-center gap-3">
-                <button onClick={()=>setHoverHighlight(v=>!v)} className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900">
-                  {hoverHighlight ? (<EyeIcon className="h-5 w-5" />) : (<EyeSlashIcon className="h-5 w-5" />)}
-                  <span className="text-sm">Highlight</span>
+            {!isEditing && (
+              <div className="inline-flex items-center gap-2">
+                <button aria-pressed={ttsActive} onClick={()=>setTtsActive(v=>!v)} className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border ${ttsActive ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-gray-300 text-gray-700'} hover:bg-gray-50`} title="Text-to-Speech">
+                  {ttsActive ? (<SpeakerWaveIcon className="h-5 w-5" />) : (<SpeakerXMarkIcon className="h-5 w-5" />)}
                 </button>
-                <div className="inline-flex items-center gap-2">
-                  <button aria-pressed={ttsActive} onClick={()=>setTtsActive(v=>!v)} className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border ${ttsActive ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-white border-gray-300 text-gray-700'} hover:bg-gray-50`} title="Text-to-Speech">
-                    {ttsActive ? (<SpeakerWaveIcon className="h-5 w-5" />) : (<SpeakerXMarkIcon className="h-5 w-5" />)}
+                {isTtsPlaying && (
+                  <button onClick={()=>{ try{ if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch {}; setIsTtsPlaying(false); }} className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 text-red-600 border border-red-200" title="Stop">
+                    <span className="block w-3 h-3 bg-red-600" />
                   </button>
-                  {isTtsPlaying && (
-                    <button onClick={()=>{ try{ if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch {}; setIsTtsPlaying(false); }} className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-red-50 text-red-600 border border-red-200" title="Stop">
-                      <span className="block w-3 h-3 bg-red-600" />
-                    </button>
-                  )}
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -1145,7 +1374,7 @@ export default function RecipeView({
                 <button onClick={()=>setConvertOpen(true)} className="flex items-center justify-center gap-2 bg-[#e87b35] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
                   <span>Convert</span>
                 </button>
-              <button onClick={() => { isEditing ? saveEdits() : startEdit(); }} disabled={busySave} className={`flex items-center justify-center gap-2 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'} text-white font-semibold py-2.5 px-5 rounded-lg transition-colors disabled:opacity-60 text-sm`}>
+              <button onClick={() => { isEditing ? saveEdits() : startEdit(); }} disabled={busySave} className={`flex items-center justify-center gap-2 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'} text-white font-semibold py-2.5 px-5 rounded-lg transition-colors disabled:opacity-60 text-sm`} data-save-button>
                   <PencilSquareIcon className="h-5 w-5" />
                   <span>{isEditing ? (busySave ? 'Saving…' : 'Save Changes') : 'Edit Recipe'}</span>
                 </button>
@@ -1163,7 +1392,7 @@ export default function RecipeView({
                   <BookOpenIcon className="h-5 w-5" />
                   <span>Add to Collection</span>
                 </button>
-              <button onClick={() => { isEditing ? saveEdits() : startEdit(); }} disabled={busySave} className={`flex items-center justify-center gap-2 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'} text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-60`}>
+              <button onClick={() => { isEditing ? saveEdits() : startEdit(); }} disabled={busySave} className={`flex items-center justify-center gap-2 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'} text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-60`} data-save-button>
                   <PencilSquareIcon className="h-5 w-5" />
                   <span>{isEditing ? (busySave ? 'Saving…' : 'Save Changes') : 'Edit Recipe'}</span>
                 </button>

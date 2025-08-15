@@ -11,7 +11,7 @@
 }
 
 body{
-  background: var(--bg);
+  background: rgb(246 241 233 / var(--tw-bg-opacity, 1));
   color: var(--ink);
 }
 
@@ -20,7 +20,6 @@ body{
 
 body {
     font-family: 'Poppins', sans-serif;
-    background-color: gainsboro;
     background-size: cover;
     background-position: center;
     background-attachment: fixed;

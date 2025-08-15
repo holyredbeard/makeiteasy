@@ -490,7 +490,7 @@ export default function CollectionsPage() {
                             )}
                             {/* Title + meta in bottom area */}
                             <div className="absolute inset-x-0 bottom-0 z-10 p-3">
-                              <div className="text-white font-semibold leading-snug line-clamp-2" title={r?.recipe_content?.title || ''}>
+                              <div className="text-white font-semibold leading-snug line-clamp-2 text-left" title={r?.recipe_content?.title || ''}>
                                 {r?.recipe_content?.title}
                               </div>
                               <div className="text-[11px] text-white/90 mt-1">
