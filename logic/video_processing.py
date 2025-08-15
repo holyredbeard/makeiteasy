@@ -97,40 +97,32 @@ def get_video_id(url: str) -> Optional[str]:
     return None
 
 
-# --- Simple disk cache (optional redis/diskcache can be added later) ---
-CACHE_DIR = Path("cache")
-CACHE_DIR.mkdir(exist_ok=True)
+# --- DiskCache implementation (replaces simple JSON cache) ---
+try:
+    import diskcache as dc
+    _cache = dc.Cache("cache")
+    _cache_available = True
+except ImportError:
+    _cache_available = False
+    _cache = None
+
 CACHE_TTL_SECONDS = 60 * 60 * 24 * 90  # 90 days
 
 
-def _cache_key_raw(key: str) -> str:
-    h = hashlib.sha256(key.encode("utf-8")).hexdigest()
-    return str(CACHE_DIR / f"{h}.json")
-
-
 def cache_get(key: str) -> Optional[dict]:
-    path = _cache_key_raw(key)
+    if not _cache_available or not _cache:
+        return None
     try:
-        if not Path(path).exists():
-            return None
-        with open(path, "r", encoding="utf-8") as f:
-            obj = json.load(f)
-        if time.time() - obj.get("t", 0) > CACHE_TTL_SECONDS:
-            try:
-                Path(path).unlink()
-            except Exception:
-                pass
-            return None
-        return obj.get("data")
+        return _cache.get(key)
     except Exception:
         return None
 
 
 def cache_set(key: str, data: dict):
-    path = _cache_key_raw(key)
+    if not _cache_available or not _cache:
+        return
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump({"t": time.time(), "data": data}, f)
+        _cache.set(key, data, expire=CACHE_TTL_SECONDS)
     except Exception:
         pass
 
@@ -345,7 +337,7 @@ def transcribe_audio(video_file_or_url: str, job_id: str, language: str = "en") 
         # Captions-first: if input is a URL, attempt to fetch auto-captions and use them if confident
         path_taken = "audio"
         video_id = get_video_id(video_file_or_url)
-        pipeline_version = "fw_v1"
+        pipeline_version = os.getenv("PIPELINE_VERSION", "fw_v1")
         if not Path(str(video_file_or_url)).exists() and video_id:
             captions = try_fetch_captions(video_file_or_url, job_id)
             if captions and captions.get("confidence", 0) >= 0.75:

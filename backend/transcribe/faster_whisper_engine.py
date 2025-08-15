@@ -42,8 +42,8 @@ def _load_model() -> WhisperModel:
     global _model
     with _lock:
         if _model is None:
-            # Force using the tiny model to keep memory and load times low
-            model_name = "tiny"
+            # Use configurable model size with tiny as default
+            model_name = os.getenv("FW_MODEL", "tiny")
             device = _select_device(os.getenv("FW_DEVICE", "auto"))
             compute_type = _compute_type_for_device(device)
             num_workers = int(os.getenv("FW_WORKERS", "2"))
