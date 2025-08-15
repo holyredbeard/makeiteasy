@@ -932,6 +932,7 @@ async def generate_stream_endpoint(request: Request, video_url: str, language: s
             video_path = await asyncio.to_thread(download_video, video_url, job_id, audio_only=False)
             if video_path:
                 temp_files.append(video_path)
+                from logic.video_processing import get_media_duration
                 duration = await asyncio.to_thread(get_media_duration, video_path, False)
                 yield await send_struct_event('video_ready', {"videoId": video_id or job_id, "durationSec": duration or 0})
 
