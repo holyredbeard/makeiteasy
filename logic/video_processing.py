@@ -1,15 +1,22 @@
 import os
 import subprocess
 import yt_dlp
-import whisper
-import torch
 import traceback
+import torch
+import tempfile
+import shutil
+import time
+from pathlib import Path
+from backend.transcribe.faster_whisper_engine import transcribe_audio_stream, transcribe_and_collect
 from pathlib import Path
 from typing import Optional, List, Tuple
 from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont, ImageStat, ImageEnhance
 from models.types import Step
 import threading
+import hashlib
+import json
+import time
 import logging
 import numpy as np
 import cv2
@@ -87,6 +94,90 @@ def get_video_id(url: str) -> Optional[str]:
     if "youtube.com" in url or "youtu.be" in url:
         match = re.search(r"(?<=v=)[^&#]+", url) or re.search(r"(?<=be/)[^&#]+", url)
         return match.group(0) if match else None
+    return None
+
+
+# --- Simple disk cache (optional redis/diskcache can be added later) ---
+CACHE_DIR = Path("cache")
+CACHE_DIR.mkdir(exist_ok=True)
+CACHE_TTL_SECONDS = 60 * 60 * 24 * 90  # 90 days
+
+
+def _cache_key_raw(key: str) -> str:
+    h = hashlib.sha256(key.encode("utf-8")).hexdigest()
+    return str(CACHE_DIR / f"{h}.json")
+
+
+def cache_get(key: str) -> Optional[dict]:
+    path = _cache_key_raw(key)
+    try:
+        if not Path(path).exists():
+            return None
+        with open(path, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+        if time.time() - obj.get("t", 0) > CACHE_TTL_SECONDS:
+            try:
+                Path(path).unlink()
+            except Exception:
+                pass
+            return None
+        return obj.get("data")
+    except Exception:
+        return None
+
+
+def cache_set(key: str, data: dict):
+    path = _cache_key_raw(key)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"t": time.time(), "data": data}, f)
+    except Exception:
+        pass
+
+
+def try_fetch_captions(video_url: str, job_id: str) -> Optional[dict]:
+    """Attempt to download auto-captions via yt-dlp (vtt). Returns dict {text, confidence} or None."""
+    video_id = get_video_id(video_url) or job_id
+    cache_k = f"captions:{video_id}:v1"
+    cached = cache_get(cache_k)
+    if cached:
+        return cached
+
+    download_path = Path("downloads")
+    download_path.mkdir(exist_ok=True)
+    outtmpl = str(download_path / f"{job_id}.%(ext)s")
+    ydl_opts = {
+        'outtmpl': outtmpl,
+        'quiet': True,
+        'skip_download': True,
+        'writesubtitles': True,
+        'writeautomaticsub': True,
+        'subtitlesformat': 'vtt',
+        'subtitleslangs': ['sv', 'en.*']
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+        # find vtt file
+        for f in download_path.iterdir():
+            if f.stem == job_id and f.suffix.lower().endswith('.vtt'):
+                text = f.read_text(encoding='utf-8', errors='ignore')
+                # strip WEBVTT and timestamps
+                lines = []
+                for ln in text.splitlines():
+                    if ln.strip() == '' or ln.strip().upper().startswith('WEBVTT'):
+                        continue
+                    if '-->' in ln:
+                        continue
+                    lines.append(ln.strip())
+                plain = ' '.join([l for l in lines if l])
+                # heuristic confidence
+                confidence = 0.8 if len(plain) > 80 else 0.6
+                result = {"text": plain, "confidence": confidence, "raw_path": str(f)}
+                cache_set(cache_k, result)
+                return result
+    except Exception as e:
+        logger.debug(f"[CAPTIONS] Unable to fetch captions: {e}")
     return None
 
 def get_media_duration(file_path: str, is_audio: bool) -> Optional[float]:
@@ -195,11 +286,13 @@ def download_video(video_url: str, job_id: str, audio_only: bool = False) -> Opt
     }
 
     if audio_only:
+        # Try a few audio format selectors to maximize compatibility
         formats = [
-            {'format_name': 'Best Audio (M4A/MP3)', 'format_selector': 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio'},
-            {'format_name': 'Fallback: Worst Video to MP3', 'format_selector': 'worstvideo[ext=mp4]/worst', 'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3'}]}
+            {'format_name': 'Best audio (m4a preferred)', 'format_selector': 'bestaudio[ext=m4a]/bestaudio'},
+            {'format_name': 'Audio bitrate <=128 or m4a (fallback)', 'format_selector': 'ba[abr<=128]/140'},
+            {'format_name': 'Best audio (any)', 'format_selector': 'bestaudio'}
         ]
-        final_ext = 'mp3'
+        final_ext = None
     else:
         formats = [
             {'format_name': 'Low Resolution (480p)', 'format_selector': 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]'},
@@ -222,23 +315,10 @@ def download_video(video_url: str, job_id: str, audio_only: bool = False) -> Opt
             with yt_dlp.YoutubeDL(specific_opts) as ydl:
                 error_code = ydl.download([video_url])
                 if error_code == 0:
-                    # The correct file path should have the final extension
-                    expected_path = download_path / f"{job_id}.{final_ext}"
-                    if expected_path.exists():
-                        logger.info(f"[DOWNLOAD] ✅ SUCCESS: Downloaded with '{f_info['format_name']}' format to {expected_path}")
-                        return str(expected_path)
-
-                    # Fallback scan if the extension is different
+                    # Scan for any file matching job_id stem and return it
                     for file in download_path.iterdir():
                         if file.stem == job_id:
-                            # Correct the extension for audio files
-                            if audio_only and not file.suffix in ['.mp3', '.m4a']:
-                                corrected_path = file.with_suffix(f'.{final_ext}')
-                                file.rename(corrected_path)
-                                logger.info(f"[DOWNLOAD] ✅ SUCCESS (Fallback Scan): Renamed to {corrected_path} and downloaded with '{f_info['format_name']}' format.")
-                                return str(corrected_path)
-                            
-                            logger.info(f"[DOWNLOAD] ✅ SUCCESS (Fallback Scan): Downloaded with '{f_info['format_name']}' format to {file}")
+                            logger.info(f"[DOWNLOAD] ✅ SUCCESS (Scan): Downloaded with '{f_info['format_name']}' format to {file}")
                             return str(file)
                     
                     logger.error("[DOWNLOAD] Download reported success, but no output file was found.")
@@ -252,27 +332,100 @@ def download_video(video_url: str, job_id: str, audio_only: bool = False) -> Opt
     logger.error("[DOWNLOAD] Download failed after all attempts.")
     return None
 
-def transcribe_audio(video_file: str, job_id: str, language: str = "en") -> Optional[str]:
+def transcribe_audio(video_file_or_url: str, job_id: str, language: str = "en") -> Optional[str]:
+    """Transcribe audio from a local file or a URL.
+    If given a URL, download audio-only via yt-dlp. Convert to 16k mono WAV and stream transcription
+    using faster-whisper. Returns full transcript text (same contract as before).
+    """
     logger.info(f"[TRANSCRIBE] Starting transcription for job {job_id} with language '{language}'")
-    if not Path(video_file).exists():
-        logger.error("[TRANSCRIBE] Video file does not exist.")
-        return None
-
-    duration = get_media_duration(video_file, is_audio=True)
-    if duration is None or duration < 0.5:
-        logger.error(f"[TRANSCRIBE] Media duration is too short ({duration}s), likely no audio content.")
-        return None
+    start_ts = time.time()
+    temp_files = []
 
     try:
-        model = get_whisper_model()
-        result = model.transcribe(video_file, fp16=False, language=language)
-        transcript_text = result["text"]
-        logger.info(f"[TRANSCRIBE] Successfully transcribed audio: {len(transcript_text)} characters")
+        # Captions-first: if input is a URL, attempt to fetch auto-captions and use them if confident
+        path_taken = "audio"
+        video_id = get_video_id(video_file_or_url)
+        pipeline_version = "fw_v1"
+        if not Path(str(video_file_or_url)).exists() and video_id:
+            captions = try_fetch_captions(video_file_or_url, job_id)
+            if captions and captions.get("confidence", 0) >= 0.75:
+                logger.info(f"[TRANSCRIBE] Using captions-first result for job {job_id} (confidence={captions.get('confidence')})")
+                cache_set(f"transcript:{video_id}:{pipeline_version}", {"text": captions.get("text", ""), "source": "captions"})
+                path_taken = "captions"
+                # telemetry
+                logger.info(f"[TELEMETRY] path_taken={path_taken}, cache_hit=False")
+                return captions.get("text", "")
+        # Determine input: local file or URL
+        audio_path = None
+        if Path(str(video_file_or_url)).exists():
+            audio_path = str(video_file_or_url)
+            audio_dl_ms = 0
+        else:
+            # treat as URL and download audio-only
+            logger.info(f"[TRANSCRIBE] Input appears to be a URL, downloading audio for job {job_id}...")
+            dl_start = time.time()
+            audio_path = download_video(video_file_or_url, job_id, audio_only=True)
+            audio_dl_ms = int((time.time() - dl_start) * 1000)
+            if not audio_path:
+                logger.error("[TRANSCRIBE] Failed to download audio from URL.")
+                return None
+            temp_files.append(audio_path)
+
+        duration = get_media_duration(audio_path, is_audio=True)
+        if duration is None:
+            logger.warning(f"[TRANSCRIBE] Could not determine media duration for {audio_path}, proceeding to conversion/transcription.")
+        elif duration < 0.5:
+            logger.error(f"[TRANSCRIBE] Media duration is too short ({duration}s), likely no audio content.")
+            return None
+
+        # Convert to 16kHz mono WAV
+        wav_tmp = tempfile.NamedTemporaryFile(prefix=f"{job_id}_", suffix=".wav", delete=False)
+        wav_tmp_path = wav_tmp.name
+        wav_tmp.close()
+
+        ffmpeg_cmd = [
+            "ffmpeg", "-y", "-i", audio_path,
+            "-ac", "1", "-ar", "16000", "-vn", "-f", "wav", wav_tmp_path
+        ]
+        logger.info(f"[TRANSCRIBE] Converting audio to 16k mono WAV: {' '.join(ffmpeg_cmd[:3])} ...")
+        try:
+            subprocess.run(ffmpeg_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except Exception as e:
+            logger.error(f"[TRANSCRIBE] ffmpeg conversion failed: {e}")
+            return None
+        temp_files.append(wav_tmp_path)
+
+        # Stream transcription using faster-whisper engine
+        logger.info(f"[TRANSCRIBE] Starting faster-whisper streaming for job {job_id}...")
+        fw_start = time.time()
+        transcript_text, timeline = transcribe_and_collect(wav_tmp_path, lang_hint=language)
+        fw_transcribe_ms = int((time.time() - fw_start) * 1000)
+
+        elapsed_ms = int((time.time() - start_ts) * 1000)
+        logger.info(f"[TRANSCRIBE] Transcription completed for job {job_id} ({elapsed_ms} ms). Segments: {len(timeline)}")
+
+        # cache transcript if video_id known
+        if video_id:
+            cache_set(f"transcript:{video_id}:{pipeline_version}", {"text": transcript_text, "timeline": timeline, "source": "audio"})
+
+        # telemetry
+        logger.info(f"[TELEMETRY] audio_dl_ms={locals().get('audio_dl_ms',0)}, fw_transcribe_ms={fw_transcribe_ms}, path_taken={path_taken}, cache_hit=False")
+
         return transcript_text
+
     except Exception as e:
-        logger.error(f"Transcription failed: {e}")
+        logger.error(f"[TRANSCRIBE] Transcription failed: {e}")
         logger.error(traceback.format_exc())
         return None
+    finally:
+        # Cleanup temp files
+        for fp in temp_files:
+            try:
+                if Path(fp).exists():
+                    Path(fp).unlink()
+                    logger.debug(f"[TRANSCRIBE] Removed temp file {fp}")
+            except Exception:
+                pass
 
 def extract_and_save_frames(video_file: str, job_id: str, interval_seconds: int = 5) -> List[str]:
     """Extracts frames from a video at a given interval and saves them as images."""
