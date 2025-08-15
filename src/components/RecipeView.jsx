@@ -1101,6 +1101,9 @@ export default function RecipeView({
                             activateFieldEdit('instructions');
                           } else if (ttsActive) {
                             speakText(typeof inst === 'string' ? inst : (inst.description || ''), `st-${recipeId}-${idx}`);
+                          } else if (hoverHighlight) {
+                            // Only allow focus when Focus mode is active
+                            setKeyboardFocusedItem({ type: 'instructions', index: idx });
                           }
                         }}
                         onMouseEnter={hoverHighlight ? () => handleHover('instructions', idx) : undefined}
