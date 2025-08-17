@@ -447,6 +447,12 @@ export default function RecipeView({
     setGalleryIndex(0);
   };
 
+  const cancelEdit = () => {
+    setIsEditing(false);
+    setActiveEditField(null);
+    setEdited(null);
+  };
+
   const activateFieldEdit = (fieldName) => {
     if (!isEditing) {
       startEdit();
@@ -1250,7 +1256,7 @@ export default function RecipeView({
             <div className="bg-gray-50 rounded-lg p-4">
               <textarea value={commentInput} onChange={(e)=>setCommentInput(e.target.value)} rows={3} className="w-full bg-white px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Write a comment..." />
               <div className="flex justify-end mt-2">
-                <button onClick={postComment} className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">Send</button>
+                <button onClick={postComment} className="flex items-center justify-center bg-green-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-green-700 transition-colors text-sm">Send</button>
               </div>
               <div className="mt-6">
                 {(() => {
@@ -1362,9 +1368,8 @@ export default function RecipeView({
             )}
           </div>
           <div className="flex flex-wrap justify-end gap-3">
-            <button onClick={() => onDownload?.(content)} className="flex items-center justify-center gap-2 bg-[#00b5c3] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
-              <ArrowDownTrayIcon className="h-5 w-5" />
-              <span>Download PDF</span>
+            <button onClick={() => onDownload?.(content)} className="flex items-center justify-center bg-[#00b5c3] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
+              <span>Download</span>
             </button>
             {!isSaved && (
               <button onClick={() => onSave?.(content)} className="flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-green-700 transition-colors text-sm">
@@ -1377,10 +1382,20 @@ export default function RecipeView({
                 <button onClick={()=>setConvertOpen(true)} className="flex items-center justify-center gap-2 bg-[#e87b35] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
                   <span>Convert</span>
                 </button>
-              <button onClick={() => { isEditing ? saveEdits() : startEdit(); }} disabled={busySave} className={`flex items-center justify-center gap-2 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'} text-white font-semibold py-2.5 px-5 rounded-lg transition-colors disabled:opacity-60 text-sm`} data-save-button>
-                  <PencilSquareIcon className="h-5 w-5" />
-                  <span>{isEditing ? (busySave ? 'Saving…' : 'Save Changes') : 'Edit Recipe'}</span>
+              {isEditing ? (
+                <>
+                                  <button onClick={() => { saveEdits(); }} disabled={busySave} className="flex items-center justify-center bg-[#7ab87a] text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-[#659a63] transition-colors disabled:opacity-60 text-sm" data-save-button>
+                  <span>{busySave ? 'Saving…' : 'Save'}</span>
                 </button>
+                  <button onClick={() => { cancelEdit(); }} className="flex items-center justify-center bg-gray-500 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-gray-600 transition-colors text-sm" data-cancel-button>
+                    <span>Cancel</span>
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => { startEdit(); }} disabled={busySave} className="flex items-center justify-center bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors disabled:opacity-60 text-sm" data-save-button>
+                  <span>Edit Recipe</span>
+                </button>
+              )}
               </>
             )}
             {justSavedVariant && (
@@ -1395,10 +1410,21 @@ export default function RecipeView({
                   <BookOpenIcon className="h-5 w-5" />
                   <span>Add to Collection</span>
                 </button>
-              <button onClick={() => { isEditing ? saveEdits() : startEdit(); }} disabled={busySave} className={`flex items-center justify-center gap-2 ${isEditing ? 'bg-green-600 hover:bg-green-700' : 'bg-violet-600 hover:bg-violet-700'} text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-60`} data-save-button>
+              {isEditing ? (
+                <>
+                  <button onClick={() => { saveEdits(); }} disabled={busySave} className="flex items-center justify-center bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60" data-save-button>
+                    <span>{busySave ? 'Saving…' : 'Save Changes'}</span>
+                  </button>
+                  <button onClick={() => { cancelEdit(); }} className="flex items-center justify-center bg-gray-500 text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-600 transition-colors" data-cancel-button>
+                    <span>Cancel</span>
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => { startEdit(); }} disabled={busySave} className="flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-60" data-save-button>
                   <PencilSquareIcon className="h-5 w-5" />
-                  <span>{isEditing ? (busySave ? 'Saving…' : 'Save Changes') : 'Edit Recipe'}</span>
+                  <span>Edit Recipe</span>
                 </button>
+              )}
               </>
             )}
           </div>

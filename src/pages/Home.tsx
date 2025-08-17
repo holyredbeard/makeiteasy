@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Camera, RefreshCcw, Apple, Facebook, Instagram, Youtube, Music, ArrowRight } from 'lucide-react';
+import FeatureCards from '../components/FeatureCards';
 
 const colors = {
   bg: '#FAF9F7',
@@ -28,11 +29,11 @@ export default function Home() {
   // Header hanteras av befintliga Layout.jsx – ingen dubblering här
 
   const hero = (
-    <section className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] bg-[#5b8959]">
+    <section className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] bg-[#659a63]">
       <div className="mx-auto max-w-7xl px-0">
       <div className="overflow-hidden grid grid-cols-1 lg:grid-cols-2 min-h-[520px]">
         {/* Left */}
-        <div className="bg-[#5b8959] p-8 lg:p-14 flex flex-col justify-center">
+        <div className="bg-[#659a63] p-8 lg:p-14 flex flex-col justify-center">
           <h1 className="text-white text-4xl lg:text-6xl font-extrabold tracking-tight">Find, Convert & Save Recipes in Seconds</h1>
           <p className="mt-4 text-gray-100/80 text-lg">Turn videos, blogs, and recipe pages into clean, organized recipes instantly.</p>
           <div className="mt-6 flex flex-wrap gap-3">
@@ -57,39 +58,10 @@ export default function Home() {
   const features = (
     <section className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] bg-[#f6f1e9] py-16">
       <div className="max-w-7xl mx-auto px-4 lg:px-6">
-        <h2 className="text-3xl font-bold text-gray-900 text-center">Unique Features</h2>
+        <h2 id="features-heading" className="text-3xl font-bold text-gray-900 text-center">Unique Features</h2>
         <p className="mt-2 text-center text-gray-600">Everything you need for effortless cooking</p>
-        {/* subtle icon wiggle on hover */}
-        <style>{`
-          @keyframes wiggle { 0%,100%{ transform: translateY(0)} 50%{ transform: translateY(-4px)} }
-          .feature-card:hover .feature-icon { animation: wiggle 800ms ease-in-out; }
-        `}</style>
-        <div className="mt-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          <Card className="feature-card p-8 min-h-[220px] hover:-translate-y-1 hover:shadow-xl transition-all">
-            <div className="flex items-center gap-3">
-              <span className="feature-icon p-2 rounded-lg bg-sky-100 text-sky-700"><Camera className="w-5 h-5"/></span>
-              <h3 className="font-semibold text-lg">Video to Recipe</h3>
-            </div>
-            <p className="mt-3 text-gray-600">Paste a video link and instantly get a clean recipe with ingredients and steps. Save to your collections or share with friends.</p>
-            <p className="mt-2 text-gray-600">Auto-detects quantities, cooking times, and yields a printable version.</p>
-          </Card>
-          <Card className="feature-card p-8 min-h-[220px] hover:-translate-y-1 hover:shadow-xl transition-all">
-            <div className="flex items-center gap-3">
-              <span className="feature-icon p-2 rounded-lg bg-amber-100 text-amber-700"><RefreshCcw className="w-5 h-5"/></span>
-              <h3 className="font-semibold text-lg">Smart Conversions</h3>
-            </div>
-            <p className="mt-3 text-gray-600">Scale servings, swap ingredients, and apply dietary presets like Vegan or Gluten‑free with one click.</p>
-            <p className="mt-2 text-gray-600">We highlight what changed and keep instructions consistent.
-            </p>
-          </Card>
-          <Card className="feature-card p-8 min-h-[220px] hover:-translate-y-1 hover:shadow-xl transition-all">
-            <div className="flex items-center gap-3">
-              <span className="feature-icon p-2 rounded-lg bg-emerald-100 text-emerald-700"><Apple className="w-5 h-5"/></span>
-              <h3 className="font-semibold text-lg">Nutrition Analysis</h3>
-            </div>
-            <p className="mt-3 text-gray-600">Automatic calories and macros per serving, with clear nutrition chips in your recipe view.</p>
-            <p className="mt-2 text-gray-600">Great for tracking goals or planning meals for the week.</p>
-          </Card>
+        <div className="mt-10">
+          <FeatureCards />
         </div>
       </div>
     </section>
@@ -114,7 +86,7 @@ export default function Home() {
   };
 
   const collections = (
-    <section className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] bg-[#ce8551] py-14">
+    <section className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] py-14" style={{ backgroundColor: '#e2dace' }}>
       <div className="max-w-7xl mx-auto px-4 lg:px-6">
       <h2 className="text-3xl font-bold text-white mb-8">Popular Collections</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -136,7 +108,7 @@ export default function Home() {
               <span>{c.likes_count || 0}</span>
             </div>
             <div className="absolute left-4 right-4 bottom-4 text-white">
-              <h2 className="text-2xl font-extrabold drop-shadow mb-1">{c.title}</h2>
+              <h2 className="text-lg font-bold drop-shadow mb-1 line-clamp-2" title={c.title}>{c.title}</h2>
               <div className="text-sm opacity-95 mb-3">{c.recipes_count} recept • {c.followers_count} följare</div>
               <div className="flex items-center gap-3">
                 <img
@@ -152,7 +124,7 @@ export default function Home() {
         ))}
       </div>
       <div className="mt-6">
-        <a href="/collections" className="inline-flex items-center gap-2 text-white hover:underline">View All Collections <ArrowRight className="w-4 h-4"/></a>
+        <a href="/collections" className="inline-flex items-center gap-2 text-[#e68a3d] hover:underline">View All Collections <ArrowRight className="w-4 h-4"/></a>
       </div>
       </div>
     </section>

@@ -354,7 +354,7 @@ const RecipeModal = ({ recipe, onClose, currentUser, onOpenRecipe, onTagsUpdated
                     variant="modal"
                     isSaved={true}
                     currentUser={currentUser}
-                    onOpenRecipeInModal={(id, state)=>{ if (!id) return; onOpenRecipe?.(id, state); }}
+                    onOpenRecipeInModal={(id, state)=>{ if (!id) return; navigate(`/recipes/${id}`); }}
                     sourceFrom={recipe._sourceFrom}
                     onTagsUpdated={(tags)=>{ try { onTagsUpdated?.(tags); } catch {} }}
                   />

@@ -26,39 +26,68 @@ function normalizeBackendUrl(pathOrUrl) {
 }
 
 const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => {
+
   const [openUserMenu, setOpenUserMenu] = useState(false);
   const [openNewMenu, setOpenNewMenu] = useState(false);
+  const [scrollY, setScrollY] = useState(0);
+  const [logoScale, setLogoScale] = useState(2);
   const navigate = useNavigate();
+
+  // Scroll animation for logo (only visual via transform so layout isn't affected)
+  useEffect(() => {
+    const handleScroll = () => {
+      const s = window.scrollY || 0;
+      setScrollY(s);
+      // start scale 2 -> min 1 when scrolled ~400px
+      const scale = Math.max(1, 2 - s / 400);
+      setLogoScale(scale);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Only add top padding when logo is in its large state
+  const logoPaddingTop = logoScale > 1 ? '12px' : '0px';
   return (
-    <header className="bg-[#5b8959] sticky top-0 z-50 shadow-sm" style={{fontFamily: 'Poppins, sans-serif'}}>
+    <header className="bg-[#659a63] sticky top-0 z-50" style={{fontFamily: 'Poppins, sans-serif'}}>
       <div className="max-w-7xl mx-auto px-6">
-        <div className="flex justify-between items-center py-3">
-          <div className="flex items-center gap-2">
+        <div className="flex justify-between items-center py-1">
+          <div className="flex items-center gap-2" style={{ paddingTop: logoPaddingTop }}>
             <Link to="/">
-              <img className="h-10 w-auto" src="/logo.png" alt="Clip2Cook" />
+              <img 
+                className="animated-logo"
+                style={{ height: '64px', transform: `scale(${logoScale})`, transformOrigin: 'left center' }}
+                src="/logo.png" 
+                alt="Clip2Cook" 
+              />
             </Link>
           </div>
           {currentUser ? (
             <div className="flex items-center gap-6 relative w-full">
-              <nav className="flex-1 flex justify-center gap-4 md:gap-6 transform translate-x-4 md:translate-x-6">
+              <nav className="flex-1 flex justify-center gap-6 md:gap-8 transform translate-x-4 md:translate-x-6">
                 <Link
                   to="/explore"
-                  className="text-base text-white/95 px-3 py-2 rounded-lg transition-colors hover:text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  className="text-base text-white px-3 py-1 rounded-lg transition-colors hover:text-[#fffae5] hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   title="Explore"
+                  style={{marginRight: '24px'}}
                 >
                   <span className="sm:block">Explore</span>
                 </Link>
                 <Link
                   to="/collections"
-                  className="text-base text-white/95 px-3 py-2 rounded-lg transition-colors hover:text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  className="text-base text-white px-3 py-1 rounded-lg transition-colors hover:text-[#fffae5] hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   title="Collections"
+                  style={{marginRight: '24px'}}
                 >
                   <span className="sm:block">Collections</span>
                 </Link>
                 <Link
                   to="/my-recipes"
-                  className="text-base text-white/95 px-3 py-2 rounded-lg transition-colors hover:text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+                  className="text-base text-white px-3 py-1 rounded-lg transition-colors hover:text-[#fffae5] hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   title="My Recipes"
+                  style={{marginRight: '24px'}}
                 >
                   <span className="sm:block">My Recipes</span>
                 </Link>
@@ -72,12 +101,14 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
                   <span className="hidden sm:block">TEST PDF</span>
                 </button>
               )}
-              <NewRecipeSplitButton onCreate={() => navigate('/create')} onExtract={() => navigate('/extract')} />
+              <div style={{marginRight: '12px'}}>
+                <NewRecipeSplitButton onCreate={() => navigate('/create')} onExtract={() => navigate('/extract')} />
+              </div>
               <button onClick={() => setOpenUserMenu(v => !v)} className="flex items-center gap-2 text-sm text-white hover:text-white/90 transition-colors focus:outline-none">
                 {currentUser?.avatar_url ? (
-                  <img src={normalizeBackendUrl(currentUser.avatar_url)} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
+                  <img src={normalizeBackendUrl(currentUser.avatar_url)} alt="avatar" className="h-10 w-10 rounded-full object-cover border border-white" />
                 ) : (
-                  <UserCircleIcon className="h-8 w-8 text-white" />
+                  <UserCircleIcon className="h-10 w-10 text-white border border-white rounded-full" />
                 )}
               </button>
               {openUserMenu && (
@@ -190,18 +221,18 @@ const NewRecipeSplitButton = ({ onCreate, onExtract }) => {
       <div ref={buttonRef} className="inline-flex rounded-lg shadow-sm overflow-hidden">
         <button
           onClick={onExtract}
-          className="flex items-center gap-2 bg-[#cc7c2e] text-white font-semibold py-2 px-4 hover:brightness-110 active:brightness-95 transition-colors"
+          className="flex items-center gap-2 bg-[#e68a3d] text-white py-2 px-4 hover:bg-[#d1762a] active:brightness-95 transition-colors"
           title="Create Recipe"
         >
-          <PlusIcon className="h-5 w-5" />
-          <span>New Recipe</span>
+          <PlusIcon className="h-4 w-4" strokeWidth={2} />
+          <span>Add Recipe</span>
         </button>
         <button
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => toggleMenu()}
           onKeyDown={onKeyDownToggle}
-          className="flex items-center justify-center bg-[#cc7c2e] text-white px-2 hover:brightness-110 active:brightness-95 transition-colors"
+          className="flex items-center justify-center bg-[#e68a3d] text-white px-2 hover:bg-[#d1762a] active:brightness-95 transition-colors"
           title="More options"
         >
           <ChevronDownIcon className="h-5 w-5" />
@@ -220,7 +251,7 @@ const NewRecipeSplitButton = ({ onCreate, onExtract }) => {
           <button
             ref={item0Ref}
             role="menuitem"
-            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg hover:bg-neutral-50 active:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#cc7c2e]"
+            className="w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg hover:bg-neutral-50 active:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e68a3d]"
             onClick={() => { setOpen(false); onExtract?.(); }}
             title="Extract Recipe"
           >
@@ -230,7 +261,7 @@ const NewRecipeSplitButton = ({ onCreate, onExtract }) => {
           <button
             ref={item1Ref}
             role="menuitem"
-            className="mt-1 w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg hover:bg-neutral-50 active:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#cc7c2e]"
+            className="mt-1 w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-lg hover:bg-neutral-50 active:bg-neutral-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#e68a3d]"
             onClick={() => { setOpen(false); onCreate?.(); }}
             title="Create Recipe"
           >

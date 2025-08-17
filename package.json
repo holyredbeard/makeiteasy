@@ -4,14 +4,15 @@
   "private": true,
   "dependencies": {
     "@heroicons/react": "^2.2.0",
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0",
-    "react-router-dom": "^7.7.1",
+    "@tailwindcss/line-clamp": "^0.4.4",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-router-dom": "^6.20.1",
     "react-scripts": "^5.0.1"
   },
   "devDependencies": {
-    "@types/react": "^19.1.10",
-    "@types/react-dom": "^19.1.7",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
     "autoprefixer": "^10.4.21",
     "lucide-react": "^0.539.0",
     "postcss": "^8.5.6",

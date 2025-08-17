@@ -393,7 +393,7 @@ const RecipeCard = ({ item }) => {
         const res = await fetch(`${API_BASE}/recipes/${item.id}/ratings`, { credentials: 'include' });
         if (res.ok) {
           const json = await res.json();
-          if (!cancelled) setRating(Number(json?.average || 0));
+          if (!cancelled) setRating(Number(json?.data?.average || 0));
         }
       } catch {}
       try {
@@ -821,7 +821,7 @@ export default function ProfilePage() {
                 variant="modal"
                 isSaved={true}
                 currentUser={currentUser}
-                onOpenRecipeInModal={(id)=> window.dispatchEvent(new CustomEvent('profile:open-recipe', { detail: { id } }))}
+                onOpenRecipeInModal={(id)=> navigate(`/recipes/${id}`)}
               />
             </div>
           </div>

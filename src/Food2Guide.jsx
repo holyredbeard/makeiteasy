@@ -818,12 +818,12 @@ export default function Food2Guide() {
               </div>
             </div>
 
-            {searchResults.length > 0 && (
+            {activeTab === 'search' && searchResults.length > 0 && (
               <div className="space-y-4">
                 <h3 className="text-gray-800 text-sm font-bold tracking-tight">Search Results</h3>
                 <div 
                   ref={scrollContainerRef}
-                  className="max-h-[25rem] overflow-y-auto grid grid-cols-2 gap-4 p-2"
+                  className="max-h-[25rem] overflow-y-auto grid grid-cols-3 gap-4 p-2"
                 >
                   {searchResults.map((video) => (
                     <div
@@ -1004,44 +1004,44 @@ export default function Food2Guide() {
       {!isStreaming && Object.keys(recipeData).length === 0 && !streamError && (
         <div className="animate-fade-in mt-10">
           <div className="max-w-[900px] mx-auto px-4 mt-10 flex flex-col md:flex-row gap-6 justify-between">
-            {/* Structured Recipes Card */}
-            <div className="bg-white p-6 rounded-xl shadow-sm w-full min-h-[220px] text-left">
-              <div className="flex flex-col">
-                <div className="w-5 h-5 text-green-600 mb-2">
-                  <ClipboardDocumentListIcon className="w-full h-full" />
-                </div>
-                <h3 className="text-base font-semibold text-gray-900 mb-2">Structured Recipes</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Get clean recipes with ingredients and steps from videos and blogs.
-                </p>
-              </div>
-            </div>
+                         {/* Structured Recipes Card */}
+             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 w-full min-h-[220px] text-left hover:shadow-md transition-shadow">
+               <div className="flex flex-col">
+                 <div className="w-5 h-5 text-green-600 mb-2">
+                   <ClipboardDocumentListIcon className="w-full h-full" />
+                 </div>
+                 <h3 className="text-base font-semibold text-gray-900 mb-2">Structured Recipes</h3>
+                 <p className="text-sm text-gray-600 leading-relaxed">
+                   Get clean recipes with ingredients and steps from videos and blogs.
+                 </p>
+               </div>
+             </div>
 
-            {/* Nutrition Info Card */}
-            <div className="bg-white p-6 rounded-xl shadow-sm w-full min-h-[220px] text-left">
-              <div className="flex flex-col">
-                <div className="w-5 h-5 text-green-600 mb-2">
-                  <ChartPieIcon className="w-full h-full" />
-                </div>
-                <h3 className="text-base font-semibold text-gray-900 mb-2">Nutrition Info</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Automatic nutrition facts including calories, protein, fat, and carbs for each recipe.
-                </p>
-              </div>
-            </div>
+             {/* Nutrition Info Card */}
+             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 w-full min-h-[220px] text-left hover:shadow-md transition-shadow">
+               <div className="flex flex-col">
+                 <div className="w-5 h-5 text-green-600 mb-2">
+                   <ChartPieIcon className="w-full h-full" />
+                 </div>
+                 <h3 className="text-base font-semibold text-gray-900 mb-2">Nutrition Info</h3>
+                 <p className="text-sm text-gray-600 leading-relaxed">
+                   Automatic nutrition facts including calories, protein, fat, and carbs for each recipe.
+                 </p>
+               </div>
+             </div>
 
-            {/* Save & Export Card */}
-            <div className="bg-white p-6 rounded-xl shadow-sm w-full min-h-[220px] text-left">
-              <div className="flex flex-col">
-                <div className="w-5 h-5 text-green-600 mb-2">
-                  <CloudArrowDownIcon className="w-full h-full" />
-                </div>
-                <h3 className="text-base font-semibold text-gray-900 mb-2">Save & Export</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Save your favorite recipes or export them as PDF for easy access anytime.
-                </p>
-              </div>
-            </div>
+             {/* Save & Export Card */}
+             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 w-full min-h-[220px] text-left hover:shadow-md transition-shadow">
+               <div className="flex flex-col">
+                 <div className="w-5 h-5 text-green-600 mb-2">
+                   <CloudArrowDownIcon className="w-full h-full" />
+                 </div>
+                 <h3 className="text-base font-semibold text-gray-900 mb-2">Save & Export</h3>
+                 <p className="text-sm text-gray-600 leading-relaxed">
+                   Save your favorite recipes or export them as PDF for easy access anytime.
+                 </p>
+               </div>
+             </div>
           </div>
         </div>
       )}

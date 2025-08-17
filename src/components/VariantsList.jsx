@@ -66,11 +66,8 @@ export default function VariantsList({ parentId, onOpenRecipeInModal, sort = 'ne
             className="text-left border border-gray-200 rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
             onClick={(e)=>{
               e.preventDefault();
-              if (typeof onOpenRecipeInModal === 'function') {
-                onOpenRecipeInModal(v.id);
-              } else {
-                navigate(`/recipes/${v.id}`);
-              }
+              // Navigate directly to recipe page instead of modal
+              navigate(`/recipes/${v.id}`);
             }}
           >
             <div className="flex items-center justify-between">
