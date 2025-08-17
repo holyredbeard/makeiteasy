@@ -504,12 +504,22 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
                 {proposedTags.map((t, i) => {
                   const key = String(t.label || t).toLowerCase();
                   let cls = 'bg-gray-100 text-gray-700 border border-gray-200';
-                  if (key === 'vegan') cls = 'bg-emerald-600 text-white';
-                  if (key === 'vegetarian') cls = 'bg-lime-600 text-white';
-                  if (key === 'pescetarian' || key === 'pescatarian') cls = 'bg-sky-600 text-white';
+                      if (key === 'vegan') cls = 'bg-emerald-600 text-white';
+    if (key === 'zesty') cls = 'bg-yellow-500 text-white';
+    if (key === 'seafood') cls = 'bg-blue-600 text-white';
+    if (key === 'vegetarian') cls = 'bg-lime-600 text-white';
+    if (key === 'pescetarian' || key === 'pescatarian') cls = 'bg-sky-600 text-white';
+    if (key === 'fastfood') cls = 'bg-orange-500 text-white';
                   return (
-                    <span key={`p-${i}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${cls}`}>
-                      <span className="font-medium">{t.label || t}</span>
+                    <span key={`p-${i}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${cls} cursor-pointer hover:opacity-90 transition-opacity hover:scale-105`}>
+                                                {t.label.toLowerCase() === 'vegan' && <i className="fa-solid fa-leaf mr-1"></i>}
+              {t.label.toLowerCase() === 'vegetarian' && <i className="fa-solid fa-carrot mr-1"></i>}
+              {t.label.toLowerCase() === 'zesty' && <i className="fa-solid fa-lemon mr-1"></i>}
+              {t.label.toLowerCase() === 'pescatarian' && <i className="fa-solid fa-fish mr-1"></i>}
+              {t.label.toLowerCase() === 'seafood' && <i className="fa-solid fa-shrimp mr-1"></i>}
+              {t.label.toLowerCase() === 'fastfood' && <i className="fa-solid fa-burger mr-1"></i>}
+              {t.label.toLowerCase() === 'pasta' && <i className="fa-solid fa-bacon mr-1"></i>}
+                      <span className="font-medium">{(t.label || t).charAt(0).toUpperCase() + (t.label || t).slice(1)}</span>
                     </span>
                   );
                 })}
@@ -522,7 +532,7 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
                 <div className="flex flex-wrap gap-2">
                   {suggestions.map((s, idx) => (
                     <button key={idx} onClick={()=>setProposedTags(t=>[...(t||[]), { label: s.label }])} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(s.type)}`}>
-                      <span className="font-medium">{s.label}</span>
+                      <span className="font-medium">{s.label.charAt(0).toUpperCase() + s.label.slice(1)}</span>
                     </button>
                   ))}
                 </div>
@@ -831,7 +841,7 @@ export default function Food2Guide() {
                       onClick={() => handleVideoSelect(video)}
                       className={`cursor-pointer border-2 rounded-xl overflow-hidden transition-all duration-200 ${selectedVideoId === video.video_id ? 'border-green-500 shadow-lg scale-105' : 'border-transparent hover:border-green-400/50'}`}
                     >
-                      <img src={video.thumbnail_url} alt={video.title} className="w-full h-28 object-cover" />
+                      <img src={video.thumbnail_url} alt={video.title} className="w-full h-28 object-cover aspect-square" />
                       <div className="p-3">
                         <p className="font-semibold text-xs text-gray-800 line-clamp-2">{video.title}</p>
                         <p className="text-xs text-gray-500 mt-1">{video.channel_title}</p>

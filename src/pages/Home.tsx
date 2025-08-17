@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, RefreshCcw, Apple, Facebook, Instagram, Youtube, Music, ArrowRight } from 'lucide-react';
+import { Camera, RefreshCcw, Apple, ArrowRight } from 'lucide-react';
 import FeatureCards from '../components/FeatureCards';
+import PageContainer from '../components/PageContainer';
+import CollectionCard from '../components/CollectionCard';
 
 const colors = {
   bg: '#FAF9F7',
@@ -46,7 +48,7 @@ export default function Home() {
           <img
             src={`${STATIC_BASE}/static/images/hero.png`}
             alt="Pasta"
-            className="w-full max-w-md lg:max-w-lg rounded-[2rem] object-cover shadow-lg"
+            className="w-full max-w-md lg:max-w-lg rounded-[2rem] object-cover shadow-lg aspect-[4/3]"
             onError={(e)=>{ e.currentTarget.src = `${STATIC_BASE}/static/test_images/test_landscape.jpg`; }}
           />
         </div>
@@ -86,47 +88,31 @@ export default function Home() {
   };
 
   const collections = (
-    <section className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] py-14" style={{ backgroundColor: '#e2dace' }}>
-      <div className="max-w-7xl mx-auto px-4 lg:px-6">
-      <h2 className="text-3xl font-bold text-white mb-8">Popular Collections</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-        {collectionsData.slice(0,4).map((c, i)=> (
-          <a
-            key={c.id || i}
-            href={`/collections?open=${c.id || i}`}
-            className="relative block rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition"
-          >
-            <img
-              src={normalizeUrl(c.image_url) || 'https://placehold.co/800x600?text=Collection'}
-              alt={c.title}
-              className="w-full h-56 object-cover"
-              onError={(e)=>{ e.currentTarget.src='https://placehold.co/800x600?text=Collection'; }}
+    <section className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] py-14" style={{ backgroundColor: 'rgb(241, 230, 214)' }}>
+      <PageContainer>
+        <h2 className="text-3xl font-bold text-[rgb(236,141,34)] text-center mb-2">Popular Collections</h2>
+        <p className="text-center text-gray-600 mb-8">Discover amazing recipe collections from our community</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+          {collectionsData.slice(0,4).map((c, i)=> (
+            <CollectionCard
+              key={c.id || i}
+              id={c.id || i.toString()}
+              title={c.title}
+              image_url={normalizeUrl(c.image_url)}
+              recipes_count={c.recipes_count}
+              followers_count={c.followers_count}
+              creator_name={c.owner_name}
+              creator_username={c.owner_username}
+              creator_avatar={normalizeUrl(c.owner_avatar)}
+              likes_count={c.likes_count || 0}
+              onClick={() => window.location.href = `/collections/${c.id || i}`}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-            <div className="absolute top-4 right-4 rounded-full px-3 py-1 text-sm font-semibold bg-white/90 text-gray-800 flex items-center gap-1">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="#ef4444" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-              <span>{c.likes_count || 0}</span>
-            </div>
-            <div className="absolute left-4 right-4 bottom-4 text-white">
-              <h2 className="text-lg font-bold drop-shadow mb-1 line-clamp-2" title={c.title}>{c.title}</h2>
-              <div className="text-sm opacity-95 mb-3">{c.recipes_count} recept • {c.followers_count} följare</div>
-              <div className="flex items-center gap-3">
-                <img
-                  src={normalizeUrl(c.owner_avatar) || 'https://placehold.co/64x64?text=%F0%9F%91%A4'}
-                  alt={c.owner_name || 'Owner'}
-                  className="h-9 w-9 rounded-full object-cover border-2 border-white/80 shadow-sm"
-                  onError={(e)=>{ e.currentTarget.src='https://placehold.co/64x64?text=%F0%9F%91%A4'; }}
-                />
-                <div className="font-semibold drop-shadow">{c.owner_name || 'Unknown'}</div>
-              </div>
-            </div>
-          </a>
-        ))}
-      </div>
-      <div className="mt-6">
-        <a href="/collections" className="inline-flex items-center gap-2 text-[#e68a3d] hover:underline">View All Collections <ArrowRight className="w-4 h-4"/></a>
-      </div>
-      </div>
+          ))}
+        </div>
+        <div className="text-center mt-8">
+          <a href="/collections" className="inline-flex items-center gap-2 text-[#e68a3d] hover:underline">View All Collections <ArrowRight className="w-4 h-4"/></a>
+        </div>
+      </PageContainer>
     </section>
   );
 
@@ -152,7 +138,7 @@ export default function Home() {
               <p className="font-medium">Noah</p>
               <p className="text-sm text-gray-600">Commented on</p>
             </div>
-            <img src="/static/test_images/test_portrait_cropped.jpg" alt="recipe" className="w-16 h-12 rounded object-cover" />
+            <img src="/static/test_images/test_portrait_cropped.jpg" alt="recipe" className="w-16 h-12 rounded object-cover aspect-square" />
           </div>
         </Card>
         <Card className="p-4 hover:-translate-y-0.5">
@@ -162,7 +148,7 @@ export default function Home() {
               <p className="font-medium">Kai</p>
               <p className="text-sm text-gray-600">Liked</p>
             </div>
-            <img src="/static/test_images/test_landscape.jpg" alt="recipe" className="w-16 h-12 rounded object-cover" />
+            <img src="/static/test_images/test_landscape.jpg" alt="recipe" className="w-16 h-12 rounded object-cover aspect-square" />
           </div>
         </Card>
       </div>
@@ -173,50 +159,7 @@ export default function Home() {
     </section>
   );
 
-  // Footer
-  const siteFooter = (
-    <footer className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-10 bg-[#0f3b2d] text-gray-200">
-      <div className="max-w-7xl mx-auto px-4 lg:px-6 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-        <div>
-          <h3 className="text-white font-bold text-xl">Food2Guide</h3>
-          <p className="mt-3 text-gray-300">Your all-in-one platform to extract, organize, and enjoy recipes from anywhere.</p>
-          <div className="mt-4 flex items-center gap-3">
-            <a href="#" aria-label="Facebook" className="p-2 rounded bg-white/10 hover:bg-white/20"><Facebook className="w-5 h-5"/></a>
-            <a href="#" aria-label="Instagram" className="p-2 rounded bg-white/10 hover:bg-white/20"><Instagram className="w-5 h-5"/></a>
-            <a href="#" aria-label="YouTube" className="p-2 rounded bg-white/10 hover:bg-white/20"><Youtube className="w-5 h-5"/></a>
-            <a href="#" aria-label="TikTok" className="p-2 rounded bg-white/10 hover:bg-white/20"><Music className="w-5 h-5"/></a>
-          </div>
-        </div>
-        <div>
-          <h4 className="text-white font-semibold mb-3">Features</h4>
-          <ul className="space-y-2 text-gray-300">
-            <li>Extract Recipes</li>
-            <li>Smart Conversions</li>
-            <li>Nutrition Analysis</li>
-            <li>Save & Organize</li>
-            <li>Social Features</li>
-          </ul>
-        </div>
-        <div>
-          <h4 className="text-white font-semibold mb-3">Explore</h4>
-          <ul className="space-y-2 text-gray-300">
-            <li>Popular Collections</li>
-            <li>Latest Recipes</li>
-            <li>Trending Now</li>
-            <li>Dietary Picks (Vegan, Keto, Gluten-Free)</li>
-          </ul>
-        </div>
-        <div>
-          <h4 className="text-white font-semibold mb-3">Stay Updated</h4>
-          <p className="text-gray-300">Subscribe for new features, tips, and recipe inspiration.</p>
-          <div className="mt-3 flex items-center gap-2">
-            <input className="flex-1 rounded-lg px-3 py-2 text-gray-900" placeholder="Email address" />
-            <button className="px-4 py-2 rounded-lg bg-[#cc7c2e] text-white hover:brightness-110">Subscribe</button>
-          </div>
-        </div>
-      </div>
-    </footer>
-  );
+
 
   
 
@@ -226,7 +169,6 @@ export default function Home() {
       {features}
       {collections}
       {social}
-      {siteFooter}
     </div>
   );
 }

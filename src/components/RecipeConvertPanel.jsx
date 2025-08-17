@@ -4,7 +4,7 @@ import Spinner from './Spinner';
 
 const PRESETS = [
   // Diet style
-  'vegan','plant-based','vegetarian','pescetarian','omnivore','Mediterranean','whole30',
+  'vegan','plant-based','vegetarian','pescetarian','omnivore','Mediterranean','whole30','zesty','seafood',
   // Add-ons
   'add-meat','add-fish','add-dairy',
   // Exclusions
@@ -314,12 +314,23 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
                   <button key={`diet-${p}`}
                     onClick={()=>{ togglePreset(p); }}
                     className={`px-3 py-1.5 rounded-full text-sm border ${normalizedPresets.includes(p)
-                      ? (p==='vegan' ? 'bg-emerald-600 text-white border-emerald-600'
-                         : p==='vegetarian' ? 'bg-lime-600 text-white border-lime-600'
-                         : p==='pescetarian' ? 'bg-sky-600 text-white border-sky-600'
-                         : 'bg-green-600 text-white border-green-600')
-                      : 'bg-gray-50 text-gray-700 border-gray-200'}`}
-                  >{labelForPreset(p)}</button>
+                                                ? (p==='vegan' ? 'bg-emerald-600 text-white border-emerald-600'
+            : p==='vegetarian' ? 'bg-lime-600 text-white border-lime-600'
+            : p==='pescetarian' ? 'bg-sky-600 text-white border-sky-600'
+            : p==='zesty' ? 'bg-yellow-500 text-white border-yellow-500'
+            : p==='seafood' ? 'bg-blue-600 text-white border-blue-600'
+            : p==='fastfood' ? 'bg-orange-500 text-white border-orange-500'
+            : 'bg-green-600 text-white border-green-600')
+                      : 'bg-gray-50 text-gray-700 border-gray-200'} cursor-pointer hover:opacity-90 transition-opacity hover:scale-105`}
+                  >
+                                    {p.toLowerCase() === 'vegan' && <i className="fa-solid fa-leaf mr-1"></i>}
+                {p.toLowerCase() === 'vegetarian' && <i className="fa-solid fa-carrot mr-1"></i>}
+                {p.toLowerCase() === 'zesty' && <i className="fa-solid fa-lemon mr-1"></i>}
+                {p.toLowerCase() === 'pescetarian' && <i className="fa-solid fa-fish mr-1"></i>}
+                {p.toLowerCase() === 'seafood' && <i className="fa-solid fa-shrimp mr-1"></i>}
+                {p.toLowerCase() === 'fastfood' && <i className="fa-solid fa-burger mr-1"></i>}
+                    {labelForPreset(p)}
+                  </button>
                 ))}
               </div>
             </section>
@@ -433,7 +444,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
                   {/* Original card */}
                   <div className={`relative inline-block border rounded ${selectedIndex===0?'ring-2 ring-blue-500':''}`} onClick={()=>setSelectedIndex(0)}>
                     {originalImage ? (
-                      <img src={originalImage.startsWith('http') ? originalImage : `http://localhost:8001${originalImage}`} alt="Original" className="w-56 h-40 object-cover rounded" />
+                      <img src={originalImage.startsWith('http') ? originalImage : `http://localhost:8001${originalImage}`} alt="Original" className="w-56 h-40 object-cover rounded aspect-square" />
                     ) : (
                       <div className="w-56 h-40 flex items-center justify-center text-sm text-gray-500 bg-gray-50 rounded">No original</div>
                     )}
@@ -443,7 +454,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
                   {/* AI cards */}
                   {aiImages.map((img, idx) => (
                     <div key={idx} className={`relative inline-block border rounded ${selectedIndex===idx+1?'ring-2 ring-blue-500':''}`} onClick={()=>setSelectedIndex(idx+1)}>
-                      <img src={`http://localhost:8001${img.url}`} alt={`AI ${idx+1}`} className="w-56 h-40 object-cover rounded" />
+                      <img src={`http://localhost:8001${img.url}`} alt={`AI ${idx+1}`} className="w-56 h-40 object-cover rounded aspect-square" />
                       <span className="absolute top-2 left-2 text-xs px-2 py-0.5 rounded-full bg-gray-800/80 text-white">AI #{idx+1}</span>
                       <span className="absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full bg-white/90 text-gray-800 border">{img.aspect}</span>
                       {selectedIndex===idx+1 && <span className="absolute bottom-2 left-2 text-xs px-2 py-0.5 rounded-full bg-blue-600 text-white">Selected</span>}

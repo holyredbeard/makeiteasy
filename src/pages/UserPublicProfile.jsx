@@ -64,8 +64,11 @@ const Chip = ({ children }) => (
 function getTagClass(label) {
   const l = String(label||'').toLowerCase();
   if (l === 'vegan') return 'bg-emerald-600 text-white';
+  if (l === 'zesty') return 'bg-yellow-500 text-white';
+  if (l === 'seafood') return 'bg-blue-600 text-white';
   if (l === 'vegetarian') return 'bg-lime-600 text-white';
   if (l === 'pescetarian' || l === 'pescatarian') return 'bg-sky-600 text-white';
+  if (l === 'fastfood') return 'bg-orange-500 text-white';
   // broader mapping used across the app
   const map = {
     'high-protein': 'bg-purple-50 text-purple-700 border border-purple-200',
@@ -90,7 +93,7 @@ function getTagClass(label) {
 function normalizeTag(tag) {
   const k = String(tag || '').trim().toLowerCase();
   if (!k) return k;
-  if (k === 'pescatarian') return 'pescetarian';
+  if (k === 'pescatarian') return 'pescatarian';
   return k;
 }
 
@@ -171,11 +174,11 @@ const MessageDrawer = ({ isOpen, onClose, profileUser, onSend }) => {
             {profileUser?.avatar_url ? (
               <img src={normalizeBackendUrl(profileUser.avatar_url)} alt={`${profileUser?.username || 'user'} avatar`} className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; }} />
             ) : (
-              <span className="font-semibold text-gray-600">{(profileUser?.full_name || profileUser?.username || '?').slice(0,1).toUpperCase()}</span>
+                              <span className="font-semibold text-gray-600">{(profileUser?.username || profileUser?.full_name || '?').slice(0,1).toUpperCase()}</span>
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-semibold truncate">{profileUser?.full_name || profileUser?.username}</div>
+                            <div className="font-semibold truncate">{profileUser?.username || profileUser?.full_name}</div>
             <a className="text-xs text-[#e87b35] hover:underline" href="#" onClick={(e)=>e.preventDefault()}>{/* TODO: link to full conversation view if exists */}View full conversation</a>
           </div>
           <button aria-label="Close" className="text-gray-500 hover:text-gray-700" onClick={onClose}>&times;</button>
@@ -214,7 +217,7 @@ const ProfileHeader = ({ profileUser, isOwn, stats, tags, onFollowToggle, follow
   const share = async () => {
     try {
       const url = window.location.href;
-      const title = `${profileUser?.full_name || profileUser?.username}`;
+      const title = `${profileUser?.username || profileUser?.full_name}`;
       if (navigator.share) await navigator.share({ title, url });
       else {
         await navigator.clipboard.writeText(url);
@@ -232,11 +235,11 @@ const ProfileHeader = ({ profileUser, isOwn, stats, tags, onFollowToggle, follow
             {profileUser?.avatar_url ? (
               <img src={normalizeBackendUrl(profileUser.avatar_url)} alt={`${profileUser?.username || 'user'} avatar`} className="w-full h-full object-cover" onError={(e)=>{ e.currentTarget.style.display='none'; }} />
             ) : (
-              <span className="text-2xl font-bold text-gray-600">{(profileUser?.full_name || profileUser?.username || '?').slice(0,1).toUpperCase()}</span>
+                              <span className="text-2xl font-bold text-gray-600">{(profileUser?.username || profileUser?.full_name || '?').slice(0,1).toUpperCase()}</span>
             )}
           </div>
           <div className="min-w-0">
-            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 truncate">{profileUser?.full_name || profileUser?.username}</h1>
+                            <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 truncate">{profileUser?.username || profileUser?.full_name}</h1>
             <p className="text-gray-600 mt-2">
               <span className="align-top inline-block max-w-[60ch]">
                 {shortBio}{!bioExpanded && bio.length > shortBio.length ? '…' : ''}
@@ -412,7 +415,7 @@ const RecipeCard = ({ item }) => {
     >
       <div className="relative aspect-square bg-gray-100">
         {image ? (
-          <img src={image} alt={title} className="h-full w-full object-cover object-center" onError={(e)=>{ e.currentTarget.src='https://placehold.co/640x640?text=No+Image'; }} />
+          <img src={image} alt={title} className="h-full w-full object-cover object-center aspect-square" onError={(e)=>{ e.currentTarget.src='https://placehold.co/640x640?text=No+Image'; }} />
         ) : null}
 
         {/* Rating chip */}
@@ -496,7 +499,7 @@ const CollectionsGrid = ({ items, loading }) => {
         <div key={i} className="rounded-2xl bg-white shadow-sm border overflow-hidden">
           <div className="aspect-[4/3] bg-gray-100">
             {cover && (
-              <img src={cover} alt={c.title || 'collection cover'} className="h-full w-full object-cover object-center" onError={(e)=>{ e.currentTarget.style.display='none'; }} />
+              <img src={cover} alt={c.title || 'collection cover'} className="h-full w-full object-cover object-center aspect-square" onError={(e)=>{ e.currentTarget.style.display='none'; }} />
             )}
           </div>
           <div className="p-3">
@@ -749,9 +752,15 @@ export default function ProfilePage() {
                           <button
                             key={`${t}-${i}`}
                             onClick={()=> setFilters(f=>{ const cur = new Set(f.tags || []); if (cur.has(norm)) cur.delete(norm); else cur.add(norm); return { ...f, tags: Array.from(cur) }; })}
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${selected ? 'bg-[#e87b35] text-white border-transparent' : base}`}
+                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${selected ? 'bg-[#e87b35] text-white border-transparent' : base} cursor-pointer hover:opacity-90 transition-opacity hover:scale-105`}
                             aria-pressed={selected}
                           >
+                                                                {t.toLowerCase() === 'vegan' && <i className="fa-solid fa-leaf mr-1"></i>}
+                        {t.toLowerCase() === 'vegetarian' && <i className="fa-solid fa-carrot mr-1"></i>}
+                        {t.toLowerCase() === 'zesty' && <i className="fa-solid fa-lemon mr-1"></i>}
+                        {t.toLowerCase() === 'pescatarian' && <i className="fa-solid fa-fish mr-1"></i>}
+                        {t.toLowerCase() === 'seafood' && <i className="fa-solid fa-shrimp mr-1"></i>}
+                        {t.toLowerCase() === 'fastfood' && <i className="fa-solid fa-burger mr-1"></i>}
                             {t}
                           </button>
                         );

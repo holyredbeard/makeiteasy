@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useLocation, useNavigate } from 'react-router-dom';
+import { useParams, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import RecipeView from './components/RecipeView';
 
 const API_BASE = 'http://localhost:8001/api/v1';
@@ -12,6 +12,7 @@ export default function RecipePage() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentUser } = useOutletContext();
   const [recipe, setRecipe] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -188,7 +189,7 @@ export default function RecipePage() {
             recipe={recipe.recipe_content} 
             variant="page" 
             isSaved={true} 
-            currentUser={recipe.user || null}
+            currentUser={currentUser}
             onEditStateChange={(isEditing) => {
               const topSaveButton = document.getElementById('top-save-button');
               const topEditButton = document.getElementById('top-edit-button');

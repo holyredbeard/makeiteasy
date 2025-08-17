@@ -17,7 +17,7 @@ import {
 import RecipeSubnav from './RecipeSubnav';
 import useScrollSpy from './useScrollSpy';
 import RecipeSection from './RecipeSection';
-import { ClockIcon, UserGroupIcon, TrashIcon, EllipsisVerticalIcon, XMarkIcon, ExclamationTriangleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
+import { ClockIcon, TrashIcon, EllipsisVerticalIcon, XMarkIcon, ExclamationTriangleIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import TagInput from './TagInput';
 import RecipeConvertPanel from './RecipeConvertPanel';
 import { convertRecipeWithDeepSeek, validateConversionSchema } from './deepseekClient';
@@ -83,8 +83,18 @@ const chipCls = (type, label) => {
   const l = String(label || '').toLowerCase();
   if (l === 'variant') return 'bg-blue-600 text-white border-blue-600';
   if (l === 'vegan') return 'bg-emerald-600 text-white border-emerald-600';
+  if (l === 'zesty') return 'bg-yellow-500 text-white border-yellow-500';
+  if (l === 'seafood') return 'bg-blue-600 text-white border-blue-600';
   if (l === 'vegetarian') return 'bg-lime-600 text-white border-lime-600';
   if (l === 'pescetarian') return 'bg-sky-600 text-white border-sky-600';
+  if (l === 'fastfood') return 'bg-orange-500 text-white border-orange-500';
+  if (l === 'spicy') return 'bg-red-600 text-white border-red-600';
+  if (l === 'chicken') return 'bg-amber-600 text-white border-amber-600';
+  if (l === 'eggs') return 'bg-yellow-400 text-white border-yellow-400';
+  if (l === 'cheese') return 'bg-yellow-300 text-gray-800 border-yellow-300';
+  if (l === 'fruits') return 'bg-pink-500 text-white border-pink-500';
+  if (l === 'wine') return 'bg-purple-600 text-white border-purple-600';
+  if (l === 'pasta') return 'bg-orange-600 text-white border-orange-600';
   const map = {
     dish: 'bg-sky-50 text-sky-700 border-sky-200',
     method: 'bg-violet-50 text-violet-700 border-violet-200',
@@ -601,6 +611,20 @@ export default function RecipeView({
     } catch {}
   };
 
+  const removeTag = async (keyword) => {
+    try {
+      const res = await fetch(`${API_BASE}/recipes/${recipeId}/tags?keyword=${encodeURIComponent(keyword)}`, { method:'DELETE', credentials:'include' });
+      const json = await res.json();
+      if (json.ok) {
+        // Remove from local state
+        setTags((t) => ({
+          approved: t.approved.filter(tag => tag.keyword !== keyword),
+          pending: t.pending.filter(tag => tag.keyword !== keyword),
+        }));
+      }
+    } catch {}
+  };
+
   const postComment = async () => {
     const body = (commentInput || '').trim();
     if (!body) return;
@@ -846,12 +870,12 @@ export default function RecipeView({
                 </div>
                 {isEditing && activeEditField === 'image' && gallery.length > 1 && (
                   <>
-                    <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev">‹</button>
-                    <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next">›</button>
+                    <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
+                    <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next" data-edit-field="image">›</button>
                   </>
                 )}
                 {isEditing && activeEditField === 'image' && (
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-3 flex items-center gap-2" data-edit-field="image">
                     <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate'}</button>
                     <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
                       const f = e.target.files && e.target.files[0];
@@ -908,23 +932,24 @@ export default function RecipeView({
 
         {/* Stats bar on its own row */}
         <div className="mb-8">
-          <div className="flex flex-wrap items-center justify-between gap-4 md:gap-6">
-            <div className="inline-flex items-center gap-2 px-4 py-3 bg-blue-50 rounded-lg border border-blue-100">
-              <UserGroupIcon className="w-5 h-5 text-blue-600" aria-hidden="true" />
+          <div className="grid grid-cols-4 gap-2 md:gap-4">
+            <div className="inline-flex items-center gap-2 px-3 py-3 bg-blue-50 rounded-lg border border-blue-100">
+                              <i className="fa-solid fa-utensils mr-1 text-blue-600"></i>
               <span className="text-sm text-blue-700">Servings</span>
               <span className="text-sm font-semibold text-blue-900">{content.servings || content.serves || '—'}</span>
             </div>
-            <div className="inline-flex items-center gap-2 px-4 py-3 bg-amber-50 rounded-lg border border-amber-100">
+            <div className="inline-flex items-center gap-2 px-3 py-3 bg-amber-50 rounded-lg border border-amber-100">
               <ClockIcon className="w-5 h-5 text-amber-600" aria-hidden="true" />
               <span className="text-sm text-amber-700">Prep Time</span>
               <span className="text-sm font-semibold text-amber-900">{(() => { const v = content.prep_time ?? content.prep_time_minutes; return v != null && String(v) !== '' ? `${String(v).replace(/\s*minutes?\s*/i, '')} min` : '—'; })()}</span>
             </div>
-            <div className="inline-flex items-center gap-2 px-4 py-3 bg-orange-50 rounded-lg border border-orange-100">
+            <div className="inline-flex items-center gap-2 px-3 py-3 bg-orange-50 rounded-lg border border-orange-100">
               <FireIcon className="w-5 h-5 text-orange-600" aria-hidden="true" />
-              <span className="text-sm text-orange-700">Cook Time</span>
+              <span className="text-xs text-orange-700">Cook Time</span>
               <span className="text-sm font-semibold text-orange-900">{(() => { const v = content.cook_time ?? content.cook_time_minutes; return v != null && String(v) !== '' ? `${String(v).replace(/\s*minutes?\s*/i, '')} min` : '—'; })()}</span>
             </div>
-            <div className="inline-flex items-center gap-2 px-4 py-3 bg-green-50 rounded-lg border border-green-100">
+            <div className="inline-flex items-center gap-2 px-3 py-3 bg-green-50 rounded-lg border border-green-100">
+                              <i className="fa-solid fa-signal mr-1 text-green-600"></i>
               <span className="text-sm text-green-700">Difficulty</span>
               <span className="text-sm font-semibold text-green-900">Easy</span>
             </div>
@@ -1177,67 +1202,106 @@ export default function RecipeView({
 
       {/* Removed divider between Nutrition and social sections to keep seamless flow */}
 
-        {/* Variants section for original recipes */}
-        {isSaved && !content?.conversion?.isVariant && (
-          <RecipeSection id="variants" title="Variants" titleHidden>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="scroll-mt-[88px] text-xl font-semibold">Variants</h2>
-              <select 
-                value={sort} 
-                onChange={(e) => setSort(e.target.value)} 
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-              >
-                <option value="popular">Most popular</option>
-                <option value="newest">Newest</option>
-                <option value="closest">Closest to your filters</option>
-              </select>
-            </div>
-            <VariantsList 
-              parentId={recipeId} 
-              onOpenRecipeInModal={variant === 'modal' ? (id)=>onOpenRecipeInModal?.(id) : undefined}
-              sort={sort}
-            />
-          </RecipeSection>
-        )}
-
-
-      {/* Source directly between Nutrition and Tags (omit in quick view) */}
-      {variant !== 'modal' && sourceUrl && (
-        <RecipeSection id="source" title="Source">
-          <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-3">
-            <LinkIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
-            <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">{sourceUrl}</a>
-          </div>
-        </RecipeSection>
-      )}
-
       {/* Social section for saved recipes (omit in quick view via isSaved=false) */}
       {isSaved && (
         <div className="mt-8 mb-24">
           {/* Tags */}
           <RecipeSection id="tags" title="Tags" className="mt-8">
-            <div className="flex flex-wrap gap-2 mb-3">
-              {(() => {
-                const approved = (tags.approved||[]);
-                const out = [...approved];
-                try {
-                  const rc = recipe || {};
-                  const conv = rc.conversion || {};
-                  if (conv.isVariant) out.push({ keyword: 'Variant', type: 'variant' });
-                  const presets = ((conv.constraints||{}).presets||[]).map(p=>String(p).toLowerCase());
-                  const label = (p)=> p==='plant-based' ? 'Plant based' : p.charAt(0).toUpperCase()+p.slice(1);
-                  ['vegan','vegetarian','pescetarian'].forEach(p=>{ if (presets.includes(p)) out.push({ keyword: label(p), type: 'diet' }); });
-                } catch {}
-                return out.map((t, idx) => (
-                  <span key={`tag-${idx}-${t.keyword}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(t.type, t.keyword)}`}>
-                    <span className="font-medium">{t.keyword}</span>
-                  </span>
-                ));
-              })()}
-            </div>
-            {/* Input: no required validation in view/edit; only enforce on create */}
-            <TagInput required={false} tags={[]} setTags={(ts)=>addTags((ts||[]).map(x=>x.label))} placeholder="Add new tag and press Add" />
+            {currentUser ? (
+              <TagInput 
+                required={false} 
+                tags={tags.approved.map(t => ({ label: t.keyword }))} 
+                setTags={(newTags) => {
+                  const currentTags = tags.approved.map(t => t.keyword);
+                  const newTagLabels = newTags.map(t => t.label);
+                  
+                  // Find tags to add (new tags that aren't in current)
+                  const tagsToAdd = newTagLabels.filter(tag => !currentTags.includes(tag));
+                  
+                  // Find tags to remove (current tags that aren't in new)
+                  const tagsToRemove = currentTags.filter(tag => !newTagLabels.includes(tag));
+                  
+                  // Add new tags
+                  if (tagsToAdd.length > 0) {
+                    addTags(tagsToAdd);
+                  }
+                  
+                  // Remove tags
+                  tagsToRemove.forEach(tag => removeTag(tag));
+                }} 
+                placeholder="Add new tag and press Add" 
+              />
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {(() => {
+                  const approved = (tags.approved||[]);
+                  const out = [...approved];
+                  try {
+                    const rc = recipe || {};
+                    const conv = rc.conversion || {};
+                    if (conv.isVariant) out.push({ keyword: 'Variant', type: 'variant' });
+                    const presets = ((conv.constraints||{}).presets||[]).map(p=>String(p).toLowerCase());
+                    const label = (p)=> p==='plant-based' ? 'Plant based' : p.charAt(0).toUpperCase()+p.slice(1);
+                    ['vegan','vegetarian','pescetarian'].forEach(p=>{ if (presets.includes(p)) out.push({ keyword: label(p), type: 'diet' }); });
+                  } catch {}
+                  return out.map((t, idx) => (
+                    <span key={`tag-${idx}-${t.keyword}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(t.type, t.keyword)}`}>
+                                            {t.keyword.toLowerCase() === 'vegan' && <i className="fa-solid fa-leaf mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'vegetarian' && <i className="fa-solid fa-carrot mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'zesty' && <i className="fa-solid fa-lemon mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'pescatarian' && <i className="fa-solid fa-fish mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'seafood' && <i className="fa-solid fa-shrimp mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'fastfood' && <i className="fa-solid fa-burger mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'spicy' && <i className="fa-solid fa-pepper-hot mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'chicken' && <i className="fa-solid fa-drumstick-bite mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'eggs' && <i className="fa-solid fa-egg mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'cheese' && <i className="fa-solid fa-cheese mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'fruits' && <i className="fa-solid fa-apple-whole mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'wine' && <i className="fa-solid fa-wine-bottle mr-1"></i>}
+                      {t.keyword.toLowerCase() === 'pasta' && <i className="fa-solid fa-bacon mr-1"></i>}
+                      <span className="font-medium">{t.keyword.charAt(0).toUpperCase() + t.keyword.slice(1)}</span>
+                    </span>
+                  ));
+                })()}
+              </div>
+            )}
           </RecipeSection>
+
+          {/* Source section */}
+          {variant !== 'modal' && sourceUrl && (
+            <RecipeSection id="source" title="Source" className="mt-4">
+              <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-3">
+                <LinkIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">{sourceUrl}</a>
+              </div>
+            </RecipeSection>
+          )}
+
+          {/* Variants section for original recipes */}
+          {!content?.conversion?.isVariant && (
+            <VariantsList 
+              parentId={recipeId} 
+              onOpenRecipeInModal={variant === 'modal' ? (id)=>onOpenRecipeInModal?.(id) : undefined}
+              sort={sort}
+              renderSection={(variantsContent) => variantsContent ? (
+                <RecipeSection id="variants" title="Variants" titleHidden className="mt-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="scroll-mt-[88px] text-xl font-semibold">Variants</h2>
+                    <select 
+                      value={sort} 
+                      onChange={(e) => setSort(e.target.value)} 
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+                    >
+                      <option value="popular">Most popular</option>
+                      <option value="newest">Newest</option>
+                      <option value="closest">Closest to your filters</option>
+                    </select>
+                  </div>
+                  {variantsContent}
+                </RecipeSection>
+              ) : null}
+            />
+          )}
 
           {/* Ratings */}
           <RecipeSection id="ratings" title="Ratings" className="mt-4">

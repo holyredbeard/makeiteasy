@@ -1284,8 +1284,9 @@ async def _adopt_collection_cover_from_recipe(collection_id: int, saved_recipe):
 
 @router.get("/collections/{collection_id}/recipes", response_model=List[SavedRecipe], tags=["Collections"]) 
 @limiter.limit("60/minute")
-async def list_collection_recipes(request: Request, collection_id: int):
-    return db.list_collection_recipes(collection_id)
+async def list_collection_recipes(request: Request, collection_id: int, current_user: Optional[User] = Depends(get_current_active_user)):
+    user_id = current_user.id if current_user else None
+    return db.list_collection_recipes(collection_id, user_id)
 
 class UpdateCollectionPayload(BaseModel):
     title: Optional[str] = None
@@ -1537,6 +1538,31 @@ async def delete_recipe_rating(recipe_id: int, request: Request, current_user: U
     except Exception as e:
         logger.error(f"Failed to delete rating for recipe {recipe_id}: {e}")
         raise HTTPException(status_code=500, detail="Could not delete rating.")
+
+# --- Recipe Likes Endpoints ---
+@router.post("/recipes/{recipe_id}/like")
+@limiter.limit("120/minute")
+async def toggle_recipe_like(recipe_id: int, request: Request, current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM recipe_likes WHERE recipe_id = ? AND user_id = ?", (recipe_id, current_user.id))
+            exists = c.fetchone() is not None
+            if exists:
+                c.execute("DELETE FROM recipe_likes WHERE recipe_id = ? AND user_id = ?", (recipe_id, current_user.id))
+                liked = False
+                c.execute("UPDATE saved_recipes SET likes_count = CASE WHEN likes_count > 0 THEN likes_count - 1 ELSE 0 END WHERE id = ?", (recipe_id,))
+            else:
+                c.execute("INSERT OR IGNORE INTO recipe_likes (recipe_id, user_id) VALUES (?, ?)", (recipe_id, current_user.id))
+                liked = True
+                c.execute("UPDATE saved_recipes SET likes_count = likes_count + 1 WHERE id = ?", (recipe_id,))
+            conn.commit()
+        return {"ok": True, "data": {"liked": liked}}
+    except Exception as e:
+        logger.error(f"Failed to toggle like for recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not toggle like")
 
 # --- Comments Endpoints ---
 @router.get("/recipes/{recipe_id}/comments")

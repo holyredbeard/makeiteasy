@@ -104,6 +104,8 @@ class DatabaseManager:
                 cursor.execute("ALTER TABLE saved_recipes ADD COLUMN rating_average REAL DEFAULT 0")
             if 'rating_count' not in cols:
                 cursor.execute("ALTER TABLE saved_recipes ADD COLUMN rating_count INTEGER DEFAULT 0")
+            if 'likes_count' not in cols:
+                cursor.execute("ALTER TABLE saved_recipes ADD COLUMN likes_count INTEGER DEFAULT 0")
 
             # Ratings table
             cursor.execute(
@@ -123,6 +125,23 @@ class DatabaseManager:
             )
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_recipe_id ON ratings(recipe_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_ratings_recipe_value ON ratings(recipe_id, value)")
+
+            # Recipe likes table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS recipe_likes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recipe_id INTEGER NOT NULL,
+                    user_id INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(recipe_id, user_id),
+                    FOREIGN KEY (recipe_id) REFERENCES saved_recipes (id),
+                    FOREIGN KEY (user_id) REFERENCES users (id)
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_recipe_likes_recipe_id ON recipe_likes(recipe_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_recipe_likes_user_id ON recipe_likes(user_id)")
 
             # Comments table
             cursor.execute(
@@ -820,18 +839,40 @@ class DatabaseManager:
             conn.commit()
             return {"ok": True}
 
-    def list_collection_recipes(self, collection_id: int) -> List[SavedRecipe]:
+    def list_collection_recipes(self, collection_id: int, user_id: Optional[int] = None) -> List[SavedRecipe]:
         try:
             with self.get_connection() as conn:
                 c = conn.cursor()
                 c.execute(
                     """
-                    SELECT sr.* FROM saved_recipes sr
+                    SELECT sr.*, 
+                           u.username as owner_username,
+                           u.full_name as owner_full_name,
+                           COALESCE(r.avg_rating, 0.0) as rating_average,
+                           COALESCE(r.rating_count, 0) as rating_count,
+                           COALESCE(l.likes_count, 0) as likes_count,
+                           CASE WHEN rl.recipe_id IS NOT NULL THEN 1 ELSE 0 END as liked_by_me
+                    FROM saved_recipes sr
                     JOIN collection_recipes cr ON cr.recipe_id = sr.id
+                    LEFT JOIN users u ON u.id = sr.user_id
+                    LEFT JOIN (
+                        SELECT recipe_id,
+                               ROUND(AVG(CAST(value AS FLOAT)), 2) as avg_rating,
+                               COUNT(*) as rating_count
+                        FROM ratings
+                        GROUP BY recipe_id
+                    ) r ON r.recipe_id = sr.id
+                    LEFT JOIN (
+                        SELECT recipe_id,
+                               COUNT(*) as likes_count
+                        FROM recipe_likes
+                        GROUP BY recipe_id
+                    ) l ON l.recipe_id = sr.id
+                    LEFT JOIN recipe_likes rl ON rl.recipe_id = sr.id AND rl.user_id = ?
                     WHERE cr.collection_id = ?
                     ORDER BY COALESCE(cr.position, 1000000) ASC, cr.created_at DESC
                     """,
-                    (collection_id,)
+                    (user_id, collection_id)
                 )
                 rows = c.fetchall()
                 items: List[SavedRecipe] = []
@@ -864,7 +905,13 @@ class DatabaseManager:
                             source_url=row['source_url'],
                             created_at=datetime.fromisoformat(row['created_at']),
                             recipe_content=RecipeContent.model_validate(content_dict),
-                            tags=tags
+                            tags=tags,
+                            rating_average=row['rating_average'] if 'rating_average' in row else 0.0,
+                            rating_count=row['rating_count'] if 'rating_count' in row else 0,
+                            likes_count=row['likes_count'] if 'likes_count' in row else 0,
+                            liked_by_me=bool(row['liked_by_me']) if 'liked_by_me' in row else False,
+                            owner_username=row['owner_username'] if 'owner_username' in row else None,
+                            owner_full_name=row['owner_full_name'] if 'owner_full_name' in row else None
                         )
                     )
                 return items
@@ -976,7 +1023,10 @@ class DatabaseManager:
                 'vegan','vegetarian','pescatarian','glutenfree','dairyfree','lowcarb','highprotein','keto','paleo','sugarfree'
             ],
             'theme': [
-                'quick','easy','budget','festive','seasonal','holiday','summer','winter','autumn','spring','spicy','sweet','savory','comfortfood','healthy','kidfriendly','fingerfood','mealprep'
+                'quick','easy','budget','festive','seasonal','holiday','summer','winter','autumn','spring','spicy','sweet','savory','comfortfood','healthy','kidfriendly','fingerfood','mealprep','zesty','seafood','fastfood'
+            ],
+            'ingredient': [
+                'chicken','eggs','cheese','fruits','wine'
             ]
         }
         for ttype, words in canonical.items():
@@ -1171,7 +1221,7 @@ class DatabaseManager:
             row = cursor.fetchone()
             count = row[0] or 0
             total = row[1] or 0
-            average = (total / count) if count > 0 else 0
+            average = round((total / count), 2) if count > 0 else 0
             cursor.execute("UPDATE saved_recipes SET rating_average = ?, rating_count = ? WHERE id = ?", (average, count, recipe_id))
             conn.commit()
 

@@ -3891,3 +3891,304 @@ INFO:     127.0.0.1:51950 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
 INFO:     127.0.0.1:51950 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
 INFO:     127.0.0.1:51950 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
 INFO:     127.0.0.1:51950 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52085 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52085 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52085 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52115 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52116 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52117 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52115 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52116 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52117 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52117 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52116 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52117 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52116 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52115 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52115 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52116 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52116 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52193 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52193 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52193 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52213 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52213 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52213 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52225 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52227 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52229 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52225 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52227 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52229 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52229 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52227 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52229 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52227 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52225 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52225 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52225 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52225 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52255 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52255 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52255 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52261 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52261 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52261 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52274 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52277 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52274 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52277 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52277 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52274 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52277 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52274 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52278 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52274 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52274 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53045 - "OPTIONS /api/v1/images/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53047 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53047 - "GET /images/recipes/46e218a9-d887-4dfa-86a4-885c64ab466f.png HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53056 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53056 - "GET /images/recipes/72c5b2a9-e20f-43ad-b53d-eed77f8750ca.png HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53056 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53056 - "GET /images/recipes/02353e1a-19bb-4955-be99-ecd38a136dbd.png HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53056 - "POST /api/v1/images/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53056 - "GET /images/recipes/c02d84c8-2f4e-4677-8560-67558c681b8a.png HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53070 - "OPTIONS /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53072 - "PUT /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53108 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53119 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53119 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /api/v1/collections/2/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /images/recipes/555ff706-2adf-482a-84eb-feb306fe84e7.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53121 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53131 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53131 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/collections/1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/recipes/61 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/recipes/61 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/recipes/61/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53131 - "GET /api/v1/recipes/61/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/v1/recipes/61/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53131 - "GET /api/v1/recipes/61/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /api/v1/recipes/61/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53121 - "GET /api/v1/recipes/61/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53131 - "GET /api/v1/recipes/61/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53131 - "GET /api/v1/recipes/61/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/collections/1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/recipes/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/recipes/21 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/recipes/21/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/recipes/21/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53142 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53142 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/recipes/21/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53138 - "GET /api/v1/recipes/21/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53142 - "GET /api/v1/recipes/21/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53142 - "GET /api/v1/recipes/21/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53142 - "GET /downloads/avatars/user_3_1755167411.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53142 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53142 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53154 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53154 - "GET /api/v1/collections/1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53154 - "GET /api/v1/recipes/38 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53154 - "GET /api/v1/recipes/38 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53154 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53154 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53161 - "GET /api/v1/recipes/38/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53161 - "GET /api/v1/recipes/38/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53161 - "GET /api/v1/recipes/38/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53161 - "GET /api/v1/recipes/38/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /api/v1/collections/2/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /images/recipes/c02d84c8-2f4e-4677-8560-67558c681b8a.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53169 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53174 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53169 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53174 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53178 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53174 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53174 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53211 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53211 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53211 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53219 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53219 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53219 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53229 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53229 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53229 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53240 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53249 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53269 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53270 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53271 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53269 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53270 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53273 - "GET /api/v1/usage-status HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53271 - "GET /images/recipes/c02d84c8-2f4e-4677-8560-67558c681b8a.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53271 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53273 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53271 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53273 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53270 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53270 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53273 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53273 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53300 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53307 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53307 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53307 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53340 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53340 - "GET /api/v1/collections HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53344 - "GET /api/v1/collections/2/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53340 - "GET /api/v1/collections/2/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53340 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53344 - "GET /api/v1/recipes/66 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53344 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53340 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53344 - "GET /api/v1/recipes/66/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53340 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53351 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53351 - "GET /api/v1/recipes/66/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53340 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53340 - "GET /api/v1/recipes/66/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /images/recipes/35bb60c7-5f3b-4c0e-9f0b-e69a40349606.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53373 - "GET /downloads/222c556b-7232-4c22-89e6-b32bc1340c2c.jpg HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53375 - "GET /images/recipes/6a41d9c7-07a7-407d-ba5e-40f08d6030ee.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53379 - "GET /images/recipes/0d47d6a7-c933-4012-8b23-2f83f1125aa5.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53377 - "GET /images/recipes/0b6889eb-56d3-4d32-8ede-2fc8a70f4260.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/80/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/79/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/78/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/77/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/76/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/75/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/74/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/73/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/72/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/71/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/70/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/68/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/67/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/64/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/63/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/62/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/61/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/58/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/57/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/50/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/80/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/79/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/78/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/77/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/76/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/75/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/74/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/73/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/72/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/71/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/70/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/68/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/67/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/66/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/64/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/63/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/62/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/61/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/58/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/57/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/50/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/49/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/47/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/46/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/45/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53373 - "GET /api/v1/recipes/38/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53375 - "GET /api/v1/recipes/21/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /api/v1/recipes/20/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53377 - "GET /api/v1/recipes/19/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53369 - "GET /api/v1/recipes/18/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53371 - "GET /api/v1/recipes/16/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53379 - "GET /images/recipes/1cb211ba-e60b-40f5-ab39-3bc6f0267b8f.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53377 - "GET /downloads/96b2cd13-ee70-4f65-a01e-b80bc29652af.webp HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53373 - "GET /images/recipes/b2b0db70-d700-4642-acda-7fda9f09a68a.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53375 - "GET /images/recipes/c34189e6-d6f6-41b9-adba-4913a6b3e210.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53369 - "GET /downloads/9286f3cc-2a29-4d4a-97ec-5364db86fd09.jpg HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53371 - "GET /downloads/5c101bba-2c2f-4aff-83a8-9dfc45445db8.jpg HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53371 - "GET /images/recipes/6b10602b-bbc9-45d9-a1cb-83b342f66826.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53375 - "GET /images/recipes/50be2183-5022-4676-8bab-ae912225be48.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53369 - "GET /images/recipes/62849cc1-ae78-4216-a5b9-c61334cc6a1f.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53373 - "GET /images/recipes/adb227ec-ed7f-4d60-8e10-d8e745f9f8fd.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53377 - "GET /images/recipes/8400b89f-c9f6-4a06-b2d9-df79a62e67bc.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:53406 - "GET /api/v1/recipes/62 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /api/v1/recipes/62 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /api/v1/recipes/62/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53410 - "GET /api/v1/recipes/62/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /api/v1/recipes/62/variants?page=1&limit=12&sort=popular HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53410 - "GET /api/v1/recipes/62/ratings HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /api/v1/recipes/62/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /api/v1/recipes/62/tags HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53410 - "GET /api/v1/recipes/62/comments?limit=20 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53410 - "GET /api/v1/recipes/62/comments?limit=20 HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'api/google_auth.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [43432]
+/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/urllib3/__init__.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+2025-08-15 10:16:32,750 [INFO] [logic.video_processing] Using device: cpu
+2025-08-15 10:16:33 [INFO] [pdf_generator] PDF Generator initialized
+2025-08-15 10:16:33,310 [INFO] [root] ENV CHECK: DEEPSEEK_API_KEY present=True
+2025-08-15 10:16:33,310 [INFO] [root] ENV CHECK: REPLICA_API_KEY present=True
+2025-08-15 10:16:33,311 [INFO] [root] --- SERVER RESTART - CODE VERSION 2 ---
+Process SpawnProcess-2:
+Traceback (most recent call last):
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/process.py", line 315, in _bootstrap
+    self.run()
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/multiprocessing/process.py", line 108, in run
+    self._target(*self._args, **self._kwargs)
+  File "/Users/henrikpetersson/Desktop/Webbprojekt/makeiteasy/venv/lib/python3.9/site-packages/uvicorn/_subprocess.py", line 73, in subprocess_started
+    sys.stdin = os.fdopen(stdin_fileno)  # pragma: full coverage
+  File "/Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/os.py", line 1023, in fdopen
+    return io.open(fd, *args, **kwargs)
+OSError: [Errno 9] Bad file descriptor
+INFO:     Stopping reloader process [43329]
+2025-08-15 10:17:06,950 [INFO] [root] Server shutdown complete.

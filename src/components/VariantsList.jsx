@@ -8,12 +8,24 @@ function Chip({ label }) {
   let cls = 'bg-gray-50 text-gray-700 border border-gray-200';
   if (l === 'variant') cls = 'bg-blue-600 text-white border-blue-600';
   else if (l === 'vegan') cls = 'bg-emerald-600 text-white border-emerald-600';
+  else if (l === 'zesty') cls = 'bg-yellow-500 text-white border-yellow-500';
+  else if (l === 'seafood') cls = 'bg-blue-600 text-white border-blue-600';
   else if (l === 'vegetarian') cls = 'bg-lime-600 text-white border-lime-600';
-  else if (l === 'pescetarian') cls = 'bg-sky-600 text-white border-sky-600';
-  return <span className={`px-2 py-0.5 rounded-full text-xs ${cls}`}>{label}</span>;
+  else if (l === 'pescatarian') cls = 'bg-sky-600 text-white border-sky-600';
+  return (
+    <span className={`px-2 py-0.5 rounded-full text-xs ${cls} cursor-pointer hover:opacity-90 transition-opacity hover:scale-105`}>
+                          {label.toLowerCase() === 'vegan' && <i className="fa-solid fa-leaf mr-1"></i>}
+            {label.toLowerCase() === 'vegetarian' && <i className="fa-solid fa-carrot mr-1"></i>}
+            {label.toLowerCase() === 'zesty' && <i className="fa-solid fa-lemon mr-1"></i>}
+            {label.toLowerCase() === 'pescatarian' && <i className="fa-solid fa-fish mr-1"></i>}
+            {label.toLowerCase() === 'seafood' && <i className="fa-solid fa-shrimp mr-1"></i>}
+            {label.toLowerCase() === 'fastfood' && <i className="fa-solid fa-burger mr-1"></i>}
+      {label}
+    </span>
+  );
 }
 
-export default function VariantsList({ parentId, onOpenRecipeInModal, sort = 'newest' }) {
+export default function VariantsList({ parentId, onOpenRecipeInModal, sort = 'newest', renderSection }) {
   const [items, setItems] = useState([]);
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
@@ -57,7 +69,7 @@ export default function VariantsList({ parentId, onOpenRecipeInModal, sort = 'ne
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
-  return (
+  const variantsContent = (
     <div className="pt-2">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {items.map(v => (
@@ -99,6 +111,14 @@ export default function VariantsList({ parentId, onOpenRecipeInModal, sort = 'ne
       )}
     </div>
   );
+
+  // If renderSection is provided, use it to wrap the content
+  if (renderSection) {
+    return renderSection(variantsContent);
+  }
+
+  // Otherwise return the content directly (for backward compatibility)
+  return variantsContent;
 }
 
 

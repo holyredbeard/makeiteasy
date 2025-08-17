@@ -3,6 +3,9 @@ import { XMarkIcon, UserGroupIcon, CalendarDaysIcon, BookOpenIcon, PencilSquareI
 import { StarIcon, HeartIcon } from '@heroicons/react/24/solid';
 import { useNavigate, Link, useParams, useLocation } from 'react-router-dom';
 import RecipeView from './components/RecipeView';
+import PageContainer from './components/PageContainer';
+import CollectionCard from './components/CollectionCard';
+import TagList from './components/TagList';
 
 const API_BASE = 'http://localhost:8001/api/v1';
 const STATIC_BASE = 'http://localhost:8001';
@@ -70,7 +73,7 @@ const RecipeCard = ({ recipe, onClick, isEditMode = false, dragIndex, dropIndex,
         onDrop={onDrop}
         onDragEnd={onDragEnd}
       >
-        <img src={normalizeUrl(recipe.recipe_content?.image_url) || 'https://placehold.co/800x600?text=No+Image'} alt={recipe.recipe_content?.title} className="w-full h-40 object-cover" />
+        <img src={normalizeUrl(recipe.recipe_content?.image_url) || 'https://placehold.co/800x600?text=No+Image'} alt={recipe.recipe_content?.title} className="w-full h-full object-cover aspect-square" />
         <div className="absolute top-2 left-2 px-2 py-1 rounded bg-black/60 text-white text-xs font-semibold">{idx===0? 'Cover' : `#${idx+1}`}</div>
         <button className="absolute top-2 right-2 bg-white/95 hover:bg-white text-gray-800 rounded-full w-8 h-8 flex items-center justify-center shadow-lg" title="Remove" onClick={onRemove}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -96,11 +99,11 @@ const RecipeCard = ({ recipe, onClick, isEditMode = false, dragIndex, dropIndex,
       onClick={onClick}
     >
       {/* Image with overlay */}
-      <div className="relative w-full h-56">
+      <div className="relative w-full aspect-square">
         <img
           src={normalizeUrl(recipe.recipe_content?.image_url) || 'https://placehold.co/800x600?text=No+Image'}
           alt={recipe.recipe_content?.title}
-          className="w-full h-56 object-cover rounded-t-lg"
+          className="w-full h-full object-cover rounded-t-lg aspect-square"
           loading="lazy"
           decoding="async"
           onError={(e)=>{ e.currentTarget.src='https://placehold.co/800x600?text=No+Image'; }}
@@ -127,7 +130,7 @@ const RecipeCard = ({ recipe, onClick, isEditMode = false, dragIndex, dropIndex,
           <div>
             <h2 className="text-white text-lg font-extrabold drop-shadow-sm">{recipe?.recipe_content?.title}</h2>
             <p className="text-white/90 text-xs mt-2">
-              By {recipe?.owner_username || recipe?.owner_full_name || 'Unknown'}
+              By {recipe?.owner_username || 'Unknown'}
             </p>
           </div>
         </div>
@@ -136,15 +139,11 @@ const RecipeCard = ({ recipe, onClick, isEditMode = false, dragIndex, dropIndex,
       <div className="p-5">
         {/* Chips */}
         {Array.isArray(recipe?.tags?.approved) && recipe.tags.approved.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {(() => { const max = 3; const visible = recipe.tags.approved.slice(0, max); const extra = recipe.tags.approved.length - visible.length; return (
-              <>
-                {visible.map((t, i) => (
-                  <span key={i} className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-700 border border-gray-200">{t.keyword}</span>
-                ))}
-                {extra > 0 && (<span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-700">+{extra}</span>)}
-              </>
-            ); })()}
+          <div className="mb-2">
+            <TagList 
+              tags={recipe.tags.approved.map(t => ({ keyword: t.keyword }))}
+              maxVisible={3}
+            />
           </div>
         )}
         {/* Description */}
@@ -195,22 +194,40 @@ export default function CollectionsPage() {
         const data = await res.json();
         const list = Array.isArray(data) ? data : [];
         setCollections(list);
+        
+        // Check for open parameter in URL
+        const searchParams = new URLSearchParams(location.search);
+        const openParam = searchParams.get('open');
+        
         // If on /collections/:id, load that collection detail page directly
         const activeId = routeId ? parseInt(routeId, 10) : null;
         if (activeId && !Number.isNaN(activeId)) {
           const r2 = await fetch(`${API_BASE}/collections/${activeId}/recipes`, { credentials: 'include' });
           const d2 = await r2.json();
           setRecipes(Array.isArray(d2) ? d2 : []);
-                  setOpenId(activeId);
-        try { const m = list.find(x => String(x.id) === String(activeId)); if (m) setOpenMeta(m); } catch {}
+          setOpenId(activeId);
+          try { const m = list.find(x => String(x.id) === String(activeId)); if (m) setOpenMeta(m); } catch {}
+        }
+        // If open parameter is present, open that collection
+        else if (openParam) {
+          const openId = parseInt(openParam, 10);
+          if (!Number.isNaN(openId)) {
+            const r2 = await fetch(`${API_BASE}/collections/${openId}/recipes`, { credentials: 'include' });
+            const d2 = await r2.json();
+            setRecipes(Array.isArray(d2) ? d2 : []);
+            setOpenId(openId);
+            try { const m = list.find(x => String(x.id) === String(openId)); if (m) setOpenMeta(m); } catch {}
+            // Clear the open parameter from URL
+            navigate(`/collections?open=${openId}`, { replace: true });
+          }
+        }
+      } catch (e) {
+        setError('Failed to load collections');
+      } finally {
+        setLoading(false);
       }
-    } catch (e) {
-      setError('Failed to load collections');
-    } finally {
-      setLoading(false);
-    }
-  })();
-}, [routeId]);
+    })();
+  }, [routeId, location.search, navigate]);
 
 // When leaving detail route back to overview, clear detail state so it doesn't render on overview
 useEffect(() => {
@@ -320,7 +337,7 @@ useEffect(() => {
     <div>
       {!routeId && (
         <>
-          <div className="max-w-7xl mx-auto px-4 lg:px-6">
+          <PageContainer>
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-4xl font-bold text-gray-800">Collections</h1>
               <button className="bg-[#da8146] text-white px-4 py-2 rounded-lg" onClick={()=>setShowModal(true)}>+ New Collection</button>
@@ -328,45 +345,25 @@ useEffect(() => {
             {collections.length === 0 ? (
               <div className="text-gray-500">No collections yet</div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {collections.map(c => (
-                <div
-                  key={c.id}
-                  className="relative rounded-2xl overflow-hidden cursor-pointer transition group"
-                  onClick={() => openCollection(c.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); openCollection(c.id);} }}
-                >
-                  <img
-                    src={normalizeUrl(c.image_url) || 'https://placehold.co/800x600?text=Collection'}
-                    alt={c.title}
-                    className="w-full h-72 object-cover"
-                    onError={(e)=>{ e.currentTarget.src = 'https://placehold.co/800x600?text=Collection'; }}
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+                {collections.map(c => (
+                  <CollectionCard
+                    key={c.id}
+                    id={c.id}
+                    title={c.title}
+                    image_url={normalizeUrl(c.image_url)}
+                    recipes_count={c.recipes_count}
+                    followers_count={c.followers_count}
+                    creator_name={c.owner_name}
+              creator_username={c.owner_username}
+                    creator_avatar={normalizeUrl(c.owner_avatar)}
+                    likes_count={c.likes_count || 0}
+                    onClick={() => openCollection(c.id)}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                  <div className="absolute top-4 right-4 rounded-full px-3 py-1 text-sm font-semibold bg-white/90 text-gray-800 flex items-center gap-1">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="#ef4444" aria-hidden="true"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41 0.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-                    <span>{c.likes_count || 0}</span>
-                  </div>
-                  <div className="absolute left-4 right-4 bottom-4 text-white">
-                    <h3 className="text-lg font-bold drop-shadow mb-1 line-clamp-2" title={c.title}>{c.title}</h3>
-                    <div className="text-sm opacity-95 mb-3">{c.recipes_count} recept • {c.followers_count} följare</div>
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={normalizeUrl(c.owner_avatar) || 'https://placehold.co/64x64?text=%F0%9F%91%A4'}
-                        alt={c.owner_name || 'Owner'}
-                        className="h-9 w-9 rounded-full object-cover border-2 border-white/80 shadow-sm"
-                        onError={(e)=>{ e.currentTarget.src='https://placehold.co/64x64?text=%F0%9F%91%A4'; }}
-                      />
-                      <div className="font-semibold drop-shadow">{c.owner_name || 'Unknown'}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
             )}
-          </div>
+          </PageContainer>
         </>
       )}
 
@@ -448,10 +445,10 @@ useEffect(() => {
                       <>
                         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-3">
                           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-gray-600">
-                            <Link to={`/users/${encodeURIComponent(openMeta?.owner_username || (openMeta?.owner_name || '').split(' ')[0] || 'user')}`} className="flex items-center gap-2 hover:underline underline-offset-2">
-                              <img src={normalizeUrl(openMeta?.owner_avatar) || 'https://placehold.co/32x32?text=%F0%9F%91%A4'} alt={openMeta?.owner_name || 'Owner'} className="h-8 w-8 rounded-full object-cover" onError={(e)=>{ e.currentTarget.src='https://placehold.co/32x32?text=%F0%9F%91%A4'; }} />
-                              <span>By <strong>{openMeta?.owner_name || 'Unknown'}</strong></span>
-                            </Link>
+                                            <Link to={`/users/${encodeURIComponent(openMeta?.owner_username || 'user')}`} className="flex items-center gap-2 hover:underline underline-offset-2">
+                  <img src={normalizeUrl(openMeta?.owner_avatar) || 'https://placehold.co/32x32?text=%F0%9F%91%A4'} alt={openMeta?.owner_username || 'Owner'} className="h-8 w-8 rounded-full object-cover" onError={(e)=>{ e.currentTarget.src='https://placehold.co/32x32?text=%F0%9F%91%A4'; }} />
+                  <span>By <strong>{openMeta?.owner_username || 'Unknown'}</strong></span>
+                </Link>
                             {Number(openMeta?.recipes_count || 0) > 0 && (
                               <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
                                 <BookOpenIcon aria-hidden="true" className="w-4 h-4" />

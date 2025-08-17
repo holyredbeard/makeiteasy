@@ -14,6 +14,7 @@ import {
   LinkIcon as LinkOutlineIcon,
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
+import { Facebook, Instagram, Youtube, Music } from 'lucide-react';
 // Logging UI disabled
 
 const API_BASE = 'http://localhost:8001/api/v1';
@@ -30,35 +31,48 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
   const [openUserMenu, setOpenUserMenu] = useState(false);
   const [openNewMenu, setOpenNewMenu] = useState(false);
   const [scrollY, setScrollY] = useState(0);
-  const [logoScale, setLogoScale] = useState(2);
+  const [logoScale, setLogoScale] = useState(1.0);
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Scroll animation for logo (only visual via transform so layout isn't affected)
+  // Check if we're on the landing page (home page)
+  const isLandingPage = location.pathname === '/';
+
+  // Scroll animation for logo (only on landing page)
   useEffect(() => {
+    if (!isLandingPage) {
+      setLogoScale(1.0); // Always small on other pages
+      return;
+    }
+
     const handleScroll = () => {
       const s = window.scrollY || 0;
       setScrollY(s);
-      // start scale 2 -> min 1 when scrolled ~400px
-      const scale = Math.max(1, 2 - s / 400);
+      // start scale 1.5 -> min 1.0 when scrolled ~400px
+      const scale = Math.max(1.0, 1.5 - s / 400);
       setLogoScale(scale);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
     handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+  }, [isLandingPage]);
 
-  // Only add top padding when logo is in its large state
-  const logoPaddingTop = logoScale > 1 ? '12px' : '0px';
+
   return (
     <header className="bg-[#659a63] sticky top-0 z-50" style={{fontFamily: 'Poppins, sans-serif'}}>
       <div className="max-w-7xl mx-auto px-6">
-        <div className="flex justify-between items-center py-1">
-          <div className="flex items-center gap-2" style={{ paddingTop: logoPaddingTop }}>
+        <div className="flex justify-between items-center py-3">
+          <div className="flex items-center gap-2">
             <Link to="/">
               <img 
                 className="animated-logo"
-                style={{ height: '64px', transform: `scale(${logoScale})`, transformOrigin: 'left center' }}
+                style={{ 
+                  height: '48px', 
+                  transform: `scale(${logoScale})`, 
+                  transformOrigin: 'left center',
+                  marginTop: isLandingPage && logoScale > 1.0 ? '20px' : '0px'
+                }}
                 src="/logo.png" 
                 alt="Clip2Cook" 
               />
@@ -159,7 +173,7 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
               )}
               <button 
                 onClick={showAuthModal} 
-                className="flex items-center justify-center gap-2 py-2 px-4 border border-gray-300 rounded-lg shadow-sm hover:shadow-md bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all"
+                className="flex items-center justify-center gap-2 py-2 px-4 border border-[#ff931d] rounded-lg shadow-sm hover:shadow-lg bg-[#fff5d9] text-sm font-medium text-[#ff931d] hover:bg-[#ffedb3] hover:border-[#e67e00] hover:scale-105 transition-all duration-200 ease-in-out"
               >
                   Sign In
               </button>
@@ -341,7 +355,7 @@ const AuthModal = ({ isOpen, onClose, initiateGoogleSignIn, authTab, setAuthTab,
                 </div>
                 <button 
                   type="submit" 
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-lg transition-transform transform hover:scale-[1.02]"
+                  className="w-full bg-[#fff5d9] hover:bg-[#ffedb3] text-[#ff931d] border border-[#ff931d] hover:border-[#e67e00] font-bold py-3 px-4 rounded-xl shadow-md hover:shadow-xl transition-all duration-200 ease-in-out transform hover:scale-[1.02] hover:-translate-y-0.5"
                 >
                   Sign In
                 </button>
@@ -643,6 +657,49 @@ export default function Layout() {
       <main className={`max-w-[1080px] mx-auto ${isHome ? 'py-0 px-0' : 'py-10 px-8'}`}>
         <Outlet context={{ currentUser, refreshCurrentUser, setCurrentUser }} />
       </main>
+
+      {/* Footer */}
+      <footer className="relative w-screen left-1/2 right-1/2 -ml-[50vw] -mr-[50vw] mt-10 bg-[#0f3b2d] text-gray-200">
+        <div className="max-w-7xl mx-auto px-4 lg:px-6 py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div>
+            <h3 className="text-white font-bold text-xl">Food2Guide</h3>
+            <p className="mt-3 text-gray-300">Your all-in-one platform to extract, organize, and enjoy recipes from anywhere.</p>
+            <div className="mt-4 flex items-center gap-3">
+              <a href="#" aria-label="Facebook" className="p-2 rounded bg-white/10 hover:bg-white/20"><Facebook className="w-5 h-5"/></a>
+              <a href="#" aria-label="Instagram" className="p-2 rounded bg-white/10 hover:bg-white/20"><Instagram className="w-5 h-5"/></a>
+              <a href="#" aria-label="YouTube" className="p-2 rounded bg-white/10 hover:bg-white/20"><Youtube className="w-5 h-5"/></a>
+              <a href="#" aria-label="TikTok" className="p-2 rounded bg-white/10 hover:bg-white/20"><Music className="w-5 h-5"/></a>
+            </div>
+          </div>
+          <div>
+            <h4 className="text-white font-semibold mb-3">Features</h4>
+            <ul className="space-y-2 text-gray-300">
+              <li>Extract Recipes</li>
+              <li>Smart Conversions</li>
+              <li>Nutrition Analysis</li>
+              <li>Save & Organize</li>
+              <li>Social Features</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-white font-semibold mb-3">Explore</h4>
+            <ul className="space-y-2 text-gray-300">
+              <li>Popular Collections</li>
+              <li>Latest Recipes</li>
+              <li>Trending Now</li>
+              <li>Dietary Picks (Vegan, Keto, Gluten-Free)</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-white font-semibold mb-3">Stay Updated</h4>
+            <p className="text-gray-300">Subscribe for new features, tips, and recipe inspiration.</p>
+            <div className="mt-3 flex items-center gap-2">
+              <input className="flex-1 rounded-lg px-3 py-2 text-gray-900" placeholder="Email address" />
+              <button className="px-4 py-2 rounded-lg bg-[#cc7c2e] text-white hover:brightness-110">Subscribe</button>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

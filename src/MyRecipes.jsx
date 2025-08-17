@@ -8,6 +8,9 @@ import {
   ChevronDownIcon
 } from '@heroicons/react/24/outline';
 import RecipeView from './components/RecipeView';
+import RecipeListToolbar from './components/RecipeListToolbar';
+import { useRecipeListSettings } from './hooks/useRecipeListSettings';
+import TagList from './components/TagList';
 
 const API_BASE = 'http://localhost:8001/api/v1';
 
@@ -105,7 +108,7 @@ const TagPicker = ({ canEdit, onAdd, suggestions }) => {
                 <div className="mt-1 bg-white border rounded-lg shadow-sm max-h-40 overflow-auto">
                     {matches.map(m => (
                         <button key={m.id} onClick={() => add(m.keyword)} className="w-full text-left px-3 py-2 hover:bg-gray-50 flex justify-between">
-                            <span>{m.keyword}</span>
+                            <span>{m.keyword.charAt(0).toUpperCase() + m.keyword.slice(1)}</span>
                             <span className="text-gray-400 text-xs">{m.type}</span>
                         </button>
                     ))}
@@ -365,9 +368,13 @@ const RecipeModal = ({ recipe, onClose, currentUser, onOpenRecipe, onTagsUpdated
 };
 
 // --- Recipe Card Component ---
-const RecipeCard = ({ recipe, viewMode, onClick, onDelete, onFilterByChip, currentUser, onAddToCollection }) => {
+const RecipeCard = ({ recipe, viewMode, density, onClick, onDelete, onFilterByChip, currentUser, onAddToCollection }) => {
     const { title, description, image_url, ingredients } = recipe.recipe_content;
     const [cardRating, setCardRating] = React.useState({ average: null, count: 0 });
+    const [likes, setLikes] = React.useState(recipe.likes_count || 0);
+    const [likedByMe, setLikedByMe] = React.useState(false);
+    
+    // Generate chips/tags
     const chips = React.useMemo(() => {
         const out = [];
         const rc = recipe?.recipe_content || {};
@@ -385,14 +392,27 @@ const RecipeCard = ({ recipe, viewMode, onClick, onDelete, onFilterByChip, curre
         if (presets.includes('vegan')) out.push({ label: 'Vegan', cls: 'bg-emerald-600 text-white' });
         if (presets.includes('vegetarian')) out.push({ label: 'Vegetarian', cls: 'bg-lime-600 text-white' });
         if (presets.includes('pescetarian')) out.push({ label: 'Pescetarian', cls: 'bg-sky-600 text-white' });
+        if (presets.includes('zesty')) out.push({ label: 'Zesty', cls: 'bg-yellow-500 text-white' });
+        if (presets.includes('seafood')) out.push({ label: 'Seafood', cls: 'bg-blue-600 text-white' });
+        if (presets.includes('fastfood')) out.push({ label: 'Fast Food', cls: 'bg-orange-500 text-white' });
         // Include approved tags from backend
         try {
             const approved = (recipe.tags && recipe.tags.approved) ? recipe.tags.approved : [];
             for (const t of approved) {
                 const key = String(t?.keyword || t).toLowerCase();
-                if (key === 'vegan' && !out.find(c=>c.label==='Vegan')) { out.push({ label:'Vegan', cls:'bg-emerald-600 text-white' }); continue; }
-                if (key === 'vegetarian' && !out.find(c=>c.label==='Vegetarian')) { out.push({ label:'Vegetarian', cls:'bg-lime-600 text-white' }); continue; }
-                if (key === 'pescetarian' && !out.find(c=>c.label==='Pescetarian')) { out.push({ label:'Pescetarian', cls:'bg-sky-600 text-white' }); continue; }
+                        if (key === 'vegan' && !out.find(c=>c.label==='Vegan')) { out.push({ label:'Vegan', cls:'bg-emerald-600 text-white' }); continue; }
+        if (key === 'vegetarian' && !out.find(c=>c.label==='Vegetarian')) { out.push({ label:'Vegetarian', cls:'bg-lime-600 text-white' }); continue; }
+        if (key === 'pescatarian' && !out.find(c=>c.label==='Pescatarian')) { out.push({ label:'Pescatarian', cls:'bg-sky-600 text-white' }); continue; }
+        if (key === 'zesty' && !out.find(c=>c.label==='Zesty')) { out.push({ label:'Zesty', cls:'bg-yellow-500 text-white' }); continue; }
+        if (key === 'seafood' && !out.find(c=>c.label==='Seafood')) { out.push({ label:'Seafood', cls:'bg-blue-600 text-white' }); continue; }
+        if (key === 'fastfood' && !out.find(c=>c.label==='Fast Food')) { out.push({ label:'Fast Food', cls:'bg-orange-500 text-white' }); continue; }
+        if (key === 'spicy' && !out.find(c=>c.label==='Spicy')) { out.push({ label:'Spicy', cls:'bg-red-600 text-white' }); continue; }
+        if (key === 'chicken' && !out.find(c=>c.label==='Chicken')) { out.push({ label:'Chicken', cls:'bg-amber-600 text-white' }); continue; }
+        if (key === 'eggs' && !out.find(c=>c.label==='Eggs')) { out.push({ label:'Eggs', cls:'bg-yellow-400 text-white' }); continue; }
+        if (key === 'cheese' && !out.find(c=>c.label==='Cheese')) { out.push({ label:'Cheese', cls:'bg-yellow-300 text-gray-800' }); continue; }
+        if (key === 'fruits' && !out.find(c=>c.label==='Fruits')) { out.push({ label:'Fruits', cls:'bg-pink-500 text-white' }); continue; }
+        if (key === 'wine' && !out.find(c=>c.label==='Wine')) { out.push({ label:'Wine', cls:'bg-purple-600 text-white' }); continue; }
+        if (key === 'pasta' && !out.find(c=>c.label==='Pasta')) { out.push({ label:'Pasta', cls:'bg-orange-600 text-white' }); continue; }
                 // default subdued style for generic tags
                 out.push({ label: t.keyword || t, cls: 'bg-gray-100 text-gray-700 border border-gray-200' });
             }
@@ -412,187 +432,217 @@ const RecipeCard = ({ recipe, viewMode, onClick, onDelete, onFilterByChip, curre
         return () => { cancelled = true; };
     }, [recipe.id]);
 
-    const TitleRow = ({ children }) => (
-        <div className="flex items-center justify-between gap-3">
-            <h2 className="font-semibold text-lg text-gray-800 truncate">{children}</h2>
-            {cardRating.count > 0 && (
-                <div className="flex items-center gap-1 text-gray-700">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="#facc15" aria-hidden="true"><path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                    <span className="text-gray-700 font-medium">{Number(cardRating.average || 0).toFixed(1)}</span>
-                </div>
-            )}
-        </div>
-    );
-    
+    // Fetch like status
+    React.useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`${API_BASE}/recipes/${recipe.id}/like`, { credentials: 'include' });
+                const json = await res.json();
+                if (!cancelled && json?.ok) {
+                    setLikedByMe(json.data.liked);
+                    setLikes(json.data.likes_count || recipe.likes_count || 0);
+                }
+            } catch {}
+        })();
+        return () => { cancelled = true; };
+    }, [recipe.id, recipe.likes_count]);
+
+    // Handle like click
+    const handleLikeClick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+            const res = await fetch(`${API_BASE}/recipes/${recipe.id}/like`, { 
+                method: 'POST', 
+                credentials: 'include' 
+            });
+            const json = await res.json();
+            if (json.ok) {
+                setLikedByMe(json.data.liked);
+                setLikes(prev => json.data.liked ? prev + 1 : Math.max(0, prev - 1));
+            }
+        } catch {}
+    };
+
+    // Helper function for human readable saved time
+    const humanSaved = (dateStr) => {
+        try {
+            const saved = new Date(dateStr);
+            const now = new Date();
+            const days = Math.max(0, Math.floor((now - saved) / (1000*60*60*24)));
+            if (days === 0) return 'Saved today';
+            if (days === 1) return 'Saved 1 day ago';
+            return `Saved ${days} days ago`;
+        } catch { return `Saved ${new Date(dateStr).toLocaleDateString()}`; }
+    };
+
+    // Get owner display name
+    const getOwnerDisplay = () => {
+        const ownerDisplayName = recipe.owner_username || recipe.owner || (recipe.user?.username) || 'You';
+        const ownerUsername = recipe.owner_username || recipe.user?.username || ownerDisplayName;
+        const ownerIsSelf = !!currentUser && (ownerDisplayName === 'You' || String(recipe.user?.id || '') === String(currentUser.id || ''));
+        const linkTarget = ownerIsSelf ? '/profile' : `/users/${encodeURIComponent(ownerUsername)}`;
+        return { ownerDisplayName, linkTarget };
+    };
+
+    // Determine padding and text sizes based on density
+    const isMinimal = density === 'minimal';
+    const padding = isMinimal ? 'p-3' : 'p-5';
+    const titleSize = isMinimal ? 'text-base' : 'text-lg';
+    const descriptionSize = isMinimal ? 'text-xs' : 'text-sm';
+
     const renderContent = () => {
-        switch (viewMode) {
-            case 'title_only':
-                return (
-                    <div className="p-5">
-                        <h2 className="font-semibold text-lg text-gray-800">{title}</h2>
-                    </div>
-                );
-            case 'title_image':
-                return (
-                    <>
-                        <div className="relative w-full h-56">
-                          <img 
-                              src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
-                              alt={title} 
-                              className="w-full h-56 object-cover rounded-t-lg" 
-                              onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
-                          />
-                          <div className="absolute inset-0 rounded-t-lg bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
-                          <div className="absolute top-3 left-3">
-                            <div className="flex items-center bg-white/95 rounded-full px-2 py-0.5 text-xs shadow">
-                              <svg viewBox="0 0 24 24" width="14" height="14" fill="#facc15" aria-hidden="true" className="mr-1"><path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                              <span className="text-gray-800 font-semibold">{cardRating && cardRating.count > 0 ? Number(cardRating.average || 0).toFixed(1) : '-'}</span>
-                            </div>
-                          </div>
-                          <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
-                            <div>
-                              <h2 className="text-white text-lg font-extrabold drop-shadow-sm">{title}</h2>
-                              {(() => {
-                                const ownerDisplayName = recipe.owner_username || recipe.owner || (recipe.user?.username) || (recipe.user?.full_name) || 'You';
-                                const ownerUsername = recipe.owner_username || recipe.user?.username || ownerDisplayName;
-                                const ownerIsSelf = !!currentUser && (ownerDisplayName === 'You' || String(recipe.user?.id || '') === String(currentUser.id || ''));
-                                const linkTarget = ownerIsSelf ? '/profile' : `/users/${encodeURIComponent(ownerUsername)}`;
-                                return (
-                                  <p className="text-white/90 text-xs mt-2">
-                                    By <Link to={linkTarget} className="font-semibold underline-offset-2 hover:underline">{ownerDisplayName}</Link>
-                                  </p>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-                    </>
-                );
-            case 'title_image_description':
-                return (
-                    <>
-                        <div className="relative w-full h-56">
-                          <img 
-                              src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
-                              alt={title} 
-                              className="w-full h-56 object-cover rounded-t-lg" 
-                              onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
-                          />
-                          <div className="absolute inset-0 rounded-t-lg bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
-                          <div className="absolute top-3 left-3">
-                            <div className="flex items-center bg-white/95 rounded-full px-2 py-0.5 text-xs shadow">
-                              <svg viewBox="0 0 24 24" width="14" height="14" fill="#facc15" aria-hidden="true" className="mr-1"><path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                              <span className="text-gray-800 font-semibold">{cardRating && cardRating.count > 0 ? Number(cardRating.average || 0).toFixed(1) : '-'}</span>
-                            </div>
-                          </div>
-                          <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
-                            <div>
-                              <h2 className="text-white text-lg font-extrabold drop-shadow-sm">{title}</h2>
-                              {(() => {
-                                const ownerDisplayName = recipe.owner_username || recipe.owner || (recipe.user?.username) || (recipe.user?.full_name) || 'You';
-                                const ownerUsername = recipe.owner_username || recipe.user?.username || ownerDisplayName;
-                                const ownerIsSelf = !!currentUser && (ownerDisplayName === 'You' || String(recipe.user?.id || '') === String(currentUser.id || ''));
-                                const linkTarget = ownerIsSelf ? '/profile' : `/users/${encodeURIComponent(ownerUsername)}`;
-                                return (
-                                  <p className="text-white/90 text-xs mt-2">
-                                    By <Link to={linkTarget} className="font-semibold underline-offset-2 hover:underline">{ownerDisplayName}</Link>
-                                  </p>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-5">
-                            {chips.length > 0 && (
-                              <div className="mb-2 flex flex-wrap gap-2">
-                                {(() => { const max = 3; const visible = chips.slice(0, max); const extra = chips.length - visible.length; return (
-                                  <>
-                                    {visible.map((c, i) => (
-                                      <button key={`${c.label}-${i}`} onClick={(e)=>{ e.stopPropagation(); if (typeof onFilterByChip === 'function') onFilterByChip(c.label); }} className={`text-xs px-2 py-1 rounded-full shadow-sm ${c.cls} cursor-pointer hover:opacity-90`} title={`Filter by ${c.label}`}>{c.label}</button>
-                                    ))}
-                                    {extra > 0 && (<span className="text-xs px-2 py-1 rounded-full bg-gray-200 text-gray-700">+{extra}</span>)}
-                                  </>
-                                ); })()}
-                              </div>
-                            )}
-                            <p className="text-sm text-gray-600 line-clamp-2">{description}</p>
-                        </div>
-                    </>
-                );
-            case 'title_image_ingredients':
-                return (
-                    <>
+        if (viewMode === 'title_only') {
+            // List view
+            return (
+                <div className={`flex items-center gap-4 ${padding}`}>
+                    <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0">
                         <img 
                             src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
                             alt={title} 
-                            className="w-full h-56 object-cover rounded-t-lg" 
+                            className="w-full h-full object-cover aspect-square" 
+                            loading="lazy"
                             onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
                         />
-                        <div className="p-5">
-                            <TitleRow>{title}</TitleRow>
-                            {(() => {
-                              const ownerDisplayName = recipe.owner_username || recipe.owner || (recipe.user?.username) || (recipe.user?.full_name) || 'You';
-                              const ownerUsername = recipe.owner_username || recipe.user?.username || ownerDisplayName;
-                              const ownerIsSelf = !!currentUser && (ownerDisplayName === 'You' || String(recipe.user?.id || '') === String(currentUser.id || ''));
-                              const linkTarget = ownerIsSelf ? '/profile' : `/users/${encodeURIComponent(ownerUsername)}`;
-                              return (
-                                <p className="text-gray-600 text-xs mt-3">
-                                  By <Link to={linkTarget} className="font-semibold text-gray-800 underline-offset-2 hover:underline">{ownerDisplayName}</Link>
-                                </p>
-                              );
-                            })()}
-                            <div className="h-2" />
-                            {ingredients && ingredients.length > 0 && (
-                                <div className="text-sm text-gray-600">
-                                    <p className="font-medium mb-1">Ingredients:</p>
-                                    <ul className="space-y-1">
-                                        {ingredients.slice(0, 3).map((ingredient, index) => (
-                                            <li key={index} className="flex items-start">
-                                                <span className="text-green-600 mr-2 mt-1 flex-shrink-0">•</span>
-                                                <span className="text-gray-700">
-                                                    {typeof ingredient === 'string' ? ingredient : 
-                                                     ingredient.name ? `${ingredient.quantity || ''} ${ingredient.name}`.trim() : 
-                                                     'Unknown ingredient'}
-                                                </span>
-                                            </li>
-                                        ))}
-                                        {ingredients.length > 3 && (
-                                            <li className="text-gray-500 italic">... and {ingredients.length - 3} more</li>
-                                        )}
-                                    </ul>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h2 
+                            className={`font-semibold ${titleSize} text-gray-800 truncate`}
+                            title={title}
+                        >
+                            {title}
+                        </h2>
+                        <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                            {cardRating.count > 0 && (
+                                <div className="flex items-center gap-1">
+                                    <svg viewBox="0 0 24 24" width="14" height="14" fill="#facc15" aria-hidden="true"><path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/></svg>
+                                    <span>{Number(cardRating.average || 0).toFixed(1)}</span>
                                 </div>
                             )}
+                            <span>{likes} likes</span>
+                            <span>{humanSaved(recipe.created_at)}</span>
                         </div>
-                    </>
-                );
-            default:
-                return null;
+                    </div>
+                </div>
+            );
         }
+
+        // Grid view - both minimal and detailed
+        const { ownerDisplayName, linkTarget } = getOwnerDisplay();
+        
+        return (
+            <>
+                {/* Image with rating badge */}
+                <div className="relative w-full aspect-square group-hover:scale-105 transition-transform duration-300">
+                    <img 
+                        src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
+                        alt={title} 
+                        className="w-full h-full object-cover rounded-t-2xl aspect-square" 
+                        loading="lazy"
+                        onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
+                    />
+                    
+                    {/* Rating badge */}
+                    {cardRating.count > 0 && (
+                        <div className="absolute top-3 left-3">
+                            <div className="flex items-center bg-white/95 rounded-full px-2 py-1 text-xs shadow-lg">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="#facc15" aria-hidden="true" className="mr-1">
+                                    <path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/>
+                                </svg>
+                                <span className="text-gray-800 font-semibold">{Number(cardRating.average || 0).toFixed(1)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Likes badge - visible by default, hidden on hover */}
+                    {likes > 0 && (
+                        <div className="absolute top-3 right-3 group-hover:opacity-0 transition-opacity duration-200">
+                            <div className="flex items-center bg-white/95 rounded-full px-2 py-1 text-xs shadow-lg">
+                                <svg viewBox="0 0 24 24" width="12" height="12" fill="#ef4444" aria-hidden="true" className="mr-1">
+                                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                </svg>
+                                <span className="text-gray-800 font-semibold">{likes}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action buttons */}
+                    <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                        <button 
+                            onClick={(e) => { e.stopPropagation(); onAddToCollection(recipe); }}
+                            className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors"
+                            title="Add to collection"
+                        >
+                            <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                        </button>
+                        <button 
+                            onClick={handleLikeClick}
+                            className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors"
+                            title={likedByMe ? 'Unlike recipe' : 'Like recipe'}
+                        >
+                            <svg className={`w-4 h-4 ${likedByMe ? 'text-red-500 fill-current' : 'text-gray-700'}`} fill={likedByMe ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Content */}
+                <div className={`${padding} flex flex-col flex-1`}>
+                    {/* Title */}
+                    <h2 
+                        className={`font-semibold ${titleSize} text-gray-800 truncate mb-2`}
+                        title={title}
+                    >
+                        {title}
+                    </h2>
+                    
+                    {/* Tags - always visible */}
+                    {chips.length > 0 && (
+                        <div className="mb-3">
+                            <TagList 
+                                tags={chips}
+                                maxVisible={3}
+                                onFilterByChip={onFilterByChip}
+                            />
+                        </div>
+                    )}
+
+                    {/* Detailed mode content */}
+                    {!isMinimal && (
+                        <>
+                            {/* Description */}
+                            {description && (
+                                <p className={`${descriptionSize} text-gray-600 line-clamp-2 mb-3`}>{description}</p>
+                            )}
+                            
+                            {/* Metadata */}
+                            <div className="mt-auto space-y-2">
+                                <div className="flex items-center justify-between text-xs text-gray-500">
+                                    <span>By <Link to={linkTarget} className="font-semibold text-gray-700 underline-offset-2 hover:underline">{ownerDisplayName}</Link></span>
+                                    <span>{humanSaved(recipe.created_at)}</span>
+                                </div>
+                                
+
+                            </div>
+                        </>
+                    )}
+                </div>
+            </>
+        );
     };
 
     return (
         <div 
-            className="group relative bg-white rounded-lg shadow-lg overflow-hidden cursor-pointer hover:shadow-2xl transition-shadow duration-300 flex flex-col" 
+            className="group relative bg-white rounded-2xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 flex flex-col h-full" 
             onClick={onClick}
         >
-            {/* Hover delete icon */}
-            <button
-              className="absolute top-3 right-3 z-10 hidden group-hover:flex items-center justify-center w-9 h-9 rounded-full bg-white/90 shadow ring-1 ring-gray-200 hover:bg-red-50"
-              title="Delete"
-              onClick={(e) => { e.stopPropagation(); onDelete?.(recipe); }}
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="#ef4444"><path d="M6 7h12l-1 14H7L6 7zm3-3h6l1 2H8l1-2z"/></svg>
-            </button>
-            {/* Chips moved to bottom section above description */}
+
+            
             {renderContent()}
-            <div className="px-5 pb-5 mt-auto">
-                <div className="flex items-center justify-between text-xs pt-4 border-t border-gray-100">
-                    <span className="text-gray-400">{humanSaved(recipe.created_at)}</span>
-                    <button className="text-[#e87b35] font-medium hover:underline" onClick={(e)=>{ e.stopPropagation(); if (typeof onAddToCollection === 'function') onAddToCollection(recipe); }}>
-                        + Add to Collection
-                    </button>
-                </div>
-            </div>
         </div>
     );
 };
@@ -612,32 +662,8 @@ const MyRecipes = () => {
     // Always reset any residual filter on mount to avoid showing a single filtered recipe
     useEffect(() => { setTagFilter(null); }, []);
     
-    // Dropdown states
-    const [viewMode, setViewMode] = useState('title_image_description');
-    const [layoutMode, setLayoutMode] = useState('grid_3');
-    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [isLayoutDropdownOpen, setIsLayoutDropdownOpen] = useState(false);
-
-    // Enforce valid combinations: List layout only supports Title only view
-    useEffect(() => {
-        if (layoutMode === 'list' && viewMode !== 'title_only') {
-            setViewMode('title_only');
-        }
-    }, [layoutMode]);
-
-    // Dropdown options
-    const viewOptions = [
-        { value: 'title_only', label: 'Title only' },
-        { value: 'title_image', label: 'Title + image' },
-        { value: 'title_image_description', label: 'Title + image + description' },
-        { value: 'title_image_ingredients', label: 'Title + image + ingredients' }
-    ];
-
-    const layoutOptions = [
-        { value: 'grid_2', label: 'Columns (2 per row)' },
-        { value: 'grid_3', label: 'Columns (3 per row)' },
-        { value: 'list', label: 'List (title only)' }
-    ];
+    // Recipe list settings
+    const { view, density, sort, updateView, updateDensity, updateSort } = useRecipeListSettings();
 
     useEffect(() => {
         const fetchRecipes = async () => {
@@ -687,16 +713,13 @@ const MyRecipes = () => {
     }, [location.search, recipes, navigate]);
 
     const getGridClasses = () => {
-        switch (layoutMode) {
-            case 'grid_2':
-                return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-2';
-            case 'grid_3':
-                return 'grid-cols-1 md:grid-cols-3';
-            case 'list':
-                return 'grid-cols-1';
-            default:
-                return 'grid-cols-1 md:grid-cols-3';
+        if (view === 'list') {
+            return 'grid-cols-1';
         }
+        
+        // Grid view med densitet
+        const gap = density === 'minimal' ? 'gap-4' : 'gap-6';
+        return `grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 ${gap}`;
     };
 
     // Collection picker state
@@ -714,24 +737,48 @@ const MyRecipes = () => {
     };
     useEffect(() => { if (showPicker) openPicker(); }, [showPicker]);
 
+    const normalize = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '-');
+    
+    // Sortera recept baserat på vald sortering
+    const visibleRecipes = React.useMemo(() => {
+        let filtered = recipes;
+        
+        // Filtrera baserat på tagFilter
+        if (tagFilter) {
+            const needle = normalize(tagFilter);
+            filtered = (recipes || []).filter((r) => {
+                const rc = (r.recipe_content || {});
+                const conv = rc.conversion || {};
+                if (needle === 'variant' && conv.isVariant) return true;
+                const presets = ((conv.constraints || {}).presets || []).map(normalize);
+                if (presets.includes(needle)) return true;
+                const appr = ((r.tags || {}).approved || []).map(t => normalize(t.keyword));
+                if (appr.includes(needle)) return true;
+                return false;
+            });
+        }
+
+        // Sortera baserat på vald sortering
+        return [...filtered].sort((a, b) => {
+            switch (sort) {
+                case 'likes':
+                    return (b.likes_count || 0) - (a.likes_count || 0);
+                case 'newest':
+                    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+                case 'rating':
+                    return (b.rating || 0) - (a.rating || 0);
+                case 'cooked':
+                    return (b.cooked_count || 0) - (a.cooked_count || 0);
+                case 'alphabetical':
+                    return (a.recipe_content?.title || '').localeCompare(b.recipe_content?.title || '');
+                default:
+                    return 0;
+            }
+        });
+    }, [recipes, tagFilter, sort]);
+
     if (loading) return <div className="text-center p-8">Loading recipes...</div>;
     if (error) return <div className="text-center p-8 text-red-500">Error: {error}</div>;
-
-    const normalize = (s) => String(s || '').trim().toLowerCase().replace(/\s+/g, '-');
-    const visibleRecipes = (() => {
-        if (!tagFilter) return recipes;
-        const needle = normalize(tagFilter);
-        return (recipes || []).filter((r) => {
-            const rc = (r.recipe_content || {});
-            const conv = rc.conversion || {};
-            if (needle === 'variant' && conv.isVariant) return true;
-            const presets = ((conv.constraints || {}).presets || []).map(normalize);
-            if (presets.includes(needle)) return true;
-            const appr = ((r.tags || {}).approved || []).map(t => normalize(t.keyword));
-            if (appr.includes(needle)) return true;
-            return false;
-        });
-    })();
 
     // helper: human friendly saved time
     const humanSaved = (dateStr) => {
@@ -746,39 +793,19 @@ const MyRecipes = () => {
     };
 
     return (
-        <div className="container mx-auto p-8">
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-8 gap-4">
-                <h1 className="text-4xl font-bold text-gray-800">My Saved Recipes</h1>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div>
+                <h1 className="text-4xl font-bold text-gray-800 mb-6">My Recipes</h1>
                 
-                {/* Dropdown Controls */}
-                <div className="flex flex-col sm:flex-row gap-4 self-start sm:self-auto">
-                    {/* View Mode Dropdown */}
-                    <div className="w-full sm:w-64">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">View Mode</label>
-                        <Dropdown
-                            label="Select view mode"
-                            value={viewMode}
-                            options={viewOptions}
-                            onChange={setViewMode}
-                            isOpen={isDropdownOpen}
-                            onToggle={() => setIsDropdownOpen(!isDropdownOpen)}
-                            isOptionDisabled={(opt) => layoutMode === 'list' && opt.value !== 'title_only'}
-                        />
-                    </div>
-                    
-                    {/* Layout Mode Dropdown */}
-                    <div className="w-full sm:w-64">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Layout Mode</label>
-                        <Dropdown
-                            label="Select layout mode"
-                            value={layoutMode}
-                            options={layoutOptions}
-                            onChange={setLayoutMode}
-                            isOpen={isLayoutDropdownOpen}
-                            onToggle={() => setIsLayoutDropdownOpen(!isLayoutDropdownOpen)}
-                        />
-                    </div>
-                </div>
+                {/* Recipe List Toolbar */}
+                <RecipeListToolbar
+                    view={view}
+                    density={density}
+                    sort={sort}
+                    onViewChange={updateView}
+                    onDensityChange={updateDensity}
+                    onSortChange={updateSort}
+                />
             </div>
             {tagFilter && (
                 <div className="mb-6 flex items-center justify-between bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-lg">
@@ -794,12 +821,13 @@ const MyRecipes = () => {
                      <p className="text-gray-500">Start by generating and saving your first recipe!</p>
                 </div>
             ) : (
-                <div className={`grid ${getGridClasses()} gap-8`}>
+                <div className={`grid ${getGridClasses()}`}>
                     {visibleRecipes.map(recipe => (
                         <div key={recipe.id} className={justInsertedId === String(recipe.id) ? 'animate-slide-in-top' : ''}>
                           <RecipeCard
                               recipe={recipe}
-                              viewMode={viewMode}
+                              viewMode={view === 'list' ? 'title_only' : 'title_image_description'}
+                              density={density}
                               onFilterByChip={(label)=> setTagFilter(label)}
                               currentUser={currentUser}
                               onClick={() => {
@@ -826,7 +854,7 @@ const MyRecipes = () => {
                         setShowPicker(false);
                       }}>
                         <div className="flex items-center gap-3">
-                          <img src={(c.image_url && (c.image_url.startsWith('http') ? c.image_url : `${STATIC_BASE}${c.image_url}`)) || 'https://placehold.co/80x60?text=+'} alt="thumb" className="w-16 h-12 object-cover rounded" onError={(e)=>{ e.currentTarget.src='https://placehold.co/80x60?text=+'; }} />
+                          <img src={(c.image_url && (c.image_url.startsWith('http') ? c.image_url : `${STATIC_BASE}${c.image_url}`)) || 'https://placehold.co/80x60?text=+'} alt="thumb" className="w-16 h-12 object-cover rounded aspect-square" onError={(e)=>{ e.currentTarget.src='https://placehold.co/80x60?text=+'; }} />
                           <div>
                             <div className="font-semibold">{c.title}</div>
                             <div className="text-xs text-gray-500">{c.recipes_count} recept</div>

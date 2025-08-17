@@ -40,6 +40,13 @@ class SavedRecipe(BaseModel):
     recipe_content: RecipeContent
     # Include tags summary so cards can render chips without extra requests
     tags: Optional[dict] = None
+    rating_average: Optional[float] = 0.0
+    rating_count: Optional[int] = 0
+    likes_count: Optional[int] = 0
+    liked_by_me: Optional[bool] = False
+    # User data for display
+    owner_username: Optional[str] = None
+    owner_full_name: Optional[str] = None
 
 class Collection(BaseModel):
     id: int
