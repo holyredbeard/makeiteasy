@@ -25,6 +25,7 @@ from logic.video_processing import (
     extract_and_save_frames,
     analyze_frames_with_blip
 )
+from logic.nutrition_calculator import NutritionCalculator
 from backend.transcribe.faster_whisper_engine import transcribe_audio_stream
 from logic.recipe_parser import analyze_video_content
 from logic.pdf_generator import generate_pdf
@@ -2307,35 +2308,14 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
 async def calculate_nutrition(request: NutritionCalcRequest):
     """Calculate nutrition from ingredients using USDA database"""
     try:
-        # For now, return placeholder data
-        # TODO: Implement full USDA pipeline
-        placeholder_nutrition = {
-            "perServing": {
-                "calories": 250,
-                "protein": 12.5,
-                "fat": 8.0,
-                "carbs": 35.0,
-                "saturatedFat": 2.5,
-                "sugar": 5.0,
-                "fiber": 3.0,
-                "sodium": 400,
-                "cholesterol": 25
-            },
-            "total": {
-                "calories": 250 * request.servings,
-                "protein": 12.5 * request.servings,
-                "fat": 8.0 * request.servings,
-                "carbs": 35.0 * request.servings,
-                "saturatedFat": 2.5 * request.servings,
-                "sugar": 5.0 * request.servings,
-                "fiber": 3.0 * request.servings,
-                "sodium": 400 * request.servings,
-                "cholesterol": 25 * request.servings
-            },
-            "needsReview": []
-        }
+        logging.info(f"Nutrition endpoint called with {len(request.ingredients)} ingredients, {request.servings} servings")
         
-        return NutritionResult(**placeholder_nutrition)
+        # Use real USDA integration
+        calculator = NutritionCalculator()
+        result = await calculator.calculate_nutrition(request.ingredients, request.servings)
+        
+        logging.info(f"Nutrition calculation completed: {result}")
+        return NutritionResult(**result)
         
     except Exception as e:
         logging.error(f"Nutrition calculation failed: {str(e)}")

@@ -437,12 +437,7 @@ export default function RecipeView({
     }
   }, [originalServings, recipeId]);
 
-  // Fetch nutrition data when component mounts or servings change
-  useEffect(() => {
-    if (currentServings && ingredients.length > 0) {
-      fetchNutritionData(currentServings);
-    }
-  }, [currentServings, ingredients, edited?.ingredients]);
+
 
   const setCurrentServingsAndSave = (servings) => {
     setCurrentServings(servings);
@@ -603,6 +598,7 @@ export default function RecipeView({
       setNutritionError(null);
       
       const ingredientsToUse = edited?.ingredients || ingredients;
+      
       const ingredientsForAPI = ingredientsToUse.map(ing => {
         if (typeof ing === 'string') {
           return { raw: ing };
@@ -611,17 +607,19 @@ export default function RecipeView({
         }
       });
 
+      const requestBody = {
+        recipeId: recipeId ? String(recipeId) : 'unknown',
+        servings: servings,
+        ingredients: ingredientsForAPI
+      };
+
       const response = await fetch(`${API_BASE}/nutrition/calc`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
-        body: JSON.stringify({
-          recipeId: recipeId,
-          servings: servings,
-          ingredients: ingredientsForAPI
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
@@ -644,6 +642,13 @@ export default function RecipeView({
   const description = content.description || '';
   const ingredients = Array.isArray(content.ingredients) ? content.ingredients : [];
   const instructions = Array.isArray(content.instructions) ? content.instructions : [];
+
+  // Fetch nutrition data when component mounts or servings change
+  useEffect(() => {
+    if (currentServings && ingredients.length > 0 && recipeId) {
+      fetchNutritionData(currentServings);
+    }
+  }, [currentServings, ingredients, edited?.ingredients, recipeId]);
   const ingredientsToRender = useMemo(() => {
     const ingredientsToUse = edited?.ingredients || ingredients;
     const baseIngredients = variant === 'modal' ? ingredientsToUse.slice(0, 8) : ingredientsToUse;

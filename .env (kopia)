@@ -14,6 +14,7 @@ GOOGLE_REDIRECT_URI=http://localhost:3000
 
 # API Keys
 DEEPSEEK_API_KEY=sk-a534e76cdc8242eca2adb8af2d0ff78e
+FDC_API_KEY=DEMO_KEY
 
 # Server Configuration
 HOST=127.0.0.1
