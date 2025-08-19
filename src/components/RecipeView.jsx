@@ -413,6 +413,120 @@ export default function RecipeView({
   }, [recipeId]);
 
   const content = useMemo(() => overrideRecipe || recipe || {}, [recipe, overrideRecipe]);
+  
+  // Servings calculator state
+  const [currentServings, setCurrentServings] = useState(() => {
+    const saved = localStorage.getItem(`recipe:${recipeId}:servings`);
+    return saved ? parseInt(saved, 10) : (content.servings || content.serves || 4);
+  });
+  const originalServings = useMemo(() => content.servings || content.serves || 4, [content.servings, content.serves]);
+  const servingsFactor = useMemo(() => currentServings / originalServings, [currentServings, originalServings]);
+
+  // Update currentServings when recipe changes
+  useEffect(() => {
+    const saved = localStorage.getItem(`recipe:${recipeId}:servings`);
+    if (!saved) {
+      // Reset to original servings when recipe changes (only if no saved preference)
+      setCurrentServingsAndSave(originalServings);
+    }
+  }, [originalServings, recipeId]);
+
+  const setCurrentServingsAndSave = (servings) => {
+    setCurrentServings(servings);
+    localStorage.setItem(`recipe:${recipeId}:servings`, servings.toString());
+  };
+
+  // Servings calculator helper functions
+  const shouldNotScale = (text) => {
+    const lower = text.toLowerCase();
+    return lower.includes('to taste') || lower.includes('pinch') || lower.includes('dash') || 
+           lower.includes('valfritt') || lower.includes('efter smak');
+  };
+
+  const isDiscrete = (text) => {
+    if (!text) return false;
+    const lower = text.toLowerCase();
+    return lower.includes('ägg') || lower.includes('egg') || lower.includes('klyfta') || 
+           lower.includes('clove') || lower.includes('st') || lower.includes('piece');
+  };
+
+  const scaleQuantity = (quantity, factor) => {
+    if (!quantity || shouldNotScale(quantity)) return quantity;
+    
+    // Parse quantity and scale
+    const scaled = parseFloat(quantity) * factor;
+    
+    return scaled;
+  };
+
+  const formatQuantity = (quantity) => {
+    if (typeof quantity === 'string') return quantity;
+    if (quantity === 0.25) return '¼';
+    if (quantity === 0.5) return '½';
+    if (quantity === 0.75) return '¾';
+    if (quantity === 0.33) return '⅓';
+    if (quantity === 0.67) return '⅔';
+    return quantity.toString();
+  };
+
+  const getScaledIngredients = () => {
+    const ingredientsToUse = edited?.ingredients || ingredients;
+    return ingredientsToUse.map(ing => {
+      if (typeof ing === 'string') {
+        const { quantity, name } = splitQuantityFromText(ing);
+        if (shouldNotScale(quantity) || shouldNotScale(name)) {
+          return ing; // Don't scale "to taste" etc.
+        }
+        const scaledQuantity = scaleQuantity(quantity, servingsFactor);
+        
+        // Handle discrete ingredients
+        if (isDiscrete(name)) {
+          if (scaledQuantity < 0.5) return 'valfritt';
+          const rounded = Math.round(scaledQuantity * 2) / 2;
+          return `${formatQuantity(rounded)} ${name}`.trim();
+        }
+        
+        return `${formatQuantity(scaledQuantity)} ${name}`.trim();
+      } else {
+        const scaledQuantity = scaleQuantity(ing.quantity, servingsFactor);
+        
+        // Handle discrete ingredients
+        if (isDiscrete(ing.name)) {
+          if (scaledQuantity < 0.5) return { ...ing, quantity: 'valfritt' };
+          const rounded = Math.round(scaledQuantity * 2) / 2;
+          return { ...ing, quantity: formatQuantity(rounded) };
+        }
+        
+        return {
+          ...ing,
+          quantity: formatQuantity(scaledQuantity)
+        };
+      }
+    });
+  };
+
+  const getScaledNutrition = useMemo(() => {
+    const nutrition = content.nutritional_information || content.nutrition || content.nutritionPerServing || {};
+    const totalNutrition = {
+      calories: (nutrition.calories || 0) * originalServings,
+      protein: (nutrition.protein || 0) * originalServings,
+      carbs: (nutrition.carbs || nutrition.carbohydrates || 0) * originalServings,
+      fat: (nutrition.fat || 0) * originalServings,
+      sodium: (nutrition.sodium || 0) * originalServings
+    };
+    
+    return {
+      perServing: {
+        calories: Math.round(totalNutrition.calories / currentServings),
+        protein: Math.round(totalNutrition.protein / currentServings),
+        carbs: Math.round(totalNutrition.carbs / currentServings),
+        fat: Math.round(totalNutrition.fat / currentServings),
+        sodium: Math.round(totalNutrition.sodium / currentServings)
+      },
+      total: totalNutrition
+    };
+  }, [content.nutritional_information, content.nutrition, content.nutritionPerServing, originalServings, currentServings]);
+
   const title = content.title || '';
   const image = content.image_url || content.thumbnail_path || content.img || null;
   const description = content.description || '';
@@ -420,8 +534,42 @@ export default function RecipeView({
   const instructions = Array.isArray(content.instructions) ? content.instructions : [];
   const ingredientsToRender = useMemo(() => {
     const ingredientsToUse = edited?.ingredients || ingredients;
-    return variant === 'modal' ? ingredientsToUse.slice(0, 8) : ingredientsToUse;
-  }, [variant, ingredients, edited?.ingredients]);
+    const baseIngredients = variant === 'modal' ? ingredientsToUse.slice(0, 8) : ingredientsToUse;
+    
+    // Apply servings scaling
+    return baseIngredients.map(ing => {
+      if (typeof ing === 'string') {
+        const { quantity, name } = splitQuantityFromText(ing);
+        if (shouldNotScale(quantity) || shouldNotScale(name)) {
+          return ing; // Don't scale "to taste" etc.
+        }
+        const scaledQuantity = scaleQuantity(quantity, servingsFactor);
+        
+        // Handle discrete ingredients
+        if (isDiscrete(name)) {
+          if (scaledQuantity < 0.5) return 'valfritt';
+          const rounded = Math.round(scaledQuantity * 2) / 2;
+          return `${formatQuantity(rounded)} ${name}`.trim();
+        }
+        
+        return `${formatQuantity(scaledQuantity)} ${name}`.trim();
+      } else {
+        const scaledQuantity = scaleQuantity(ing.quantity, servingsFactor);
+        
+        // Handle discrete ingredients
+        if (isDiscrete(ing.name)) {
+          if (scaledQuantity < 0.5) return { ...ing, quantity: 'valfritt' };
+          const rounded = Math.round(scaledQuantity * 2) / 2;
+          return { ...ing, quantity: formatQuantity(rounded) };
+        }
+        
+        return {
+          ...ing,
+          quantity: formatQuantity(scaledQuantity)
+        };
+      }
+    });
+  }, [variant, ingredients, edited?.ingredients, servingsFactor]);
   const instructionsToRender = useMemo(() => {
     const instructionsToUse = edited?.instructions || instructions;
     return variant === 'modal' ? instructionsToUse.slice(0, 3) : instructionsToUse;
@@ -799,6 +947,8 @@ export default function RecipeView({
       return newSet;
     });
   };
+
+
 
   const addToShoppingList = () => {
     const ingredientsToAdd = selectedIngredients.size > 0 
@@ -1279,7 +1429,7 @@ export default function RecipeView({
                     <textarea
                       value={edited?.description || ''}
                       onChange={(e)=>setEdited(v=>({...(v||{}), description: e.target.value}))}
-                      className="w-full min-h-[120px] text-base leading-relaxed border-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-lg p-3 resize-y"
+                      className="w-full min-h-[120px] text-base leading-relaxed border-0 focus:outline-none rounded-lg p-3 resize-y"
                       placeholder="Describe your recipe..."
                       aria-label="Recipe description"
                       onBlur={() => setActiveEditField(null)}
@@ -1300,9 +1450,18 @@ export default function RecipeView({
               <div className="flex items-center gap-3 md:gap-4 flex-wrap gap-y-2">
                 {/* Servings */}
                 {(content.servings || content.serves) && (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)]">
+                  <div className="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)]">
                     <i className="fa-solid fa-utensils text-[#cc7c2e]"></i>
-                    <span className="text-gray-700">{content.servings || content.serves} servings</span>
+                    <select 
+                      value={currentServings}
+                      onChange={(e) => setCurrentServingsAndSave(parseInt(e.target.value, 10))}
+                      className="text-gray-700 bg-transparent border-none outline-none cursor-pointer pr-0 w-auto"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                        <option key={num} value={num}>{num}</option>
+                      ))}
+                    </select>
+                    <span className="text-gray-700">servings</span>
                   </div>
                 )}
                 
@@ -1370,7 +1529,7 @@ export default function RecipeView({
               
               {/* Action Buttons */}
               <div className="flex items-center gap-2 flex-wrap">
-                <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
+                <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#7ab87a] text-white hover:bg-[#659a63] transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}`}>
                   <i className="fa-solid fa-download"></i>
                   <span>Download</span>
                 </button>
@@ -1467,7 +1626,7 @@ export default function RecipeView({
                   <textarea
                         value={edited?.description || ''}
                         onChange={(e)=>setEdited(v=>({...(v||{}), description: e.target.value}))}
-                        className="w-full min-h-[120px] text-base leading-relaxed border-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-lg p-3 resize-y"
+                        className="w-full min-h-[120px] text-base leading-relaxed border-0 focus:outline-none rounded-lg p-3 resize-y"
                         placeholder="Describe your recipe..."
                         aria-label="Recipe description"
                     onBlur={() => setActiveEditField(null)}
@@ -1488,9 +1647,18 @@ export default function RecipeView({
                 <div className="flex items-center gap-3 md:gap-4 flex-wrap gap-y-2">
                                     {/* Servings */}
                   {(content.servings || content.serves) && (
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)]">
+                    <div className="inline-flex items-center gap-1 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)]">
                       <i className="fa-solid fa-utensils text-[#cc7c2e]"></i>
-                      <span className="text-gray-700">{content.servings || content.serves} servings</span>
+                      <select 
+                        value={currentServings}
+                        onChange={(e) => setCurrentServingsAndSave(parseInt(e.target.value, 10))}
+                        className="text-gray-700 bg-transparent border-none outline-none cursor-pointer pr-0 w-auto"
+                      >
+                        {Array.from({ length: 12 }, (_, i) => i + 1).map(num => (
+                          <option key={num} value={num}>{num}</option>
+                        ))}
+                      </select>
+                      <span className="text-gray-700">servings</span>
                     </div>
                   )}
                   
@@ -1558,7 +1726,7 @@ export default function RecipeView({
                 
                                 {/* Action Buttons */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
+                  <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#7ab87a] text-white hover:bg-[#659a63] transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     <i className="fa-solid fa-download"></i>
                     <span>Download</span>
                   </button>
@@ -1985,27 +2153,35 @@ export default function RecipeView({
               <RecipeSection id="nutrition" title={
                 <span>
                   <i className="fa-solid fa-fire mr-2"></i>
-                  Nutrition Information (per serving)
+                  Nutrition Information
                 </span>
               } className="bg-white">
+        <div className="mb-4">
+          <div className="text-sm text-gray-600 mb-2">
+            Per serving ({currentServings} servings) • Total batch
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-2 mb-2 mt-6">
           {[
             {k:'calories', l:'Calories', icon:'fa-fire', bgColor:'bg-blue-50', iconColor:'text-blue-600'},
             {k:'protein',l:'Protein', icon:'fa-egg', bgColor:'bg-green-50', iconColor:'text-green-600'},
             {k:'fat',l:'Fat', icon:'fa-bacon', bgColor:'bg-orange-50', iconColor:'text-orange-600'},
             {k:'carbs',l:'Carbs', icon:'fa-bread-slice', bgColor:'bg-amber-50', iconColor:'text-amber-600'}
-          ].map(({k,l,icon,bgColor,iconColor}) => (
-            <div key={k} className={`inline-flex items-center gap-2 ${bgColor} text-gray-800 rounded-full px-3 py-1 border border-gray-200 shadow-[2px_2px_0_rgb(204_124_46_/_10%)]`}>
-              <i className={`fa-solid ${icon} text-sm ${iconColor}`}></i>
-              <span className="text-sm text-gray-600">{l}</span>
-              <span className="text-sm font-medium">{(() => {
-                const val = resolveNutritionValue(nutrition, k);
-                if (val === 0 || val === '0' || val === 0.0) return ['protein','fat','carbs'].includes(k) ? '0g' : '0';
-                const formatted = (val !== undefined && val !== null && String(val).trim() !== '') ? formatNutritionValue(k, val) : '—';
-                return k === 'calories' ? `${formatted} kcal` : formatted;
-              })()}</span>
-            </div>
-          ))}
+          ].map(({k,l,icon,bgColor,iconColor}) => {
+            const perServing = getScaledNutrition.perServing[k];
+            const total = getScaledNutrition.total[k];
+            
+            return (
+              <div key={k} className={`inline-flex items-center gap-2 ${bgColor} text-gray-800 rounded-full px-3 py-1 border border-gray-200 shadow-[2px_2px_0_rgb(204_124_46_/_10%)]`}>
+                <i className={`fa-solid ${icon} text-sm ${iconColor}`}></i>
+                <span className="text-sm text-gray-600">{l}</span>
+                <div className="text-sm font-medium">
+                  <div>{perServing || '—'}{k === 'calories' ? ' kcal' : 'g'}</div>
+                  <div className="text-xs text-gray-500">({total || '—'}{k === 'calories' ? ' kcal' : 'g'} total)</div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </RecipeSection>
       )}
@@ -2060,7 +2236,7 @@ export default function RecipeView({
           <i className="fa-solid fa-comment mr-2"></i>
           Comments
         </span>
-      } className="mt-8 bg-white">
+      } className="mt-8 bg-white hover:shadow-[6px_6px_0_rgb(204_124_46_/_15%)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
             <div className="bg-gray-50 rounded-lg p-4">
               <textarea value={commentInput} onChange={(e)=>setCommentInput(e.target.value)} rows={3} className="w-full bg-white px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Write a comment..." />
               <div className="flex justify-end mt-2">
@@ -2190,7 +2366,7 @@ export default function RecipeView({
             )}
           </div>
           <div className="flex flex-wrap justify-end gap-3">
-                            <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
+                            <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#7ab87a] text-white hover:bg-[#659a63] transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <i className="fa-solid fa-download"></i>
               <span>Download</span>
             </button>
