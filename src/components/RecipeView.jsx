@@ -202,8 +202,11 @@ export default function RecipeView({
   const [keyboardFocusedItem, setKeyboardFocusedItem] = useState(null); // { type: 'ingredients'|'instructions', index: number }
   const hoverTimeoutRef = useRef(null);
   const [showTimePopover, setShowTimePopover] = useState(false);
+  const [showNutritionDetails, setShowNutritionDetails] = useState(false);
+  const [highlightedNutritionRow, setHighlightedNutritionRow] = useState(null);
   const timePopoverRef = useRef(null);
   const titleInputRef = useRef(null);
+  const nutritionTableRef = useRef(null);
 
   const moveArrayItem = (array, fromIndex, toIndex) => {
     const list = Array.isArray(array) ? [...array] : [];
@@ -512,7 +515,11 @@ export default function RecipeView({
       protein: (nutrition.protein || 0) * originalServings,
       carbs: (nutrition.carbs || nutrition.carbohydrates || 0) * originalServings,
       fat: (nutrition.fat || 0) * originalServings,
-      sodium: (nutrition.sodium || 0) * originalServings
+      sodium: (nutrition.sodium || 0) * originalServings,
+      saturatedFat: (nutrition.saturated_fat || nutrition.saturatedFat || 0) * originalServings,
+      sugar: (nutrition.sugar || 0) * originalServings,
+      fiber: (nutrition.fiber || nutrition.fibre || 0) * originalServings,
+      cholesterol: (nutrition.cholesterol || 0) * originalServings
     };
     
     return {
@@ -521,11 +528,54 @@ export default function RecipeView({
         protein: Math.round(totalNutrition.protein / currentServings),
         carbs: Math.round(totalNutrition.carbs / currentServings),
         fat: Math.round(totalNutrition.fat / currentServings),
-        sodium: Math.round(totalNutrition.sodium / currentServings)
+        sodium: Math.round(totalNutrition.sodium / currentServings),
+        saturatedFat: Math.round(totalNutrition.saturatedFat / currentServings),
+        sugar: Math.round(totalNutrition.sugar / currentServings),
+        fiber: Math.round(totalNutrition.fiber / currentServings),
+        cholesterol: Math.round(totalNutrition.cholesterol / currentServings)
       },
       total: totalNutrition
     };
   }, [content.nutritional_information, content.nutrition, content.nutritionPerServing, originalServings, currentServings]);
+
+  // Nutrition detail functions
+  const handleNutritionChipClick = (nutritionKey) => {
+    if (!showNutritionDetails) {
+      setShowNutritionDetails(true);
+    }
+    
+    // Highlight the corresponding row
+    setHighlightedNutritionRow(nutritionKey);
+    
+    // Clear highlight after 1.5 seconds
+    setTimeout(() => setHighlightedNutritionRow(null), 1500);
+    
+    // Scroll to the nutrition table
+    if (nutritionTableRef.current) {
+      nutritionTableRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  const getNutritionRDI = (nutrient, value) => {
+    if (!value) return null;
+    
+    const rdiValues = {
+      calories: 2000,
+      protein: 50,
+      fat: 70,
+      saturatedFat: 20,
+      carbs: 260,
+      sugar: 90,
+      fiber: 25,
+      sodium: 2300,
+      cholesterol: 300
+    };
+    
+    const rdi = rdiValues[nutrient];
+    if (!rdi) return null;
+    
+    return Math.round((value / rdi) * 100);
+  };
 
   const title = content.title || '';
   const image = content.image_url || content.thumbnail_path || content.img || null;
@@ -2156,33 +2206,181 @@ export default function RecipeView({
                   Nutrition Information
                 </span>
               } className="bg-white">
-        <div className="mb-4">
-          <div className="text-sm text-gray-600 mb-2">
-            Per serving ({currentServings} servings) • Total batch
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 mb-2 mt-6">
+        {/* Nutrition Chips */}
+        <div className="flex flex-wrap items-center gap-3 mb-4">
           {[
-            {k:'calories', l:'Calories', icon:'fa-fire', bgColor:'bg-blue-50', iconColor:'text-blue-600'},
-            {k:'protein',l:'Protein', icon:'fa-egg', bgColor:'bg-green-50', iconColor:'text-green-600'},
-            {k:'fat',l:'Fat', icon:'fa-bacon', bgColor:'bg-orange-50', iconColor:'text-orange-600'},
-            {k:'carbs',l:'Carbs', icon:'fa-bread-slice', bgColor:'bg-amber-50', iconColor:'text-amber-600'}
-          ].map(({k,l,icon,bgColor,iconColor}) => {
+            {k:'calories', l:'Calories', icon:'fa-fire', bgColor:'bg-blue-50', borderColor:'border-blue-200', iconColor:'text-blue-600'},
+            {k:'protein',l:'Protein', icon:'fa-egg', bgColor:'bg-green-50', borderColor:'border-green-200', iconColor:'text-green-600'},
+            {k:'fat',l:'Fat', icon:'fa-bacon', bgColor:'bg-orange-50', borderColor:'border-orange-200', iconColor:'text-orange-600'},
+            {k:'carbs',l:'Carbs', icon:'fa-bread-slice', bgColor:'bg-amber-50', borderColor:'border-amber-200', iconColor:'text-amber-600'}
+          ].map(({k,l,icon,bgColor,borderColor,iconColor}) => {
             const perServing = getScaledNutrition.perServing[k];
             const total = getScaledNutrition.total[k];
+            const isInteractive = showNutritionDetails;
             
             return (
-              <div key={k} className={`inline-flex items-center gap-2 ${bgColor} text-gray-800 rounded-full px-3 py-1 border border-gray-200 shadow-[2px_2px_0_rgb(204_124_46_/_10%)]`}>
+              <div 
+                key={k}
+                role={isInteractive ? "button" : "text"}
+                tabIndex={isInteractive ? 0 : -1}
+                onClick={isInteractive ? () => handleNutritionChipClick(k) : undefined}
+                onKeyDown={isInteractive ? (e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleNutritionChipClick(k);
+                  }
+                } : undefined}
+                className={`
+                  inline-flex items-center gap-2 px-4 py-2.5 rounded-full border transition-all duration-200
+                  ${bgColor} ${borderColor}
+                  ${isInteractive 
+                    ? 'cursor-pointer hover:-translate-y-0.5 hover:border-opacity-80 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500' 
+                    : 'cursor-default'
+                  }
+                `}
+              >
                 <i className={`fa-solid ${icon} text-sm ${iconColor}`}></i>
-                <span className="text-sm text-gray-600">{l}</span>
-                <div className="text-sm font-medium">
-                  <div>{perServing || '—'}{k === 'calories' ? ' kcal' : 'g'}</div>
-                  <div className="text-xs text-gray-500">({total || '—'}{k === 'calories' ? ' kcal' : 'g'} total)</div>
-                </div>
+                                 <div className="flex flex-col">
+                   <div className="text-sm font-semibold text-gray-900">
+                     {perServing || '—'}{k === 'calories' ? ' kcal' : 'g'}
+                   </div>
+                 </div>
+                {isInteractive && (
+                  <i className="fa-solid fa-chevron-right text-xs text-gray-400 ml-1"></i>
+                )}
               </div>
             );
           })}
         </div>
+
+        {/* Show Details Link */}
+        <button
+          onClick={() => setShowNutritionDetails(!showNutritionDetails)}
+          className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors duration-200 mb-4"
+          aria-expanded={showNutritionDetails}
+        >
+          {showNutritionDetails ? 'Dölj detaljer' : 'Visa detaljer'}
+        </button>
+
+        {/* Nutrition Details Table */}
+        {showNutritionDetails && (
+          <div ref={nutritionTableRef} className="mt-4">
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-2 px-3 font-medium text-gray-700">Ämne</th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-700">Per portion</th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-700">%RI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    {key: 'calories', label: 'Energi', unit: 'kcal', showKj: true},
+                    {key: 'protein', label: 'Protein', unit: 'g'},
+                    {key: 'fat', label: 'Fett', unit: 'g'},
+                    {key: 'saturatedFat', label: 'Varav mättat', unit: 'g'},
+                    {key: 'carbs', label: 'Kolhydrater', unit: 'g'},
+                    {key: 'sugar', label: 'Varav socker', unit: 'g'},
+                    {key: 'fiber', label: 'Fibrer', unit: 'g'},
+                    {key: 'sodium', label: 'Salt', unit: 'g', calculated: true},
+                    {key: 'cholesterol', label: 'Kolesterol', unit: 'mg'}
+                  ].map(({key, label, unit, showKj, calculated}) => {
+                    const perServing = getScaledNutrition.perServing[key];
+                    const rdi = getNutritionRDI(key, perServing);
+                    const isHighlighted = highlightedNutritionRow === key;
+                    
+                    // Calculate salt from sodium if needed
+                    let displayValue = perServing;
+                    if (calculated && key === 'sodium' && perServing) {
+                      displayValue = Math.round(perServing * 2.5);
+                    }
+                    
+                    return (
+                      <tr 
+                        key={key}
+                        className={`
+                          border-b border-gray-100 transition-colors duration-300
+                          ${isHighlighted ? 'bg-blue-50' : 'hover:bg-gray-50'}
+                        `}
+                      >
+                        <td className="py-2 px-3 text-gray-900">{label}</td>
+                        <td className="py-2 px-3 text-right text-gray-900">
+                          {displayValue || '—'}
+                          {displayValue && unit}
+                          {showKj && displayValue && (
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({Math.round(displayValue * 4.184)} kJ)
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right text-gray-900">
+                          {rdi ? `${rdi}%` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Stacked View */}
+            <div className="md:hidden space-y-3">
+              {[
+                {key: 'calories', label: 'Energi', unit: 'kcal', showKj: true},
+                {key: 'protein', label: 'Protein', unit: 'g'},
+                {key: 'fat', label: 'Fett', unit: 'g'},
+                {key: 'saturatedFat', label: 'Varav mättat', unit: 'g'},
+                {key: 'carbs', label: 'Kolhydrater', unit: 'g'},
+                {key: 'sugar', label: 'Varav socker', unit: 'g'},
+                {key: 'fiber', label: 'Fibrer', unit: 'g'},
+                {key: 'sodium', label: 'Salt', unit: 'g', calculated: true},
+                {key: 'cholesterol', label: 'Kolesterol', unit: 'mg'}
+              ].map(({key, label, unit, showKj, calculated}) => {
+                const perServing = getScaledNutrition.perServing[key];
+                const rdi = getNutritionRDI(key, perServing);
+                const isHighlighted = highlightedNutritionRow === key;
+                
+                // Calculate salt from sodium if needed
+                let displayValue = perServing;
+                if (calculated && key === 'sodium' && perServing) {
+                  displayValue = Math.round(perServing * 2.5);
+                }
+                
+                return (
+                  <div 
+                    key={key}
+                    className={`
+                      p-3 border border-gray-200 rounded-lg transition-colors duration-300
+                      ${isHighlighted ? 'bg-blue-50 border-blue-300' : 'bg-white hover:bg-gray-50'}
+                    `}
+                  >
+                    <div className="font-medium text-gray-900 mb-1">{label}</div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">
+                        {displayValue || '—'}
+                        {displayValue && unit}
+                        {showKj && displayValue && (
+                          <span className="text-xs text-gray-500 ml-1">
+                            ({Math.round(displayValue * 4.184)} kJ)
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-gray-600">
+                        {rdi ? `${rdi}% RI` : '—'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <p className="text-xs text-gray-500 mt-3">
+              *%RI avser vuxen referensintag. Salt beräknat från natrium ×2,5.
+            </p>
+          </div>
+        )}
       </RecipeSection>
       )}
 
