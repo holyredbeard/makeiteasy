@@ -66,7 +66,7 @@ const RecipeCard = ({ recipe, onClick, isEditMode = false, dragIndex, dropIndex,
   if (isEditMode) {
     return (
       <div
-        className={`relative border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-md hover:shadow-xl ${dragIndex===idx? 'ring-2 ring-amber-400' : ''} cursor-move transition`}
+        className={`relative border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out ${dragIndex===idx? 'ring-2 ring-amber-400' : ''} cursor-move`}
         draggable
         onDragStart={onDragStart}
         onDragOver={onDragOver}
@@ -75,7 +75,7 @@ const RecipeCard = ({ recipe, onClick, isEditMode = false, dragIndex, dropIndex,
       >
         <img src={normalizeUrl(recipe.recipe_content?.image_url) || 'https://placehold.co/800x600?text=No+Image'} alt={recipe.recipe_content?.title} className="w-full h-full object-cover aspect-square" />
         <div className="absolute top-2 left-2 px-2 py-1 rounded bg-black/60 text-white text-xs font-semibold">{idx===0? 'Cover' : `#${idx+1}`}</div>
-        <button className="absolute top-2 right-2 bg-white/95 hover:bg-white text-gray-800 rounded-full w-8 h-8 flex items-center justify-center shadow-lg" title="Remove" onClick={onRemove}>
+        <button className="absolute top-2 right-2 bg-white/95 hover:bg-white text-gray-800 rounded-full w-8 h-8 flex items-center justify-center shadow-lg opacity-90 hover:opacity-100 transition-opacity" title="Remove" onClick={onRemove}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
         </button>
         {dropIndex===idx && dragIndex!==null && dropEdge && (
@@ -95,7 +95,7 @@ const RecipeCard = ({ recipe, onClick, isEditMode = false, dragIndex, dropIndex,
 
   return (
     <div 
-      className="group relative bg-white rounded-lg shadow-lg overflow-hidden cursor-pointer hover:shadow-2xl transition-shadow duration-300 flex flex-col" 
+      className="group relative bg-white rounded-2xl border border-gray-200 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out overflow-hidden cursor-pointer flex flex-col" 
       onClick={onClick}
     >
       {/* Image with overlay */}
@@ -119,7 +119,7 @@ const RecipeCard = ({ recipe, onClick, isEditMode = false, dragIndex, dropIndex,
         {/* Likes chip */}
         <button
           onClick={handleLikeClick}
-          className="absolute top-3 right-3 z-10 rounded-full bg-white/95 text-gray-800 text-xs px-2 py-0.5 flex items-center gap-1 shadow hover:bg-white transition-colors"
+          className="absolute top-3 right-3 z-10 rounded-full bg-white/95 text-gray-800 text-xs px-2 py-0.5 flex items-center gap-1 shadow hover:bg-white transition-colors opacity-90 hover:opacity-100"
           title={likedByMe ? 'Unlike' : 'Like'}
         >
           <HeartIcon className={`w-3.5 h-3.5 ${likedByMe ? 'text-red-500' : 'text-gray-600'}`} />
@@ -580,7 +580,7 @@ useEffect(() => {
             {/* Mobile floating action bar */}
             {openMeta && (
               <div className={`md:hidden fixed bottom-2 inset-x-4 z-40 transition-opacity ${showFab ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                <div className="bg-white/90 backdrop-blur rounded-2xl shadow-lg border border-gray-200 p-2 flex items-center justify-center gap-3">
+                <div className="bg-white/90 backdrop-blur rounded-2xl shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out border border-gray-200 p-2 flex items-center justify-center gap-3">
                   <button
                     onClick={async ()=>{ try{ const r= await fetch(`${API_BASE}/collections/${openMeta.id}/follow`, { method:'POST', credentials:'include' }); const j= await r.json(); if(j.ok){ const list = await (await fetch(`${API_BASE}/collections`, { credentials:'include' })).json(); setCollections(list); const updated = list.find(x=>x.id===openMeta.id); if(updated) setOpenMeta(updated);} } catch{} }}
                     className={`px-3 py-2 rounded-lg text-sm ${openMeta.followed_by_me ? 'bg-gray-200 text-gray-800' : 'bg-blue-600 text-white'}`}
@@ -598,7 +598,7 @@ useEffect(() => {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>setShowModal(false)}>
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6" onClick={(e)=>e.stopPropagation()}>
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out max-w-xl w-full p-6" onClick={(e)=>e.stopPropagation()}>
             <h3 className="text-2xl font-bold mb-4">Create Collection</h3>
             <div className="space-y-4">
               <div>

@@ -535,20 +535,32 @@ class DatabaseManager:
         try:
             with self.get_connection() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT * FROM saved_recipes WHERE id = ?", (recipe_id,))
+                cursor.execute("""
+                    SELECT sr.*, u.username as owner_username, u.full_name as owner_full_name, u.avatar_url as owner_avatar
+                    FROM saved_recipes sr
+                    LEFT JOIN users u ON u.id = sr.user_id
+                    WHERE sr.id = ?
+                """, (recipe_id,))
                 row = cursor.fetchone()
                 if row:
                     try:
                         tags = self.list_recipe_tags(row['id'])
                     except Exception:
                         tags = {"approved": [], "pending": []}
+                    
+                    # Debug: Print the row data
+                    print(f"DEBUG: Recipe {recipe_id} - owner_username: {row['owner_username']}, owner_full_name: {row['owner_full_name']}, owner_avatar: {row['owner_avatar']}")
+                    
                     return SavedRecipe(
                         id=row['id'],
                         user_id=row['user_id'],
                         source_url=row['source_url'],
                         created_at=datetime.fromisoformat(row["created_at"]),
                         recipe_content=RecipeContent.model_validate_json(row['recipe_content']),
-                        tags=tags
+                        tags=tags,
+                        owner_username=row['owner_username'] if row['owner_username'] else None,
+                        owner_full_name=row['owner_full_name'] if row['owner_full_name'] else None,
+                        owner_avatar=row['owner_avatar'] if row['owner_avatar'] else None
                     )
                 return None
         except Exception as e:
@@ -565,7 +577,12 @@ class DatabaseManager:
                     order = "ORDER BY rating_count DESC, rating_average DESC, created_at DESC"
                 else:
                     order = "ORDER BY created_at DESC"
-                cursor.execute(f"SELECT * FROM saved_recipes WHERE user_id = ? {order}", (user_id,))
+                cursor.execute(f"""
+                    SELECT sr.*, u.username as owner_username, u.full_name as owner_full_name, u.avatar_url as owner_avatar
+                    FROM saved_recipes sr
+                    LEFT JOIN users u ON u.id = sr.user_id
+                    WHERE sr.user_id = ? {order}
+                """, (user_id,))
                 rows = cursor.fetchall()
                 recipes = []
                 for row in rows:
@@ -608,7 +625,10 @@ class DatabaseManager:
                             source_url=row['source_url'],
                             created_at=datetime.fromisoformat(row["created_at"]),
                             recipe_content=RecipeContent.model_validate(content_dict),
-                            tags=tags
+                            tags=tags,
+                            owner_username=row['owner_username'] if row['owner_username'] else None,
+                            owner_full_name=row['owner_full_name'] if row['owner_full_name'] else None,
+                            owner_avatar=row['owner_avatar'] if row['owner_avatar'] else None
                         )
                     )
 
@@ -627,7 +647,12 @@ class DatabaseManager:
                     order = "ORDER BY rating_count DESC, rating_average DESC, created_at DESC"
                 else:
                     order = "ORDER BY created_at DESC"
-                cursor.execute(f"SELECT * FROM saved_recipes {order}")
+                cursor.execute(f"""
+                    SELECT sr.*, u.username as owner_username, u.full_name as owner_full_name, u.avatar_url as owner_avatar
+                    FROM saved_recipes sr
+                    LEFT JOIN users u ON u.id = sr.user_id
+                    {order}
+                """)
                 rows = cursor.fetchall()
                 recipes: List[SavedRecipe] = []
                 for row in rows:
@@ -662,7 +687,10 @@ class DatabaseManager:
                             source_url=row['source_url'],
                             created_at=datetime.fromisoformat(row["created_at"]),
                             recipe_content=RecipeContent.model_validate(content_dict),
-                            tags=tags
+                            tags=tags,
+                            owner_username=row['owner_username'] if 'owner_username' in row else None,
+                            owner_full_name=row['owner_full_name'] if 'owner_full_name' in row else None,
+                            owner_avatar=row['owner_avatar'] if 'owner_avatar' in row else None
                         )
                     )
                 return recipes

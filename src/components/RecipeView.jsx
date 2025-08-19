@@ -872,7 +872,7 @@ export default function RecipeView({
     
     // Show toast
     const count = ingredientsToAdd.length;
-    const message = `Added ${count} item${count !== 1 ? 's' : ''} to Shopping List`;
+            const message = `Added ${count} item${count !== 1 ? 's' : ''} to Shop List`;
     
     // Create toast notification
     const toast = document.createElement('div');
@@ -1046,15 +1046,15 @@ export default function RecipeView({
             <div className="flex items-start justify-between gap-4 mb-4">
               <div className="flex-1">
                 <h1 className="text-5xl font-bold text-gray-900 recipe-title mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
-                  {isEditing && activeEditField === 'title' ? (
+              {isEditing && activeEditField === 'title' ? (
                     <div data-edit-field="title" className="w-full" ref={titleInputRef}>
-                      <input
-                        value={edited?.title || ''}
-                        onChange={(e)=>setEdited(v=>({...(v||{}), title: e.target.value}))}
+                  <input
+                    value={edited?.title || ''}
+                    onChange={(e)=>setEdited(v=>({...(v||{}), title: e.target.value}))}
                         className="w-full text-5xl font-bold text-gray-900 recipe-title bg-transparent border-b-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-sm px-1"
                         style={{ fontFamily: "'Playfair Display', serif" }}
-                        placeholder="Title"
-                        aria-label="Recipe title"
+                    placeholder="Title"
+                    aria-label="Recipe title"
                         onMouseDown={(e) => {
                           // Prevent blur when starting text selection
                           e.currentTarget.setAttribute('data-selecting', 'true');
@@ -1072,63 +1072,63 @@ export default function RecipeView({
                           }
                         }}
                         autoFocus
-                      />
-                    </div>
-                  ) : (
-                    <span 
-                      className={isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}
-                      onClick={isEditing ? () => activateFieldEdit('title') : undefined}
-                      data-edit-field="title"
-                    >
-                      {edited?.title || title || 'Untitled Recipe'}
-                    </span>
-                  )}
+                  />
+                </div>
+              ) : (
+                <span 
+                  className={isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}
+                  onClick={isEditing ? () => activateFieldEdit('title') : undefined}
+                  data-edit-field="title"
+                >
+                  {edited?.title || title || 'Untitled Recipe'}
+                </span>
+              )}
                 </h1>
                 
                 {/* Variant badges inline with title */}
-                {content?.conversion?.isVariant && (
+              {content?.conversion?.isVariant && (
                   <div className="flex items-center gap-2 mb-4">
                     <span className="text-[11px] px-2 py-1 rounded-md bg-orange-100 text-orange-700 border border-orange-300 uppercase font-medium" style={{fontFamily: 'Poppins, sans-serif'}}>Variant</span>
-                    <button
+                <button
                       className={`text-[11px] px-2 py-1 rounded-md border ${content?.conversion?.visibility === 'public' ? 'bg-green-100 text-green-700 border-green-300 uppercase font-medium' : 'bg-gray-100 text-gray-700 border-gray-300 uppercase font-medium'}`}
                       style={{fontFamily: 'Poppins, sans-serif'}}
-                      disabled={visibilitySaving}
-                      title="Toggle visibility"
-                      onClick={async ()=>{
-                        try {
-                          setVisibilitySaving(true);
-                          const desired = content?.conversion?.visibility === 'public' ? 'private' : 'public';
-                          const res = await fetch(`http://localhost:8001/api/v1/recipes/${recipeId}/visibility`, {
-                            method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ visibility: desired })
-                          });
-                          const j = await res.json();
-                          if (!res.ok) throw new Error(j?.detail || 'Visibility update failed');
-                          // Update local recipe content
-                          setOverrideRecipe((prev) => ({ ...(prev || content), conversion: { ...(prev?.conversion || content?.conversion || {}), visibility: desired } }));
-                        } catch (e) {
-                          alert(String(e?.message || e));
-                        } finally { setVisibilitySaving(false); }
-                      }}
-                    >{content?.conversion?.visibility === 'public' ? 'Public' : 'Private'}</button>
-                  </div>
-                )}
+                  disabled={visibilitySaving}
+                  title="Toggle visibility"
+                  onClick={async ()=>{
+                    try {
+                      setVisibilitySaving(true);
+                      const desired = content?.conversion?.visibility === 'public' ? 'private' : 'public';
+                      const res = await fetch(`http://localhost:8001/api/v1/recipes/${recipeId}/visibility`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ visibility: desired })
+                      });
+                      const j = await res.json();
+                      if (!res.ok) throw new Error(j?.detail || 'Visibility update failed');
+                      // Update local recipe content
+                      setOverrideRecipe((prev) => ({ ...(prev || content), conversion: { ...(prev?.conversion || content?.conversion || {}), visibility: desired } }));
+                    } catch (e) {
+                      alert(String(e?.message || e));
+                    } finally { setVisibilitySaving(false); }
+                  }}
+                >{content?.conversion?.visibility === 'public' ? 'Public' : 'Private'}</button>
+              </div>
+            )}
                 
                 {/* Based on link */}
-                {content?.conversion?.isVariant && (
+          {content?.conversion?.isVariant && (
                   <div className="text-sm text-gray-600 mb-4">
                     Based on: <a className="hover:underline" style={{ color: 'rgb(204 124 46 / var(--tw-text-opacity, 1))' }} href={`/recipes/${content?.conversion?.parentRecipeId}`}
-                      onClick={(e)=>{
-                        if (variant === 'modal' && typeof onOpenRecipeInModal === 'function') {
-                          e.preventDefault();
-                          const parentId = content?.conversion?.parentRecipeId;
-                          if (parentId) onOpenRecipeInModal(parentId, { sourceRecipeId: recipeId, sourceTitle: title });
-                        }
-                      }}
-                    >{content?.conversion?.basedOnTitle || 'Original'}</a>
-                  </div>
-                )}
-              </div>
-              
+                onClick={(e)=>{
+                  if (variant === 'modal' && typeof onOpenRecipeInModal === 'function') {
+                    e.preventDefault();
+                    const parentId = content?.conversion?.parentRecipeId;
+                    if (parentId) onOpenRecipeInModal(parentId, { sourceRecipeId: recipeId, sourceTitle: title });
+                  }
+                }}
+              >{content?.conversion?.basedOnTitle || 'Original'}</a>
+            </div>
+          )}
+        </div>
+
               {/* Rating - Desktop: top right, Mobile: below title */}
               {!isEditing && (
                 <div className="flex items-center gap-2 flex-shrink-0 mt-[5px] hidden md:flex">
@@ -1224,32 +1224,35 @@ export default function RecipeView({
             {/* Mobile Layout: Image → Description → Meta Pills → Actions */}
             <div className="md:hidden space-y-6">
               {/* Image */}
-              {(image || edited?.image_url) && (
-                <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+            {(image || edited?.image_url) && (
+              <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
                   <div className="relative w-full aspect-square overflow-hidden rounded-lg">
-                    <img
-                      src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
-                      alt={edited?.title || title}
+                  <img
+                    src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
+                    alt={edited?.title || title}
                       className="w-full h-full object-cover rounded-lg shadow-md hover:scale-105 transition-transform duration-300 ease-in-out"
                       loading="eager"
-                      decoding="async"
-                      onClick={isEditing ? () => activateFieldEdit('image') : undefined}
-                      data-edit-field="image"
-                    />
-                  </div>
-                  {isEditing && activeEditField === 'image' && gallery.length > 1 && (
-                    <>
-                      <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
-                      <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next" data-edit-field="image">›</button>
-                    </>
-                  )}
-                  {isEditing && activeEditField === 'image' && (
-                    <div className="mt-3 flex items-center gap-2" data-edit-field="image">
-                      <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate'}</button>
-                      <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
-                        const f = e.target.files && e.target.files[0];
-                        if(!f) return;
-                        try {
+                    decoding="async"
+                    onClick={isEditing ? () => activateFieldEdit('image') : undefined}
+                    data-edit-field="image"
+                  />
+                </div>
+                {isEditing && activeEditField === 'image' && gallery.length > 1 && (
+                  <>
+                    <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
+                    <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next" data-edit-field="image">›</button>
+                  </>
+                )}
+                {isEditing && activeEditField === 'image' && (
+                  <div className="mt-3 flex items-center gap-2" data-edit-field="image">
+                      <button className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#da8146] text-white hover:brightness-110 transition-all duration-200 text-sm disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>
+                        <i className="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>{aiBusy ? 'Generating…' : 'Generate'}</span>
+                      </button>
+                    <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
+                      const f = e.target.files && e.target.files[0];
+                      if(!f) return;
+                      try {
                           const formData = new FormData();
                           formData.append('image', f);
                           const res = await fetch(`${API_BASE}/recipes/${recipeId}/image`, { method: 'POST', credentials: 'include', body: formData });
@@ -1260,7 +1263,10 @@ export default function RecipeView({
                           alert('Failed to upload image: ' + e.message);
                         }
                       }} />
-                      <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 border border-gray-300" onClick={()=>document.getElementById('rv-upload')?.click()}>Upload</button>
+                      <button className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm" onClick={()=>document.getElementById('rv-upload')?.click()}>
+                        <i className="fa-solid fa-upload"></i>
+                        <span>Upload</span>
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1294,7 +1300,7 @@ export default function RecipeView({
               <div className="flex items-center gap-3 md:gap-4 flex-wrap gap-y-2">
                 {/* Servings */}
                 {(content.servings || content.serves) && (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)]">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)]">
                     <i className="fa-solid fa-utensils text-[#cc7c2e]"></i>
                     <span className="text-gray-700">{content.servings || content.serves} servings</span>
                   </div>
@@ -1304,7 +1310,7 @@ export default function RecipeView({
                 {(prepTime || cookTime) && (
                   <div className="relative" ref={timePopoverRef}>
                     <button
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)] hover:shadow-[3px_3px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out"
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)] hover:shadow-[3px_3px_0_rgb(204_124_46_/_10%)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out"
                       onClick={handleTimeClick}
                       onMouseEnter={handleTimeMouseEnter}
                       onMouseLeave={handleTimeMouseLeave}
@@ -1356,22 +1362,22 @@ export default function RecipeView({
                 )}
                 
                 {/* Difficulty */}
-                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)]">
-                  <i className="fa-solid fa-smile text-[#cc7c2e]"></i>
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)]">
+                  <i className="fa-regular fa-face-smile" style={{color: 'rgb(204 124 46 / var(--tw-text-opacity, 1))'}}></i>
                   <span className="text-gray-700">{difficulty}</span>
                 </div>
               </div>
               
               {/* Action Buttons */}
               <div className="flex items-center gap-2 flex-wrap">
-                                  <button onClick={() => onDownload?.(content)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white hover:brightness-110 transition-colors text-sm">
+                <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
                   <i className="fa-solid fa-download"></i>
                   <span>Download</span>
                 </button>
                 {isSaved && (
                   <>
-                    <button onClick={()=>setConvertOpen(true)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#e87b35] text-white hover:brightness-110 transition-colors text-sm">
-                      <i className="fa-solid fa-arrows-rotate"></i>
+                    <button onClick={()=>setConvertOpen(true)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#e87b35] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
+                      <i className="fa-solid fa-rotate"></i>
                       <span>Convert</span>
                     </button>
                   </>
@@ -1382,7 +1388,7 @@ export default function RecipeView({
                     const shareData = { title: (edited?.title || title) || 'Recipe', url };
                     if (navigator.share) {
                       await navigator.share(shareData);
-                    } else {
+                        } else {
                       await navigator.clipboard.writeText(url);
                       const t = document.createElement('div');
                       t.className = 'fixed bottom-4 right-4 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow z-[9999]';
@@ -1391,7 +1397,7 @@ export default function RecipeView({
                       setTimeout(()=>{ t.remove(); }, 2500);
                     }
                   } catch {}
-                }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#6b7280] text-white hover:brightness-110 transition-colors text-sm">
+                }} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgb(158,137,112)] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
                   <i className="fa-solid fa-share-nodes"></i>
                   <span>Share</span>
                 </button>
@@ -1423,7 +1429,10 @@ export default function RecipeView({
                   )}
                   {isEditing && activeEditField === 'image' && (
                     <div className="mt-3 flex items-center gap-2" data-edit-field="image">
-                      <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate'}</button>
+                      <button className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#da8146] text-white hover:brightness-110 transition-all duration-200 text-sm disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>
+                        <i className="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>{aiBusy ? 'Generating…' : 'Generate'}</span>
+                      </button>
                       <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
                         const f = e.target.files && e.target.files[0];
                         if(!f) return;
@@ -1436,47 +1445,50 @@ export default function RecipeView({
                           setEdited(v => ({ ...(v || {}), image_url: j.image_url }));
                         } catch (e) {
                           alert('Failed to upload image: ' + e.message);
-                        }
-                      }} />
-                      <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 border border-gray-300" onClick={()=>document.getElementById('rv-upload')?.click()}>Upload</button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                      }
+                    }} />
+                      <button className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm" onClick={()=>document.getElementById('rv-upload')?.click()}>
+                        <i className="fa-solid fa-upload"></i>
+                        <span>Upload</span>
+                      </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
             
             {/* Right column: Content Stack (Description → Meta Pills → Actions) */}
             <div className="md:w-2/3">
               <div className="space-y-6">
                 {/* Description */}
                 <div className={`${isEditing && activeEditField === 'description' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
-                  {isEditing && activeEditField === 'description' ? (
-                    <div data-edit-field="description">
-                      <textarea
+              {isEditing && activeEditField === 'description' ? (
+                <div data-edit-field="description">
+                  <textarea
                         value={edited?.description || ''}
                         onChange={(e)=>setEdited(v=>({...(v||{}), description: e.target.value}))}
                         className="w-full min-h-[120px] text-base leading-relaxed border-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-lg p-3 resize-y"
                         placeholder="Describe your recipe..."
                         aria-label="Recipe description"
-                        onBlur={() => setActiveEditField(null)}
-                      />
-                    </div>
-                  ) : (
-                    <p 
-                      className={`text-base leading-relaxed text-gray-700 ${isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}`}
-                      onClick={isEditing ? () => activateFieldEdit('description') : undefined}
-                      data-edit-field="description"
-                    >
-                      {edited?.description || description || 'No description available.'}
-                    </p>
-                  )}
+                    onBlur={() => setActiveEditField(null)}
+                  />
                 </div>
+              ) : (
+                <p 
+                      className={`text-base leading-relaxed text-gray-700 ${isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}`}
+                  onClick={isEditing ? () => activateFieldEdit('description') : undefined}
+                  data-edit-field="description"
+                >
+                      {edited?.description || description || 'No description available.'}
+                </p>
+              )}
+          </div>
                 
                 {/* Meta Pills */}
                 <div className="flex items-center gap-3 md:gap-4 flex-wrap gap-y-2">
-                  {/* Servings */}
+                                    {/* Servings */}
                   {(content.servings || content.serves) && (
-                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)]">
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)]">
                       <i className="fa-solid fa-utensils text-[#cc7c2e]"></i>
                       <span className="text-gray-700">{content.servings || content.serves} servings</span>
                     </div>
@@ -1485,8 +1497,8 @@ export default function RecipeView({
                   {/* Total Time */}
                   {(prepTime || cookTime) && (
                     <div className="relative" ref={timePopoverRef}>
-                      <button
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)] hover:shadow-[3px_3px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out"
+                                          <button
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)] hover:shadow-[3px_3px_0_rgb(204_124_46_/_10%)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out"
                         onClick={handleTimeClick}
                         onMouseEnter={handleTimeMouseEnter}
                         onMouseLeave={handleTimeMouseLeave}
@@ -1516,7 +1528,7 @@ export default function RecipeView({
                             `Cook: ${cookTime} min`
                           )}
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                        </div>
+            </div>
                       )}
                       
                       {/* Mobile popover */}
@@ -1532,28 +1544,28 @@ export default function RecipeView({
                           ) : (
                             `Cook: ${cookTime} min`
                           )}
-                        </div>
+            </div>
                       )}
-                    </div>
+            </div>
                   )}
                   
                   {/* Difficulty */}
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)]">
-                    <i className="fa-solid fa-smile text-[#cc7c2e]"></i>
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgb(204_124_46_/_10%)]">
+                    <i className="fa-regular fa-face-smile" style={{color: 'rgb(204 124 46 / var(--tw-text-opacity, 1))'}}></i>
                     <span className="text-gray-700">{difficulty}</span>
                   </div>
                 </div>
                 
-                {/* Action Buttons */}
+                                {/* Action Buttons */}
                 <div className="flex items-center gap-2 flex-wrap">
-                  <button onClick={() => onDownload?.(content)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white hover:brightness-110 transition-colors text-sm">
+                  <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
                     <i className="fa-solid fa-download"></i>
                     <span>Download</span>
                   </button>
                   {isSaved && (
                     <>
-                      <button onClick={()=>setConvertOpen(true)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#e87b35] text-white hover:brightness-110 transition-colors text-sm">
-                        <i className="fa-solid fa-arrows-rotate"></i>
+                      <button onClick={()=>setConvertOpen(true)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#e87b35] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
+                        <i className="fa-solid fa-rotate"></i>
                         <span>Convert</span>
                       </button>
                     </>
@@ -1573,20 +1585,20 @@ export default function RecipeView({
                         setTimeout(()=>{ t.remove(); }, 2500);
                       }
                     } catch {}
-                  }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#6b7280] text-white hover:brightness-110 transition-colors text-sm">
+                  }} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgb(158,137,112)] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
                     <i className="fa-solid fa-share-nodes"></i>
                     <span>Share</span>
                   </button>
                 </div>
               </div>
             </div>
+            </div>
           </div>
-        </div>
         </div>
 
         {/* Toolbar - Full width wrapper matching My Recipes style */}
-        <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-[4px_4px_0_rgba(0,0,0,0.06)] -mt-1 mb-6">
-          <div className="flex items-center justify-between gap-4 px-5 py-3">
+        <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-[3px_3px_0_rgb(204_124_46_/_10%)] -mt-1 mb-6" style={{pointerEvents: 'none'}}>
+                      <div className="flex items-center justify-between gap-4 px-5 py-3" style={{pointerEvents: 'auto'}}>
             {/* Left side: Two segment groups */}
             <div className="flex items-center gap-4">
               {/* Segment Group 1 - Layout */}
@@ -1599,10 +1611,10 @@ export default function RecipeView({
                       setLayoutModeAndSave('two');
                     }
                   }}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ease-in-out ${
                     layoutMode === 'two'
-                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
-                      : 'text-gray-600'
+                      ? 'bg-[#7ab87a] text-white font-semibold border border-[#7ab87a] hover:bg-[#659a63]'
+                      : 'bg-white text-[#444] border border-[#ddd] hover:bg-[#f9f9f9]'
                   }`}
                   title="Switch to two-column layout"
                   aria-label="Switch to two-column layout"
@@ -1619,10 +1631,10 @@ export default function RecipeView({
                       setLayoutModeAndSave('single');
                     }
                   }}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ease-in-out ${
                     layoutMode === 'single'
-                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
-                      : 'text-gray-600'
+                      ? 'bg-[#7ab87a] text-white font-semibold border border-[#7ab87a] hover:bg-[#659a63]'
+                      : 'bg-white text-[#444] border border-[#ddd] hover:bg-[#f9f9f9]'
                   }`}
                   title="Switch to single-column layout"
                   aria-label="Switch to single-column layout"
@@ -1643,14 +1655,17 @@ export default function RecipeView({
                       setHoverHighlightAndSave(!hoverHighlight);
                     }
                   }}
+                  disabled={isEditing}
                   aria-pressed={hoverHighlight}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
-                    hoverHighlight
-                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
-                      : 'text-gray-600'
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ease-in-out ${
+                    isEditing 
+                      ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-50'
+                      : hoverHighlight
+                        ? 'bg-[#7ab87a] text-white font-semibold border border-[#7ab87a] shadow-[0_2px_4px_rgba(0,0,0,0.15)] hover:bg-[#659a63] hover:shadow-[0_3px_6px_rgba(0,0,0,0.2)]'
+                        : 'bg-white text-[#444] border border-[#ddd] shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:bg-[#f9f9f9] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]'
                   }`}
-                  title={hoverHighlight ? "Disable focus mode" : "Enable focus mode"}
-                  aria-label={hoverHighlight ? "Disable focus mode" : "Enable focus mode"}
+                  title={isEditing ? "Focus mode disabled during editing" : (hoverHighlight ? "Disable focus mode" : "Enable focus mode")}
+                  aria-label={isEditing ? "Focus mode disabled during editing" : (hoverHighlight ? "Disable focus mode" : "Enable focus mode")}
                 >
                   {hoverHighlight ? (
                     <i className="fa-regular fa-eye text-sm"></i>
@@ -1668,14 +1683,17 @@ export default function RecipeView({
                       setTtsActiveAndSave(!ttsActive);
                     }
                   }}
+                  disabled={isEditing}
                   aria-pressed={ttsActive}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
-                    ttsActive
-                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
-                      : 'text-gray-600'
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ease-in-out ${
+                    isEditing 
+                      ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-50'
+                      : ttsActive
+                        ? 'bg-[#7ab87a] text-white font-semibold border border-[#7ab87a] shadow-[0_2px_4px_rgba(0,0,0,0.15)] hover:bg-[#659a63] hover:shadow-[0_3px_6px_rgba(0,0,0,0.2)]'
+                        : 'bg-white text-[#444] border border-[#ddd] shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:bg-[#f9f9f9] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]'
                   }`}
-                  title={ttsActive ? "Mute TTS" : "Read steps aloud"}
-                  aria-label={ttsActive ? "Mute TTS" : "Read steps aloud"}
+                  title={isEditing ? "Read Aloud disabled during editing" : (ttsActive ? "Mute TTS" : "Read steps aloud")}
+                  aria-label={isEditing ? "Read Aloud disabled during editing" : (ttsActive ? "Mute TTS" : "Read steps aloud")}
                 >
                   {ttsActive ? (
                     <i className="fa-solid fa-volume-high text-sm"></i>
@@ -1693,17 +1711,20 @@ export default function RecipeView({
                       setCartModeAndSave(!cartMode);
                     }
                   }}
+                  disabled={isEditing}
                   aria-pressed={cartMode}
-                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
-                    cartMode
-                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
-                      : 'text-gray-600'
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 ease-in-out ${
+                    isEditing 
+                      ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-50'
+                      : cartMode
+                        ? 'bg-[#7ab87a] text-white font-semibold border border-[#7ab87a] shadow-[0_2px_4px_rgba(0,0,0,0.15)] hover:bg-[#659a63] hover:shadow-[0_3px_6px_rgba(0,0,0,0.2)]'
+                        : 'bg-white text-[#444] border border-[#ddd] shadow-[0_1px_2px_rgba(0,0,0,0.05)] hover:bg-[#f9f9f9] hover:shadow-[0_2px_4px_rgba(0,0,0,0.1)]'
                   }`}
-                  title={cartMode ? "Disable shopping list mode" : "Enable shopping list mode"}
-                  aria-label={cartMode ? "Disable shopping list mode" : "Enable shopping list mode"}
+                  title={isEditing ? "Shop List mode disabled during editing" : (cartMode ? "Disable shop list mode" : "Enable shop list mode")}
+                  aria-label={isEditing ? "Shop List mode disabled during editing" : (cartMode ? "Disable shop list mode" : "Enable shop list mode")}
                 >
                   <i className="fa-solid fa-cart-shopping text-sm"></i>
-                  <span className="text-sm font-medium hidden sm:inline">Shop Ingredients</span>
+                  <span className="text-sm font-medium hidden sm:inline">Shop List</span>
                 </button>
               </div>
             </div>
@@ -1717,11 +1738,11 @@ export default function RecipeView({
         <RecipeSection id="ingredients-section" title="Ingredients & Instructions" titleHidden variant="plain" className="px-0">
           <div className={`gap-6 ${layoutMode === 'two' ? 'grid md:grid-cols-[2fr,3fr]' : 'flex flex-col'}`}>
             {/* Ingredients Card */}
-            <div 
-              className={`bg-white rounded-2xl p-6 card-hard-shadow ${isEditing ? 'cursor-pointer' : ''}`}
-              onClick={isEditing && activeEditField !== 'ingredients' ? () => activateFieldEdit('ingredients') : undefined}
-              data-edit-field="ingredients"
-            >
+                          <div 
+                className={`bg-white rounded-2xl p-6 shadow-[4px_4px_0_rgb(204_124_46_/_10%)] hover:shadow-[6px_6px_0_rgb(204_124_46_/_10%)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out ${isEditing ? 'cursor-pointer' : ''}`}
+                onClick={isEditing && activeEditField !== 'ingredients' ? () => activateFieldEdit('ingredients') : undefined}
+                data-edit-field="ingredients"
+              >
               <div className="flex items-center justify-between mb-3">
                 <h3 id="ingredients" className="text-lg font-semibold flex items-center gap-2 scroll-mt-[88px]">
                   <i className="fa-solid fa-carrot mr-2"></i>
@@ -1788,7 +1809,7 @@ export default function RecipeView({
                                 toggleIngredientSelection(idx);
                               }
                             }}
-                            className={`w-4 h-4 mt-1 mr-3 flex-shrink-0 border-2 rounded ${isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-green-500`}
+                            className={`w-5 h-5 mr-3 flex-shrink-0 border-2 rounded ${isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-green-500`}
                             aria-label={isSelected ? `Deselect ${text}` : `Select ${text}`}
                           >
                             {isSelected && (
@@ -1798,7 +1819,7 @@ export default function RecipeView({
                             )}
                           </button>
                         ) : (
-                        <span className="text-green-600 mr-3 mt-1 flex-shrink-0">•</span>
+                        <span className="text-green-600 mr-3 flex-shrink-0 flex items-center text-lg">•</span>
                         )}
                         <span className="text-gray-700">{m ? (<><strong className="font-semibold text-gray-900">{m[1]}</strong>{m[2]}</>) : text}</span>
                       </li>
@@ -1809,11 +1830,11 @@ export default function RecipeView({
                   <div className="mt-4 pt-4 border-t border-gray-200">
                     <button
                       onClick={addToShoppingList}
-                      className="w-full bg-green-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
-                      aria-label="Add selected ingredients to shopping list"
+                      className="w-full bg-green-600 text-white font-semibold py-4 px-6 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-3 text-lg"
+                      aria-label="Add selected ingredients to shop list"
                     >
-                      <i className="fa-solid fa-list-check"></i>
-                      <span>Add to Shopping List</span>
+                      <i className="fa-solid fa-list-check text-xl"></i>
+                      <span>Add to Shop List</span>
                     </button>
                   </div>
                 )}
@@ -1823,7 +1844,7 @@ export default function RecipeView({
 
             {/* Instructions Card */}
             <div 
-              className={`bg-white rounded-2xl p-6 card-hard-shadow ${isEditing ? 'cursor-pointer' : ''}`}
+              className={`bg-white rounded-2xl p-6 shadow-[4px_4px_0_rgb(204_124_46_/_10%)] hover:shadow-[6px_6px_0_rgb(204_124_46_/_10%)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out ${isEditing ? 'cursor-pointer' : ''}`}
               onClick={isEditing && activeEditField !== 'instructions' ? () => activateFieldEdit('instructions') : undefined}
               data-edit-field="instructions"
             >
@@ -1947,8 +1968,14 @@ export default function RecipeView({
                 </button>
               </div>
               <div className="mt-5 flex justify-end gap-3">
-                <button onClick={onCancelDelete} className="px-4 py-2 rounded-lg bg-gray-100 text-gray-800 hover:bg-gray-200">Avbryt</button>
-                <button onClick={onConfirmDelete} className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700">Ta bort</button>
+                <button onClick={onCancelDelete} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm">
+                  <i className="fa-solid fa-xmark"></i>
+                  <span>Avbryt</span>
+                </button>
+                <button onClick={onConfirmDelete} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-all duration-200 text-sm">
+                  <i className="fa-solid fa-trash"></i>
+                  <span>Ta bort</span>
+                </button>
               </div>
             </div>
           </div>
@@ -1968,7 +1995,7 @@ export default function RecipeView({
             {k:'fat',l:'Fat', icon:'fa-bacon', bgColor:'bg-orange-50', iconColor:'text-orange-600'},
             {k:'carbs',l:'Carbs', icon:'fa-bread-slice', bgColor:'bg-amber-50', iconColor:'text-amber-600'}
           ].map(({k,l,icon,bgColor,iconColor}) => (
-            <div key={k} className={`inline-flex items-center gap-2 ${bgColor} text-gray-800 rounded-full px-3 py-1 border border-gray-200 shadow-[2px_2px_0_rgba(0,0,0,0.06)]`}>
+            <div key={k} className={`inline-flex items-center gap-2 ${bgColor} text-gray-800 rounded-full px-3 py-1 border border-gray-200 shadow-[2px_2px_0_rgb(204_124_46_/_10%)]`}>
               <i className={`fa-solid ${icon} text-sm ${iconColor}`}></i>
               <span className="text-sm text-gray-600">{l}</span>
               <span className="text-sm font-medium">{(() => {
@@ -1992,7 +2019,7 @@ export default function RecipeView({
           {/* Source section */}
           {variant !== 'modal' && sourceUrl && (
             <RecipeSection id="source" title="Source" className="mt-4 bg-white">
-              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out flex items-center gap-3">
+              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 shadow-[4px_4px_0_rgb(204_124_46_/_10%)] hover:shadow-[6px_6px_0_rgb(204_124_46_/_10%)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out flex items-center gap-3">
                 <LinkIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
                 <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">{sourceUrl}</a>
               </div>
@@ -2037,7 +2064,10 @@ export default function RecipeView({
             <div className="bg-gray-50 rounded-lg p-4">
               <textarea value={commentInput} onChange={(e)=>setCommentInput(e.target.value)} rows={3} className="w-full bg-white px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Write a comment..." />
               <div className="flex justify-end mt-2">
-                <button onClick={postComment} className="flex items-center justify-center bg-[#5b8959] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">Send</button>
+                <button onClick={postComment} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white hover:brightness-110 transition-all duration-200 text-sm">
+                  <i className="fa-solid fa-paper-plane"></i>
+                  <span>Send</span>
+                </button>
               </div>
               <div className="mt-6">
                 {(() => {
@@ -2049,7 +2079,7 @@ export default function RecipeView({
                   const renderThread = (list, level=0) => (
                     <div>
                       {list.map((c) => (
-                        <div key={c.id} className={`border border-gray-200 rounded-2xl p-3 bg-white mb-3 shadow-[2px_2px_0_rgba(0,0,0,0.04)] ${level>0? 'ml-6 md:ml-10' : ''}`}>
+                        <div key={c.id} className={`border border-gray-200 rounded-2xl p-3 bg-white mb-3 shadow-[2px_2px_0_rgb(204_124_46_/_10%)] ${level>0? 'ml-6 md:ml-10' : ''}`}>
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2">
                               {c.user?.avatar && (
@@ -2063,8 +2093,14 @@ export default function RecipeView({
                             <div>
                               <textarea className="w-full border border-gray-300 rounded-lg px-3 py-2" rows={3} value={editValue} onChange={(e)=>setEditValue(e.target.value)} />
                               <div className="flex justify-end gap-2 mt-2">
-                                <button onClick={async ()=>{ try{ const r= await fetch(`${API_BASE}/comments/${c.id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({body: editValue})}); const j= await r.json(); if(j.ok){ setComments(list => list.map(x => x.id===c.id? j.data : x)); } } finally { setEditingId(null); } }} className="px-3 py-1.5 rounded-lg bg-green-600 text-white text-sm hover:bg-green-700">Save</button>
-                                <button onClick={()=>{ setEditingId(null); }} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm">Cancel</button>
+                                <button onClick={async ()=>{ try{ const r= await fetch(`${API_BASE}/comments/${c.id}`, {method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({body: editValue})}); const j= await r.json(); if(j.ok){ setComments(list => list.map(x => x.id===c.id? j.data : x)); } } finally { setEditingId(null); } }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 text-sm">
+                                  <i className="fa-solid fa-check"></i>
+                                  <span>Save</span>
+                                </button>
+                                <button onClick={()=>{ setEditingId(null); }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm">
+                                  <i className="fa-solid fa-xmark"></i>
+                                  <span>Cancel</span>
+                                </button>
                               </div>
                             </div>
                           ) : (
@@ -2106,8 +2142,14 @@ export default function RecipeView({
                             <div className="mt-3">
                               <textarea value={replyText} onChange={(e)=>setReplyText(e.target.value)} rows={2} className="w-full bg-white px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Write a reply..." />
                               <div className="flex justify-end gap-2 mt-2">
-                                <button onClick={()=>setReplyToId(null)} className="px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-sm">Cancel</button>
-                                <button onClick={()=>postReply(c.id)} className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm hover:bg-blue-700">Reply</button>
+                                <button onClick={()=>setReplyToId(null)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm">
+                                  <i className="fa-solid fa-xmark"></i>
+                                  <span>Cancel</span>
+                                </button>
+                                <button onClick={()=>postReply(c.id)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200 text-sm">
+                                  <i className="fa-solid fa-reply"></i>
+                                  <span>Reply</span>
+                                </button>
                               </div>
                             </div>
                           )}
@@ -2148,18 +2190,20 @@ export default function RecipeView({
             )}
           </div>
           <div className="flex flex-wrap justify-end gap-3">
-                            <button onClick={() => onDownload?.(content)} className="flex items-center justify-center bg-[#5b8959] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
+                            <button onClick={() => onDownload?.(content)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
+              <i className="fa-solid fa-download"></i>
               <span>Download</span>
             </button>
             {!isSaved && (
-              <button onClick={() => onSave?.(content)} className="flex items-center justify-center gap-2 bg-green-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-green-700 transition-colors text-sm">
-                <BookmarkIcon className="h-5 w-5" />
+              <button onClick={() => onSave?.(content)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 text-sm">
+                <i className="fa-solid fa-bookmark"></i>
                 <span>Save to Recipes</span>
               </button>
             )}
             {isSaved && (
               <>
-                <button onClick={()=>setConvertOpen(true)} className="flex items-center justify-center gap-2 bg-[#e87b35] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
+                <button onClick={()=>setConvertOpen(true)} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#e87b35] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
+                  <i className="fa-solid fa-rotate"></i>
                   <span>Convert</span>
                 </button>
                 <button onClick={async ()=>{
@@ -2178,21 +2222,24 @@ export default function RecipeView({
                       setTimeout(()=>{ t.remove(); }, 2500);
                     }
                   } catch {}
-                }} className="flex items-center justify-center gap-2 bg-[#6b7280] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
-                  <i className="fa-solid fa-share-nodes mr-2"></i>
+                }} disabled={isEditing} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[rgb(158,137,112)] text-white transition-all duration-200 text-sm ${isEditing ? 'opacity-50 cursor-not-allowed' : 'hover:brightness-110'}`}>
+                  <i className="fa-solid fa-share-nodes"></i>
                   <span>Share</span>
                 </button>
               {isEditing ? (
                 <>
-                                  <button onClick={() => { saveEdits(); }} disabled={busySave} className="flex items-center justify-center bg-[#7ab87a] text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-[#659a63] transition-colors disabled:opacity-60 text-sm" data-save-button>
+                <button onClick={() => { saveEdits(); }} disabled={busySave} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#7ab87a] text-white hover:bg-[#659a63] transition-all duration-200 disabled:opacity-60 text-sm" data-save-button>
+                  <i className="fa-solid fa-check"></i>
                   <span>{busySave ? 'Saving…' : 'Save'}</span>
                 </button>
-                  <button onClick={() => { cancelEdit(); }} className="flex items-center justify-center bg-gray-500 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-gray-600 transition-colors text-sm" data-cancel-button>
+                <button onClick={() => { cancelEdit(); }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm" data-cancel-button>
+                  <i className="fa-solid fa-xmark"></i>
                     <span>Cancel</span>
                   </button>
                 </>
               ) : (
-                <button onClick={() => { startEdit(); }} disabled={busySave} className="flex items-center justify-center bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 px-5 rounded-lg transition-colors disabled:opacity-60 text-sm" data-save-button>
+                <button onClick={() => { startEdit(); }} disabled={busySave} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 transition-all duration-200 disabled:opacity-60 text-sm" data-save-button>
+                  <i className="fa-solid fa-pen"></i>
                   <span>Edit Recipe</span>
                 </button>
               )}
@@ -2200,28 +2247,36 @@ export default function RecipeView({
             )}
             {justSavedVariant && (
               <>
-                <button onClick={()=>{ if (variant==='modal' && typeof onOpenRecipeInModal==='function') { onOpenRecipeInModal(null); } }} className="flex items-center justify-center gap-2 bg-gray-100 text-gray-800 font-semibold py-3 px-6 rounded-lg hover:bg-gray-200 transition-colors">Close</button>
-                <button onClick={()=>{ window.location.href = '/'; }} className="flex items-center justify-center gap-2 bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-blue-700 transition-colors">View in My Recipes</button>
+                <button onClick={()=>{ if (variant==='modal' && typeof onOpenRecipeInModal==='function') { onOpenRecipeInModal(null); } }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm">
+                  <i className="fa-solid fa-xmark"></i>
+                  <span>Close</span>
+                </button>
+                <button onClick={()=>{ window.location.href = '/'; }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all duration-200 text-sm">
+                  <i className="fa-solid fa-arrow-left"></i>
+                  <span>View in My Recipes</span>
+                </button>
               </>
             )}
             {!isSaved && (
               <>
-                <button onClick={() => onAddToCollection?.()} className="flex items-center justify-center gap-2 bg-[#da8146] text-white font-semibold py-3 px-6 rounded-lg hover:brightness-110 transition-colors">
-                  <BookOpenIcon className="h-5 w-5" />
+                <button onClick={() => onAddToCollection?.()} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#da8146] text-white hover:brightness-110 transition-all duration-200 text-sm">
+                  <i className="fa-solid fa-book-open"></i>
                   <span>Add to Collection</span>
                 </button>
               {isEditing ? (
                 <>
-                  <button onClick={() => { saveEdits(); }} disabled={busySave} className="flex items-center justify-center bg-green-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60" data-save-button>
+                  <button onClick={() => { saveEdits(); }} disabled={busySave} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 disabled:opacity-60 text-sm" data-save-button>
+                    <i className="fa-solid fa-check"></i>
                     <span>{busySave ? 'Saving…' : 'Save Changes'}</span>
                   </button>
-                  <button onClick={() => { cancelEdit(); }} className="flex items-center justify-center bg-gray-500 text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-600 transition-colors" data-cancel-button>
+                  <button onClick={() => { cancelEdit(); }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm" data-cancel-button>
+                    <i className="fa-solid fa-xmark"></i>
                     <span>Cancel</span>
                   </button>
                 </>
               ) : (
-                <button onClick={() => { startEdit(); }} disabled={busySave} className="flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors disabled:opacity-60" data-save-button>
-                  <PencilSquareIcon className="h-5 w-5" />
+                <button onClick={() => { startEdit(); }} disabled={busySave} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 transition-all duration-200 disabled:opacity-60 text-sm" data-save-button>
+                  <i className="fa-solid fa-pen"></i>
                   <span>Edit Recipe</span>
                 </button>
               )}

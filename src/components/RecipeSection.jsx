@@ -3,7 +3,7 @@ import React from 'react';
 export default function RecipeSection({ id, title, children, className = '', titleHidden = false, variant = 'card' }) {
   const wrapperClass = variant === 'plain'
     ? `scroll-mt-[88px] relative p-0 mb-6 ${className}`
-    : `scroll-mt-[88px] relative rounded-2xl border border-gray-200 p-4 sm:p-6 mb-6 !bg-white card-hard-shadow ${className}`;
+    : `scroll-mt-[88px] relative rounded-2xl border border-gray-200 p-4 sm:p-6 mb-6 !bg-white shadow-[4px_4px_0_rgb(204_124_46_/_10%)] ${className}`;
 
   // Only set aria-labelledby if title is a string (for proper accessibility)
   const ariaProps = title && typeof title === 'string' ? { 'aria-labelledby': `${id}-h2` } : {};

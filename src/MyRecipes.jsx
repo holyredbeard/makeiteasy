@@ -534,11 +534,11 @@ const RecipeCard = ({ recipe, viewMode, density, onClick, onDelete, onFilterByCh
         return (
             <>
                 {/* Image with rating badge */}
-                <div className="relative w-full aspect-square group-hover:scale-105 transition-transform duration-300">
+                <div className="relative w-full aspect-[4/3] group-hover:scale-105 transition-transform duration-300">
                     <img 
                         src={image_url ? (asThumbSrc(image_url) || 'https://placehold.co/800x600/EEE/31343C?text=No+Image') : 'https://placehold.co/800x600/EEE/31343C?text=No+Image'} 
                         alt={title} 
-                        className="w-full h-full object-cover rounded-t-2xl aspect-square" 
+                        className="w-full h-full object-cover rounded-t-2xl aspect-[4/3]" 
                         loading="lazy"
                         onError={(e) => { e.target.src = 'https://placehold.co/800x600/EEE/31343C?text=No+Image'; }}
                     />
@@ -567,11 +567,40 @@ const RecipeCard = ({ recipe, viewMode, density, onClick, onDelete, onFilterByCh
                         </div>
                     )}
 
+                    {/* User info in bottom left */}
+                    <div className="absolute bottom-3 left-3">
+                        <Link 
+                            to={linkTarget} 
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-lg hover:bg-white transition-colors"
+                        >
+                            <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                                {recipe.owner_avatar ? (
+                                    <img 
+                                        src={String(recipe.owner_avatar).startsWith('http') 
+                                            ? recipe.owner_avatar 
+                                            : `${STATIC_BASE}${recipe.owner_avatar}`} 
+                                        alt={`${ownerDisplayName} avatar`} 
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                ) : (
+                                    <div className="w-full h-full bg-gray-300 flex items-center justify-center">
+                                        <svg className="w-3 h-3 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
+                                        </svg>
+                                    </div>
+                                )}
+                            </div>
+                            <span className="text-xs font-medium text-gray-800 truncate max-w-20">{ownerDisplayName}</span>
+                        </Link>
+                    </div>
+
                     {/* Action buttons */}
                     <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                         <button 
                             onClick={(e) => { e.stopPropagation(); onAddToCollection(recipe); }}
-                            className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors"
+                            className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors opacity-90 hover:opacity-100"
                             title="Add to collection"
                         >
                             <svg className="w-4 h-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -580,7 +609,7 @@ const RecipeCard = ({ recipe, viewMode, density, onClick, onDelete, onFilterByCh
                         </button>
                         <button 
                             onClick={handleLikeClick}
-                            className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors"
+                            className="w-8 h-8 bg-white/90 rounded-full flex items-center justify-center shadow-lg hover:bg-white transition-colors opacity-90 hover:opacity-100"
                             title={likedByMe ? 'Unlike recipe' : 'Like recipe'}
                         >
                             <svg className={`w-4 h-4 ${likedByMe ? 'text-red-500 fill-current' : 'text-gray-700'}`} fill={likedByMe ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
@@ -622,7 +651,6 @@ const RecipeCard = ({ recipe, viewMode, density, onClick, onDelete, onFilterByCh
                             {/* Metadata */}
                             <div className="mt-auto space-y-2">
                                 <div className="flex items-center justify-between text-xs text-gray-500">
-                                    <span>By <Link to={linkTarget} className="font-semibold text-gray-700 underline-offset-2 hover:underline">{ownerDisplayName}</Link></span>
                                     <span>{humanSaved(recipe.created_at)}</span>
                                 </div>
                                 
@@ -637,7 +665,7 @@ const RecipeCard = ({ recipe, viewMode, density, onClick, onDelete, onFilterByCh
 
     return (
         <div 
-            className="group relative bg-white rounded-2xl shadow-lg overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 flex flex-col h-full" 
+            className="group relative bg-white rounded-2xl border border-gray-200 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out overflow-hidden cursor-pointer flex flex-col h-full" 
             onClick={onClick}
         >
 
@@ -821,7 +849,7 @@ const MyRecipes = () => {
                      <p className="text-gray-500">Start by generating and saving your first recipe!</p>
                 </div>
             ) : (
-                <div className={`grid ${getGridClasses()}`}>
+                <div className={`grid ${getGridClasses()} gap-4`}>
                     {visibleRecipes.map(recipe => (
                         <div key={recipe.id} className={justInsertedId === String(recipe.id) ? 'animate-slide-in-top' : ''}>
                           <RecipeCard

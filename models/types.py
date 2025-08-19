@@ -47,6 +47,7 @@ class SavedRecipe(BaseModel):
     # User data for display
     owner_username: Optional[str] = None
     owner_full_name: Optional[str] = None
+    owner_avatar: Optional[str] = None
 
 class Collection(BaseModel):
     id: int

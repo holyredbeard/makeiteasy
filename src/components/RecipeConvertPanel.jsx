@@ -300,14 +300,14 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
             {/** Active color mapping for diet chips */}
             {(() => null)()}
             {/* Language at top */}
-            <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+            <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
               <h4 className="text-sm font-semibold tracking-wide text-gray-700 mb-2">Language & Region</h4>
               <select value={locale} onChange={e=>setLocale(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2">
                 <option value="sv">Swedish (sv)</option>
                 <option value="en">English (en)</option>
               </select>
             </section>
-            <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+            <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
               <h4 className="text-sm font-semibold tracking-wide text-gray-700 mb-2">Diet Style</h4>
               <div className="flex flex-wrap gap-2 mb-2">
                 {GROUPS.dietStyle.map(p => (
@@ -335,7 +335,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
               </div>
             </section>
 
-            <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+            <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
               <h4 className="text-sm font-semibold tracking-wide text-gray-700 mb-2">Add Ons</h4>
               <div className="flex flex-wrap gap-2">
                 {GROUPS.addOns.filter(p => visibleAddOns.has(p)).map(p => (
@@ -356,7 +356,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
               </div>
             </section>
 
-            <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+            <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
               <h4 className="text-sm font-semibold tracking-wide text-gray-700 mb-2">Exclusions</h4>
               <div className="flex flex-wrap gap-2">
                 {GROUPS.exclusions.map(p => (
@@ -372,7 +372,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
               </div>
             </section>
 
-            <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+            <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
               <h4 className="text-sm font-semibold tracking-wide text-gray-700 mb-2">Macros</h4>
               <div className="flex flex-wrap gap-2">
               {GROUPS.macros.map(p => (
@@ -386,7 +386,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
               </div>
             </section>
 
-            <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+            <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
               <h4 className="text-sm font-semibold tracking-wide text-gray-700 mb-2">Programs</h4>
             <div className="flex flex-wrap gap-2">
               {GROUPS.programs.map(p => (
@@ -429,7 +429,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
               {/* Preview header removed per request */}
 
               {/* Image gallery (top of preview) */}
-              <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+              <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
                 <div className="flex items-center gap-3 justify-between mb-3">
                   <div className="text-sm text-gray-700 font-semibold">Images</div>
                   <div className="flex items-center gap-2">
@@ -534,7 +534,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
 
           {!previewResult && (
           <>
-            <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+            <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
               <h4 className="text-sm font-semibold tracking-wide text-gray-700 mb-2">Allergens</h4>
               <div className="flex flex-wrap gap-2">
                 {ALLERGENS.map(a => (
@@ -547,7 +547,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
               </div>
             </section>
 
-            <section className="border border-gray-200 rounded-xl p-4 bg-white/80">
+            <section className="border border-gray-200 rounded-2xl p-4 bg-white/80 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out">
               <h4 className="text-sm font-semibold tracking-wide text-gray-700 mb-2">Nutrition Targets (per serving)</h4>
               <div className="mb-3 flex items-center gap-2 text-sm">
                 <span className="text-gray-600">Tolerance</span>
@@ -663,12 +663,16 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
             <button onClick={handleRequestClose} className="px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm">Cancel</button>
           )}
           {!previewResult && (
-            <button disabled={busy || !canConvert} onClick={()=>onPreview?.(constraints)} className={`${(busy || !canConvert) ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600'} px-4 py-2.5 rounded-lg`}>
-              {busy ? 'Converting…' : 'Convert'}
+            <button disabled={busy || !canConvert} onClick={()=>onPreview?.(constraints)} className={`${(busy || !canConvert) ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-orange-500 text-white hover:bg-orange-600'} inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm`}>
+              <i className="fa-solid fa-rotate"></i>
+              <span>{busy ? 'Converting…' : 'Convert'}</span>
             </button>
           )}
           {previewResult && !busy && (
-            <button onClick={()=> onBack ? onBack() : onClose?.()} className="px-3 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-sm">Back</button>
+            <button onClick={()=> onBack ? onBack() : onClose?.()} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm">
+  <i className="fa-solid fa-arrow-left"></i>
+  <span>Back</span>
+</button>
           )}
           {previewResult && !busy && (
             <button onClick={()=>{
@@ -682,9 +686,9 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
                 }
               }
               onApply?.({ ...constraints, customTitle, imageSource: imageMeta ? 'ai' : 'original', imageURL: imageMeta?.url || null, visibility, _imageMeta: imageMeta });
-            }} className="px-4 py-2.5 rounded-lg bg-green-600 text-white hover:bg-green-700 inline-flex items-center gap-2">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 21c4.97 0 9-4.03 9-9s-4.03-9-9-9S3 7.03 3 12s4.03 9 9 9zm-1-5l-4-4 1.41-1.41L11 13.17l5.59-5.59L18 9l-7 7z"/></svg>
-              Save as Variant
+            }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 text-sm">
+              <i className="fa-solid fa-check"></i>
+              <span>Save as Variant</span>
             </button>
           )}
           {!previewResult && (

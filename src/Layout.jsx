@@ -26,6 +26,48 @@ function normalizeBackendUrl(pathOrUrl) {
   return `${API_ROOT}${pathOrUrl.startsWith('/') ? pathOrUrl : '/' + pathOrUrl}`;
 }
 
+// Hook to get shopping list badge count
+const useShoppingListBadge = () => {
+  const [badgeCount, setBadgeCount] = useState(0);
+
+  const updateBadgeCount = () => {
+    try {
+      const shoppingList = JSON.parse(localStorage.getItem('shoppingList:v1') || '[]');
+      const uncheckedCount = shoppingList.filter(item => !item.checked).length;
+      setBadgeCount(uncheckedCount);
+    } catch (error) {
+      setBadgeCount(0);
+    }
+  };
+
+  useEffect(() => {
+    updateBadgeCount();
+    
+    // Listen for storage changes
+    const handleStorageChange = (e) => {
+      if (e.key === 'shoppingList:v1') {
+        updateBadgeCount();
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Also listen for custom events from RecipeView
+    const handleShoppingListUpdate = () => {
+      updateBadgeCount();
+    };
+    
+    window.addEventListener('shoppingListUpdated', handleShoppingListUpdate);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('shoppingListUpdated', handleShoppingListUpdate);
+    };
+  }, []);
+
+  return badgeCount;
+};
+
 const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTestPdfModal }) => {
 
   const [openUserMenu, setOpenUserMenu] = useState(false);
@@ -34,6 +76,7 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
   const [logoScale, setLogoScale] = useState(1.0);
   const navigate = useNavigate();
   const location = useLocation();
+  const shoppingListBadgeCount = useShoppingListBadge();
 
   // Check if we're on the landing page (home page)
   const isLandingPage = location.pathname === '/';
@@ -80,12 +123,12 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
           </div>
           {currentUser ? (
             <div className="flex items-center gap-6 relative w-full">
-              <nav className="flex-1 flex justify-center gap-6 md:gap-8 transform translate-x-4 md:translate-x-6">
+              <nav className="flex-1 flex justify-center gap-4 md:gap-5 transform translate-x-4 md:translate-x-6">
                 <Link
                   to="/explore"
                   className="text-base text-white px-3 py-1 rounded-lg transition-colors hover:text-[#fffae5] hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   title="Explore"
-                  style={{marginRight: '24px'}}
+                  style={{marginRight: '12px'}}
                 >
                   <span className="sm:block">Explore</span>
                 </Link>
@@ -93,7 +136,7 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
                   to="/collections"
                   className="text-base text-white px-3 py-1 rounded-lg transition-colors hover:text-[#fffae5] hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   title="Collections"
-                  style={{marginRight: '24px'}}
+                  style={{marginRight: '12px'}}
                 >
                   <span className="sm:block">Collections</span>
                 </Link>
@@ -101,9 +144,20 @@ const Header = ({ currentUser, handleLogout, showAuthModal, usageStatus, showTes
                   to="/my-recipes"
                   className="text-base text-white px-3 py-1 rounded-lg transition-colors hover:text-[#fffae5] hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
                   title="My Recipes"
-                  style={{marginRight: '24px'}}
+                  style={{marginRight: '12px'}}
                 >
                   <span className="sm:block">My Recipes</span>
+                </Link>
+                <Link
+                  to="/shopping-list"
+                  className="text-base text-white px-3 py-1 rounded-lg transition-colors hover:text-[#fffae5] hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 relative"
+                  title="Shop List"
+                  style={{marginRight: '12px'}}
+                >
+                  <span className="flex items-center gap-3">
+                    <i className="fa-solid fa-basket-shopping"></i>
+                    <span>Shop List{shoppingListBadgeCount > 0 ? ` (${shoppingListBadgeCount})` : ''}</span>
+                  </span>
                 </Link>
               </nav>
               {currentUser.is_admin && (

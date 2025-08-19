@@ -75,7 +75,7 @@ export default function VariantsList({ parentId, onOpenRecipeInModal, sort = 'ne
         {items.map(v => (
           <button
             key={v.id}
-            className="text-left border border-gray-200 rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
+            className="text-left border border-gray-200 rounded-2xl p-4 bg-white shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out"
             onClick={(e)=>{
               e.preventDefault();
               // Navigate directly to recipe page instead of modal
@@ -104,9 +104,9 @@ export default function VariantsList({ parentId, onOpenRecipeInModal, sort = 'ne
       </div>
       {totalPages > 1 && (
         <div className="mt-4 flex items-center justify-center gap-2">
-          <button className="px-3 py-1.5 border rounded-lg text-sm" disabled={page<=1} onClick={()=>fetchPage(page-1, sort)}>Prev</button>
+          <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm opacity-90 hover:opacity-100 transition-opacity" disabled={page<=1} onClick={()=>fetchPage(page-1, sort)}>Prev</button>
           <span className="text-sm text-gray-600">Page {page} / {totalPages}</span>
-          <button className="px-3 py-1.5 border rounded-lg text-sm" disabled={page>=totalPages} onClick={()=>fetchPage(page+1, sort)}>Next</button>
+          <button className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm opacity-90 hover:opacity-100 transition-opacity" disabled={page>=totalPages} onClick={()=>fetchPage(page+1, sort)}>Next</button>
         </div>
       )}
     </div>

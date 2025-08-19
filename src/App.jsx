@@ -23,6 +23,7 @@ function App() {
         <Route path="profile" element={<Profile />} />
         <Route path="users/:username" element={<UserPublicProfile />} />
         <Route path="recipes/:id" element={<RecipePage />} />
+        <Route path="shopping-list" element={<div>Shop List Page - Coming Soon</div>} />
       </Route>
     </Routes>
   );

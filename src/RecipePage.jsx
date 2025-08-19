@@ -136,28 +136,32 @@ export default function RecipePage() {
   return (
     <div className="min-h-screen py-1 md:py-2">
       <div className="max-w-3xl lg:max-w-4xl mx-auto px-4">
-        <div className="mb-2 flex justify-between items-center">
-          <button
-            onClick={() => {
-              const s = location.state || {};
-              if (s.fromCollection) return navigate(-1);
-              if (s.fromMyRecipes) return navigate(-1);
-              // Default fallback
-              return navigate('/collections');
-            }}
-            className="px-3 py-2 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 border border-gray-300"
-          >Back</button>
+        <div className="mb-4 md:mb-6 flex justify-between items-center">
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const s = location.state || {};
+                if (s.fromCollection) return navigate(-1);
+                if (s.fromMyRecipes) return navigate(-1);
+                // Default fallback
+                return navigate('/collections');
+              }}
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-300 text-gray-700 hover:bg-gray-400 transition-all duration-200 text-sm"
+            >
+              <i className="fa-solid fa-arrow-left"></i>
+              <span>Back</span>
+            </button>
             <button
               onClick={() => {
                 // This will trigger the edit function in RecipeView
                 const editButton = document.querySelector('[data-save-button]');
                 if (editButton) editButton.click();
               }}
-              className="px-5 py-2.5 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 font-semibold flex items-center justify-center text-sm"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-500 text-white hover:bg-yellow-600 transition-all duration-200 text-sm"
               id="top-edit-button"
             >
-              Edit Recipe
+              <i className="fa-solid fa-pen"></i>
+              <span>Edit Recipe</span>
             </button>
             <button
               onClick={() => {
@@ -165,10 +169,11 @@ export default function RecipePage() {
                 const saveButton = document.querySelector('[data-save-button]');
                 if (saveButton) saveButton.click();
               }}
-              className="px-5 py-2.5 rounded-lg bg-[#7ab87a] text-white hover:bg-[#659a63] font-semibold hidden flex items-center justify-center text-sm"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#7ab87a] text-white hover:bg-[#659a63] transition-all duration-200 text-sm hidden"
               id="top-save-button"
             >
-              Save
+              <i className="fa-solid fa-check"></i>
+              <span>Save</span>
             </button>
             <button
               onClick={() => {
@@ -176,36 +181,42 @@ export default function RecipePage() {
                 const cancelButton = document.querySelector('[data-cancel-button]');
                 if (cancelButton) cancelButton.click();
               }}
-              className="px-5 py-2.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 font-semibold hidden flex items-center justify-center text-sm"
+              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm hidden"
               id="top-cancel-button"
             >
-              Cancel
+              <i className="fa-solid fa-xmark"></i>
+              <span>Cancel</span>
             </button>
           </div>
+          <div className="flex items-center gap-2">
+            {/* Right side is now empty, keeping the structure for potential future buttons */}
+          </div>
         </div>
-        <div className="bg-white rounded-2xl shadow px-5 md:px-6 lg:px-8 py-6 md:py-8">
-          <RecipeView 
-            recipeId={recipe.id} 
-            recipe={recipe.recipe_content} 
-            variant="page" 
-            isSaved={true} 
-            currentUser={currentUser}
-            onEditStateChange={(isEditing) => {
-              const topSaveButton = document.getElementById('top-save-button');
-              const topEditButton = document.getElementById('top-edit-button');
-              const topCancelButton = document.getElementById('top-cancel-button');
-              if (topSaveButton) {
-                topSaveButton.classList.toggle('hidden', !isEditing);
-              }
-              if (topEditButton) {
-                topEditButton.classList.toggle('hidden', isEditing);
-              }
-              if (topCancelButton) {
-                topCancelButton.classList.toggle('hidden', !isEditing);
-              }
-            }}
-          />
-        </div>
+        <RecipeView 
+          recipeId={recipe.id} 
+          recipe={recipe.recipe_content} 
+          variant="page" 
+          isSaved={true} 
+          currentUser={currentUser}
+          onEditStateChange={(isEditing) => {
+            const topSaveButton = document.getElementById('top-save-button');
+            const topEditButton = document.getElementById('top-edit-button');
+            const topCancelButton = document.getElementById('top-cancel-button');
+            const backButton = document.querySelector('button:has(i.fa-solid.fa-arrow-left)');
+            if (topSaveButton) {
+              topSaveButton.classList.toggle('hidden', !isEditing);
+            }
+            if (topEditButton) {
+              topEditButton.classList.toggle('hidden', isEditing);
+            }
+            if (topCancelButton) {
+              topCancelButton.classList.toggle('hidden', !isEditing);
+            }
+            if (backButton) {
+              backButton.classList.toggle('hidden', isEditing);
+            }
+          }}
+        />
       </div>
     </div>
   );

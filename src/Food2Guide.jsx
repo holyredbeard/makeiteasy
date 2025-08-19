@@ -564,7 +564,7 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
             <h3 className="text-xl font-bold mb-3">Add to Collection</h3>
             <div className="space-y-2 max-h-64 overflow-auto">
               {collections.map(c => (
-                <button key={c.id} className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 border" onClick={async()=>{
+                <button key={c.id} className="w-full text-left px-3 py-2 rounded-2xl hover:bg-gray-50 border border-gray-200 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out" onClick={async()=>{
                   try {
                     let rid = savedRecipeId || saveResultId;
                     if (!rid) { rid = await saveCurrentRecipeSilently(); }
