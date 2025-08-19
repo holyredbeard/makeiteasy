@@ -33,7 +33,7 @@
 body {
     font-family: 'Poppins', sans-serif;
     /*background-color: #f9fafb;*/
-    background-color: rgb(232 229 221);
+    background-color: rgb(244 244 244);
     min-height: 100vh;
     color: #333;
 }
@@ -53,7 +53,7 @@ body {
 .header h1 {
     font-size: 3rem;
     margin-bottom: 1rem;
-    color: #659a63;
+    color: rgb(74, 117, 72);
 }
 
 .header p {

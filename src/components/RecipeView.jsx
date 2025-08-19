@@ -86,7 +86,7 @@ const chipCls = (type, label) => {
   if (l === 'zesty') return 'bg-yellow-500 text-white border-yellow-500';
   if (l === 'seafood') return 'bg-blue-600 text-white border-blue-600';
   if (l === 'vegetarian') return 'bg-lime-600 text-white border-lime-600';
-  if (l === 'pescetarian') return 'bg-sky-600 text-white border-sky-600';
+  if (l === 'pescetarian' || l === 'pescatarian') return 'bg-blue-600 text-white border-blue-600';
   if (l === 'fastfood') return 'bg-orange-500 text-white border-orange-500';
   if (l === 'spicy') return 'bg-red-600 text-white border-red-600';
   if (l === 'chicken') return 'bg-amber-600 text-white border-amber-600';
@@ -174,8 +174,23 @@ export default function RecipeView({
   const [aiBusy, setAiBusy] = useState(false);
   const [gallery, setGallery] = useState([]);
   const [galleryIndex, setGalleryIndex] = useState(0);
-  const [hoverHighlight, setHoverHighlight] = useState(false);
-  const [ttsActive, setTtsActive] = useState(false);
+  const [hoverHighlight, setHoverHighlight] = useState(() => {
+    const saved = localStorage.getItem('recipeFocusMode');
+    return saved === 'true';
+  });
+  const [cartMode, setCartMode] = useState(() => {
+    const saved = localStorage.getItem(`recipe:${recipeId}:cartMode`);
+    return saved === 'true';
+  });
+  const [selectedIngredients, setSelectedIngredients] = useState(new Set());
+  const [layoutMode, setLayoutMode] = useState(() => {
+    const saved = localStorage.getItem('recipeLayoutMode');
+    return saved === 'single' ? 'single' : 'two';
+  });
+  const [ttsActive, setTtsActive] = useState(() => {
+    const saved = localStorage.getItem('recipeTTS');
+    return saved === 'true';
+  });
   const [isTtsPlaying, setIsTtsPlaying] = useState(false);
   const utterRef = useRef(null);
   const { onStepClick } = useStepTTS();
@@ -186,6 +201,9 @@ export default function RecipeView({
   const [hoveredItem, setHoveredItem] = useState(null); // { type: 'ingredients'|'instructions', index: number }
   const [keyboardFocusedItem, setKeyboardFocusedItem] = useState(null); // { type: 'ingredients'|'instructions', index: number }
   const hoverTimeoutRef = useRef(null);
+  const [showTimePopover, setShowTimePopover] = useState(false);
+  const timePopoverRef = useRef(null);
+  const titleInputRef = useRef(null);
 
   const moveArrayItem = (array, fromIndex, toIndex) => {
     const list = Array.isArray(array) ? [...array] : [];
@@ -432,6 +450,11 @@ export default function RecipeView({
 
   // ----- Edit helpers -----
   const startEdit = () => {
+    // Automatically exit shopping list mode when entering edit mode
+    if (cartMode) {
+      setCartModeAndSave(false);
+    }
+    
     setIsEditing(true);
     setEdited({
       title,
@@ -729,7 +752,7 @@ export default function RecipeView({
   if (nutrition && Object.keys(nutrition).length > 0) subnavItems.push({ id: 'nutrition', label: 'Nutrition' });
   if (isSaved && !content?.conversion?.isVariant) subnavItems.push({ id: 'variants', label: 'Variants' });
   subnavItems.push({ id: 'tags', label: 'Tags' });
-  subnavItems.push({ id: 'ratings', label: 'Ratings' });
+  
   subnavItems.push({ id: 'comments', label: 'Comments' });
 
   const activeId = useScrollSpy(subnavItems.map(i => i.id), 88);
@@ -744,233 +767,964 @@ export default function RecipeView({
     try { target?.focus?.(); } catch {}
   };
 
-  return (
-    <div className={`w-full ${variant === 'modal' ? 'max-w-[1180px]' : ''}`}>
-      <div className="px-4 lg:px-8">
-        {/* Header */}
-      <div className="mb-8">
-        {variant === 'modal' && sourceFrom && !recipe?.conversion?.isVariant && (
-          <div className="mb-2">
-            <button className="text-sm text-blue-600 hover:underline"
-              onClick={() => {
-                if (typeof onOpenRecipeInModal === 'function') {
-                  // Navigate back to the variant and clear source so no back button is shown there
-                  onOpenRecipeInModal(sourceFrom.id, { clearSource: true });
-                }
-              }}
-            >Back to {sourceFrom.title || 'variant'}</button>
-          </div>
-        )}
-        {activeConstraints && (
-          <div className="mb-3 flex flex-wrap gap-2">
-            {(activeConstraints.presets || []).map(p => (
-              <span key={`p-${p}`} className="px-2 py-1 rounded-full text-xs bg-emerald-50 text-emerald-700 border border-emerald-200">{p}</span>
-            ))}
-              {(() => {
-              const n = activeConstraints.nutrition || {};
-              const chips = [];
-              if (n.maxCalories != null) chips.push({ k: 'kcal', label: `≤ ${n.maxCalories} kcal` });
-              if (n.minProtein != null) chips.push({ k: 'protein', label: `≥ ${n.minProtein} g protein` });
-              if (n.maxCarbs != null) chips.push({ k: 'carbs', label: `≤ ${n.maxCarbs} g carbs` });
-              if (n.maxFat != null) chips.push({ k: 'fat', label: `≤ ${n.maxFat} g fat` });
-              
-              return chips.map(c => (
-                <span key={`n-${c.k}`} className="px-2 py-1 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">{c.label}</span>
-              ));
-            })()}
-          </div>
-        )}
-          <div className="flex items-center gap-3">
-            <h2 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-              {isEditing && activeEditField === 'title' ? (
-                <div data-edit-field="title">
-                  <input
-                    value={edited?.title || ''}
-                    onChange={(e)=>setEdited(v=>({...(v||{}), title: e.target.value}))}
-                    className="flex-1 w-[50vw] max-w-[730px] min-w-[35ch] text-3xl font-extrabold leading-tight border-b-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-sm px-1"
-                    placeholder="Title"
-                    aria-label="Recipe title"
-                    onBlur={() => setActiveEditField(null)}
-                  />
-                </div>
-              ) : (
-                <span 
-                  className={isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}
-                  onClick={isEditing ? () => activateFieldEdit('title') : undefined}
-                  data-edit-field="title"
-                >
-                  {edited?.title || title || 'Untitled Recipe'}
-                </span>
-              )}
-              {content?.conversion?.isVariant && (
-                <span className="text-xs px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">Variant</span>
-              )}
-              {/* removed variant title tag near header */}
-              {content?.conversion?.isVariant && (
-                <button
-                  className={`text-xs px-2 py-1 rounded-full border ${content?.conversion?.visibility === 'public' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-gray-50 text-gray-700 border-gray-300'}`}
-                  disabled={visibilitySaving}
-                  title="Toggle visibility"
-                  onClick={async ()=>{
-                    try {
-                      setVisibilitySaving(true);
-                      const desired = content?.conversion?.visibility === 'public' ? 'private' : 'public';
-                      const res = await fetch(`http://localhost:8001/api/v1/recipes/${recipeId}/visibility`, {
-                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ visibility: desired })
-                      });
-                      const j = await res.json();
-                      if (!res.ok) throw new Error(j?.detail || 'Visibility update failed');
-                      // Update local recipe content
-                      setOverrideRecipe((prev) => ({ ...(prev || content), conversion: { ...(prev?.conversion || content?.conversion || {}), visibility: desired } }));
-                    } catch (e) {
-                      alert(String(e?.message || e));
-                    } finally { setVisibilitySaving(false); }
-                  }}
-                >{content?.conversion?.visibility === 'public' ? 'Public' : 'Private'}</button>
-              )}
-            </h2>
-            {!isEditing && Number(rating.count || 0) > 0 && (
-              <div className="flex items-center gap-1 text-gray-700">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="#facc15" aria-hidden="true"><path d="M12 17.27L18.18 21 16.54 13.97 22 9.24l-7.19-.62L12 2 9.19 8.62 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                <span className="font-medium">{Number(rating.average || 0).toFixed(1)}</span>
-                <span className="text-xs text-gray-500">({rating.count})</span>
-              </div>
-            )}
-          </div>
-          {content?.conversion?.isVariant && (
-            <div className="mt-1 text-sm text-gray-600">
-              Based on: <a className="text-blue-600 hover:underline" href={`/recipes/${content?.conversion?.parentRecipeId}`}
-                onClick={(e)=>{
-                  if (variant === 'modal' && typeof onOpenRecipeInModal === 'function') {
-                    e.preventDefault();
-                    const parentId = content?.conversion?.parentRecipeId;
-                    if (parentId) onOpenRecipeInModal(parentId, { sourceRecipeId: recipeId, sourceTitle: title });
-                  }
-                }}
-              >{content?.conversion?.basedOnTitle || 'Original'}</a>
-            </div>
-          )}
-        </div>
+  // localStorage save functions
+  const setLayoutModeAndSave = (mode) => {
+    setLayoutMode(mode);
+    localStorage.setItem('recipeLayoutMode', mode);
+  };
 
-        {/* Media + Description */}
-        <div className="flex flex-col md:flex-row md:items-stretch gap-6 mb-8 lg:mb-10">
-          <div className="md:w-1/3">
-            {(image || edited?.image_url) && (
-              <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
-                <div className={`${variant === 'modal' ? 'relative w-full aspect-[4/3]' : ''}`}>
-                  <img
-                    src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
-                    alt={edited?.title || title}
-                    className={`w-full ${variant === 'modal' ? 'h-full absolute inset-0' : 'h-auto'} object-cover rounded-lg shadow-md ${isEditing ? 'cursor-pointer' : ''}`}
-                    loading={variant === 'modal' ? 'lazy' : 'eager'}
-                    decoding="async"
-                    onClick={isEditing ? () => activateFieldEdit('image') : undefined}
-                    data-edit-field="image"
-                  />
-                </div>
-                {isEditing && activeEditField === 'image' && gallery.length > 1 && (
-                  <>
-                    <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
-                    <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next" data-edit-field="image">›</button>
-                  </>
+  const setHoverHighlightAndSave = (enabled) => {
+    setHoverHighlight(enabled);
+    localStorage.setItem('recipeFocusMode', enabled.toString());
+  };
+
+  const setTtsActiveAndSave = (enabled) => {
+    setTtsActive(enabled);
+    localStorage.setItem('recipeTTS', enabled.toString());
+  };
+
+  const setCartModeAndSave = (enabled) => {
+    setCartMode(enabled);
+    localStorage.setItem(`recipe:${recipeId}:cartMode`, enabled.toString());
+  };
+
+  const toggleIngredientSelection = (index) => {
+    setSelectedIngredients(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
+  };
+
+  const addToShoppingList = () => {
+    const ingredientsToAdd = selectedIngredients.size > 0 
+      ? Array.from(selectedIngredients).map(idx => ingredientsToRender[idx])
+      : ingredientsToRender;
+    
+    // Get existing shopping list
+    const existingList = JSON.parse(localStorage.getItem('shoppingList:v1') || '[]');
+    
+    ingredientsToAdd.forEach(ingredient => {
+      const text = typeof ingredient === 'string' ? ingredient : `${ingredient.quantity || ''} ${ingredient.name || ''} ${ingredient.notes ? `(${ingredient.notes})` : ''}`.trim();
+      
+      // Parse ingredient text to extract quantity, unit, and name
+      const match = text.match(/^([\d\/\s]+)?\s*([a-zA-Z]+)?\s+(.+)$/);
+      let quantity = '';
+      let unit = '';
+      let name = text;
+      
+      if (match) {
+        quantity = (match[1] || '').trim();
+        unit = (match[2] || '').trim();
+        name = (match[3] || '').trim();
+      }
+      
+      // Normalize name
+      const normalizedName = name.toLowerCase().trim().replace(/\s+/g, ' ');
+      
+      // Check if item already exists
+      const existingIndex = existingList.findIndex(item => 
+        item.name.toLowerCase().trim().replace(/\s+/g, ' ') === normalizedName && 
+        item.unit === unit
+      );
+      
+      if (existingIndex >= 0) {
+        // Merge quantities if possible
+        const existing = existingList[existingIndex];
+        if (quantity && existing.quantity) {
+          // Simple merge - could be improved with proper unit conversion
+          existing.quantity = `${existing.quantity} + ${quantity}`;
+        }
+        // Add source if not already present
+        if (!existing.sources.some(s => s.recipeId === recipeId)) {
+          existing.sources.push({
+            recipeId: recipeId,
+            title: title
+          });
+        }
+      } else {
+        // Add new item
+        const category = getIngredientCategory(name);
+        existingList.push({
+          name: name,
+          quantity: quantity,
+          unit: unit,
+          category: category,
+          checked: false,
+          sources: [{
+            recipeId: recipeId,
+            title: title
+          }],
+          addedAt: new Date().toISOString()
+        });
+      }
+    });
+    
+    // Save updated list
+    localStorage.setItem('shoppingList:v1', JSON.stringify(existingList));
+    
+    // Dispatch custom event to update badge
+    window.dispatchEvent(new CustomEvent('shoppingListUpdated'));
+    
+    // Show toast
+    const count = ingredientsToAdd.length;
+    const message = `Added ${count} item${count !== 1 ? 's' : ''} to Shopping List`;
+    
+    // Create toast notification
+    const toast = document.createElement('div');
+    toast.className = 'fixed bottom-4 left-1/2 transform -translate-x-1/2 md:left-auto md:right-4 md:transform-none bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3 max-w-sm';
+    toast.setAttribute('aria-live', 'polite');
+    toast.innerHTML = `
+      <span>${message}</span>
+      <button onclick="window.location.href='/shopping-list'" class="bg-white text-green-600 px-2 py-1 rounded text-sm font-medium hover:bg-gray-100">
+        View list
+            </button>
+    `;
+    document.body.appendChild(toast);
+    
+    // Remove toast after 4 seconds
+    setTimeout(() => {
+      if (toast.parentNode) {
+        toast.parentNode.removeChild(toast);
+      }
+    }, 4000);
+    
+    // Close toast on click outside or ESC
+    const handleClickOutside = (event) => {
+      if (!toast.contains(event.target)) {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+        document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        if (toast.parentNode) {
+          toast.parentNode.removeChild(toast);
+        }
+        document.removeEventListener('click', handleClickOutside);
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    
+    // Add event listeners after a small delay to avoid immediate trigger
+    setTimeout(() => {
+      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+    }, 100);
+  };
+
+  const getIngredientCategory = (name) => {
+    const lowerName = name.toLowerCase();
+    
+    if (lowerName.includes('milk') || lowerName.includes('cheese') || lowerName.includes('yogurt') || lowerName.includes('cream') || lowerName.includes('butter')) {
+      return 'Dairy';
+    }
+    if (lowerName.includes('apple') || lowerName.includes('banana') || lowerName.includes('tomato') || lowerName.includes('lettuce') || lowerName.includes('carrot') || lowerName.includes('onion') || lowerName.includes('garlic') || lowerName.includes('lemon') || lowerName.includes('lime') || lowerName.includes('mango') || lowerName.includes('berry') || lowerName.includes('fruit') || lowerName.includes('vegetable')) {
+      return 'Produce';
+    }
+    if (lowerName.includes('chicken') || lowerName.includes('beef') || lowerName.includes('pork') || lowerName.includes('fish') || lowerName.includes('salmon') || lowerName.includes('tuna') || lowerName.includes('shrimp') || lowerName.includes('meat')) {
+      return 'Meat/Fish';
+    }
+    if (lowerName.includes('bread') || lowerName.includes('pasta') || lowerName.includes('rice') || lowerName.includes('flour') || lowerName.includes('sugar') || lowerName.includes('salt') || lowerName.includes('oil') || lowerName.includes('vinegar') || lowerName.includes('spice') || lowerName.includes('herb')) {
+      return 'Pantry';
+    }
+    if (lowerName.includes('frozen') || lowerName.includes('ice cream') || lowerName.includes('peas') || lowerName.includes('corn')) {
+      return 'Frozen';
+    }
+    if (lowerName.includes('cake') || lowerName.includes('cookie') || lowerName.includes('pastry') || lowerName.includes('bread')) {
+      return 'Bakery';
+    }
+    
+    return 'Other';
+  };
+
+  // Helper functions for time calculation and popover
+  const getTimeValue = (timeField) => {
+    const v = content[timeField] ?? content[`${timeField}_minutes`];
+    if (v == null || String(v) === '') return null;
+    return parseInt(String(v).replace(/\s*minutes?\s*/i, ''), 10);
+  };
+
+  const prepTime = getTimeValue('prep_time');
+  const cookTime = getTimeValue('cook_time');
+  const totalTime = (prepTime || 0) + (cookTime || 0);
+
+  const getDifficultyText = (level) => {
+    if (!level) return 'Beginner'; // Default fallback
+    const num = parseInt(level, 10);
+    if (num === 1) return 'Beginner';
+    if (num === 2) return 'Intermediate';
+    if (num === 3) return 'Advanced';
+    return level; // fallback to original value
+  };
+
+  const difficulty = getDifficultyText(content.difficulty || content.difficulty_level);
+
+  // Popover handlers
+  const handleTimeClick = () => {
+    if (window.innerWidth < 768) { // mobile
+      setShowTimePopover(!showTimePopover);
+    }
+  };
+
+  const handleTimeMouseEnter = () => {
+    if (window.innerWidth >= 768) { // desktop
+      setShowTimePopover(true);
+    }
+  };
+
+  const handleTimeMouseLeave = () => {
+    if (window.innerWidth >= 768) { // desktop
+      setShowTimePopover(false);
+    }
+  };
+
+  // Close popover when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (timePopoverRef.current && !timePopoverRef.current.contains(event.target)) {
+        setShowTimePopover(false);
+      }
+    };
+
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setShowTimePopover(false);
+      }
+    };
+
+    if (showTimePopover) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showTimePopover]);
+
+  // Handle clicks outside title input field
+  useEffect(() => {
+    const handleTitleClickOutside = (event) => {
+      if (titleInputRef.current && !titleInputRef.current.contains(event.target)) {
+        // Check if the click is not on a Save/Cancel button
+        const isSaveButton = event.target.closest('button[data-save-button]');
+        const isCancelButton = event.target.closest('button[data-cancel-button]');
+        
+        if (!isSaveButton && !isCancelButton) {
+          setActiveEditField(null);
+        }
+      }
+    };
+
+    if (isEditing && activeEditField === 'title') {
+      document.addEventListener('mousedown', handleTitleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleTitleClickOutside);
+    };
+  }, [isEditing, activeEditField]);
+
+  return (
+    <div className={`w-full min-h-screen ${variant === 'modal' ? 'max-w-[1180px]' : ''}`}>
+      <div className="max-w-7xl mx-auto space-y-6">
+
+        {/* Recipe Header Layout */}
+        <div className="mb-8">
+          {/* Title Block */}
+          <div className="mb-6">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div className="flex-1">
+                <h1 className="text-5xl font-bold text-gray-900 recipe-title mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  {isEditing && activeEditField === 'title' ? (
+                    <div data-edit-field="title" className="w-full" ref={titleInputRef}>
+                      <input
+                        value={edited?.title || ''}
+                        onChange={(e)=>setEdited(v=>({...(v||{}), title: e.target.value}))}
+                        className="w-full text-5xl font-bold text-gray-900 recipe-title bg-transparent border-b-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-sm px-1"
+                        style={{ fontFamily: "'Playfair Display', serif" }}
+                        placeholder="Title"
+                        aria-label="Recipe title"
+                        onMouseDown={(e) => {
+                          // Prevent blur when starting text selection
+                          e.currentTarget.setAttribute('data-selecting', 'true');
+                        }}
+                        onMouseUp={(e) => {
+                          // Allow blur after text selection is complete
+                          setTimeout(() => {
+                            e.currentTarget.removeAttribute('data-selecting');
+                          }, 100);
+                        }}
+                        onBlur={(e) => {
+                          // Only blur if not during text selection
+                          if (!e.currentTarget.hasAttribute('data-selecting')) {
+                            setActiveEditField(null);
+                          }
+                        }}
+                        autoFocus
+                      />
+                    </div>
+                  ) : (
+                    <span 
+                      className={isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}
+                      onClick={isEditing ? () => activateFieldEdit('title') : undefined}
+                      data-edit-field="title"
+                    >
+                      {edited?.title || title || 'Untitled Recipe'}
+                    </span>
+                  )}
+                </h1>
+                
+                {/* Variant badges inline with title */}
+                {content?.conversion?.isVariant && (
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-[11px] px-2 py-1 rounded-md bg-orange-100 text-orange-700 border border-orange-300 uppercase font-medium" style={{fontFamily: 'Poppins, sans-serif'}}>Variant</span>
+                    <button
+                      className={`text-[11px] px-2 py-1 rounded-md border ${content?.conversion?.visibility === 'public' ? 'bg-green-100 text-green-700 border-green-300 uppercase font-medium' : 'bg-gray-100 text-gray-700 border-gray-300 uppercase font-medium'}`}
+                      style={{fontFamily: 'Poppins, sans-serif'}}
+                      disabled={visibilitySaving}
+                      title="Toggle visibility"
+                      onClick={async ()=>{
+                        try {
+                          setVisibilitySaving(true);
+                          const desired = content?.conversion?.visibility === 'public' ? 'private' : 'public';
+                          const res = await fetch(`http://localhost:8001/api/v1/recipes/${recipeId}/visibility`, {
+                            method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ visibility: desired })
+                          });
+                          const j = await res.json();
+                          if (!res.ok) throw new Error(j?.detail || 'Visibility update failed');
+                          // Update local recipe content
+                          setOverrideRecipe((prev) => ({ ...(prev || content), conversion: { ...(prev?.conversion || content?.conversion || {}), visibility: desired } }));
+                        } catch (e) {
+                          alert(String(e?.message || e));
+                        } finally { setVisibilitySaving(false); }
+                      }}
+                    >{content?.conversion?.visibility === 'public' ? 'Public' : 'Private'}</button>
+                  </div>
                 )}
-                {isEditing && activeEditField === 'image' && (
-                  <div className="mt-3 flex items-center gap-2" data-edit-field="image">
-                    <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate'}</button>
-                    <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
-                      const f = e.target.files && e.target.files[0];
-                      if(!f) return;
-                      try {
-                        const form = new FormData();
-                        form.append('file', f);
-                        const r = await fetch(`${API_BASE}/images/upload`, { method: 'POST', credentials: 'include', body: form });
-                        const j = await r.json();
-                        if (j?.url) {
-                          setEdited(prev => ({ ...(prev||{}), image_url: j.url }));
-                          const abs = j.url.startsWith('http') ? j.url : STATIC_BASE + j.url;
-                          setGallery(g => { const ng = g && g.length ? [...g, abs] : [abs]; setGalleryIndex(ng.length-1); return ng; });
-                        } else {
-                          alert('Upload failed');
+                
+                {/* Based on link */}
+                {content?.conversion?.isVariant && (
+                  <div className="text-sm text-gray-600 mb-4">
+                    Based on: <a className="hover:underline" style={{ color: 'rgb(204 124 46 / var(--tw-text-opacity, 1))' }} href={`/recipes/${content?.conversion?.parentRecipeId}`}
+                      onClick={(e)=>{
+                        if (variant === 'modal' && typeof onOpenRecipeInModal === 'function') {
+                          e.preventDefault();
+                          const parentId = content?.conversion?.parentRecipeId;
+                          if (parentId) onOpenRecipeInModal(parentId, { sourceRecipeId: recipeId, sourceTitle: title });
                         }
-                      } catch {
-                        alert('Upload failed');
-                      } finally {
-                        e.target.value = '';
-                      }
-                    }} />
-                    <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 hover:bg-gray-300" onClick={()=>document.getElementById('rv-upload')?.click()}>Upload</button>
+                      }}
+                    >{content?.conversion?.basedOnTitle || 'Original'}</a>
+                  </div>
+                )}
+              </div>
+              
+              {/* Rating - Desktop: top right, Mobile: below title */}
+              {!isEditing && (
+                <div className="flex items-center gap-2 flex-shrink-0 mt-[5px] hidden md:flex">
+                  <div className="flex items-center gap-1" role="radiogroup" aria-label="Rate 1 to 5">
+                    {[1,2,3,4,5].map(v => (
+                      <button key={v} className={`w-4 h-4 sm:w-5 sm:h-5 ${v <= (rating.userValue || Math.round(rating.average)) ? 'text-yellow-400' : 'text-gray-300'}`} onClick={()=>putRating(v)}>
+                        <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                      </button>
+                    ))}
+                  </div>
+                  {Number(rating.count || 0) > 0 && (
+                    <div className="flex items-center gap-1 text-gray-700">
+                      <span className="font-medium text-sm">{Number(rating.average || 0).toFixed(1)}</span>
+                      <span className="text-xs text-gray-500 hidden sm:inline">({rating.count})</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Rating - Mobile: below title */}
+            {!isEditing && (
+              <div className="flex items-center gap-2 mb-4 md:hidden">
+                <div className="flex items-center gap-1" role="radiogroup" aria-label="Rate 1 to 5">
+                  {[1,2,3,4,5].map(v => (
+                    <button key={v} className={`w-4 h-4 sm:w-5 sm:h-5 ${v <= (rating.userValue || Math.round(rating.average)) ? 'text-yellow-400' : 'text-gray-300'}`} onClick={()=>putRating(v)}>
+                      <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                    </button>
+                  ))}
+                </div>
+                {Number(rating.count || 0) > 0 && (
+                  <div className="flex items-center gap-1 text-gray-700">
+                    <span className="font-medium text-sm">{Number(rating.average || 0).toFixed(1)}</span>
+                    <span className="text-xs text-gray-500 hidden sm:inline">({rating.count})</span>
                   </div>
                 )}
               </div>
             )}
           </div>
-          <div className="md:w-2/3 flex flex-col">
-            <Section title="Description" showTitle={false}>
-              {isEditing && activeEditField === 'description' ? (
-                <div data-edit-field="description">
-                  <textarea
-                    value={edited?.description||''}
-                    onChange={(e)=>setEdited(v=>({...(v||{}), description:e.target.value}))}
-                    className="w-full border rounded-lg px-4 py-3 text-base leading-relaxed min-h-[200px] resize-y ring-amber-200 focus:ring-2"
-                    rows={8}
-                    placeholder="Add description"
-                    onBlur={() => setActiveEditField(null)}
-                  />
+          
+          {/* Tags Row */}
+          <div className="mb-6 -mt-2">
+            <div className="flex flex-wrap gap-2">
+              {(() => {
+                const approved = (tags.approved||[]);
+                const out = [...approved];
+                try {
+                  const rc = recipe || {};
+                  const conv = rc.conversion || {};
+                  if (conv.isVariant) out.push({ keyword: 'Variant', type: 'variant' });
+                  const presets = ((conv.constraints||{}).presets||[]).map(p=>String(p).toLowerCase());
+                  const label = (p)=> p==='plant-based' ? 'Plant based' : p.charAt(0).toUpperCase()+p.slice(1);
+                  ['vegan','vegetarian','pescetarian'].forEach(p=>{ if (presets.includes(p)) out.push({ keyword: label(p), type: 'diet' }); });
+                } catch {}
+                
+                // Show max 5 tags, collapse rest into +N
+                const visibleTags = out.slice(0, 5);
+                const hiddenCount = out.length - 5;
+                
+                return (
+                  <>
+                    {visibleTags.map((t, idx) => (
+                      <span key={`tag-${idx}-${t.keyword}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(t.type, t.keyword)}`}>
+                        {t.keyword.toLowerCase() === 'vegan' && <i className="fa-solid fa-leaf mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'vegetarian' && <i className="fa-solid fa-carrot mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'zesty' && <i className="fa-solid fa-lemon mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'pescatarian' && <i className="fa-solid fa-fish mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'seafood' && <i className="fa-solid fa-shrimp mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'fastfood' && <i className="fa-solid fa-burger mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'spicy' && <i className="fa-solid fa-pepper-hot mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'chicken' && <i className="fa-solid fa-drumstick-bite mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'eggs' && <i className="fa-solid fa-egg mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'cheese' && <i className="fa-solid fa-cheese mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'fruits' && <i className="fa-solid fa-apple-whole mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'wine' && <i className="fa-solid fa-wine-bottle mr-1"></i>}
+                        {t.keyword.toLowerCase() === 'pasta' && <i className="fa-solid fa-bacon mr-1"></i>}
+                        <span className="font-medium">{t.keyword.charAt(0).toUpperCase() + t.keyword.slice(1)}</span>
+                      </span>
+                    ))}
+                    {hiddenCount > 0 && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs border bg-gray-100 text-gray-700 border-gray-300">
+                        <span className="font-medium">+{hiddenCount}</span>
+                      </span>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+          
+          {/* Image + Content Two-Column Layout */}
+          <div className="flex flex-col md:flex-row gap-6 mb-6">
+            {/* Mobile Layout: Image → Description → Meta Pills → Actions */}
+            <div className="md:hidden space-y-6">
+              {/* Image */}
+              {(image || edited?.image_url) && (
+                <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+                  <div className="relative w-full aspect-square overflow-hidden rounded-lg">
+                    <img
+                      src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
+                      alt={edited?.title || title}
+                      className="w-full h-full object-cover rounded-lg shadow-md hover:scale-105 transition-transform duration-300 ease-in-out"
+                      loading="eager"
+                      decoding="async"
+                      onClick={isEditing ? () => activateFieldEdit('image') : undefined}
+                      data-edit-field="image"
+                    />
+                  </div>
+                  {isEditing && activeEditField === 'image' && gallery.length > 1 && (
+                    <>
+                      <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
+                      <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next" data-edit-field="image">›</button>
+                    </>
+                  )}
+                  {isEditing && activeEditField === 'image' && (
+                    <div className="mt-3 flex items-center gap-2" data-edit-field="image">
+                      <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate'}</button>
+                      <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
+                        const f = e.target.files && e.target.files[0];
+                        if(!f) return;
+                        try {
+                          const formData = new FormData();
+                          formData.append('image', f);
+                          const res = await fetch(`${API_BASE}/recipes/${recipeId}/image`, { method: 'POST', credentials: 'include', body: formData });
+                          if (!res.ok) throw new Error('Upload failed');
+                          const j = await res.json();
+                          setEdited(v => ({ ...(v || {}), image_url: j.image_url }));
+                        } catch (e) {
+                          alert('Failed to upload image: ' + e.message);
+                        }
+                      }} />
+                      <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 border border-gray-300" onClick={()=>document.getElementById('rv-upload')?.click()}>Upload</button>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <p 
-                  className={`text-gray-700 leading-relaxed ${isEditing ? 'cursor-pointer hover:bg-yellow-50 rounded-lg p-2 transition-colors' : ''}`}
-                  onClick={isEditing ? () => activateFieldEdit('description') : undefined}
-                  data-edit-field="description"
-                >
-                  {edited?.description || description}
-                </p>
               )}
-            </Section>
+              
+              {/* Description */}
+              <div className={`${isEditing && activeEditField === 'description' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+                {isEditing && activeEditField === 'description' ? (
+                  <div data-edit-field="description">
+                    <textarea
+                      value={edited?.description || ''}
+                      onChange={(e)=>setEdited(v=>({...(v||{}), description: e.target.value}))}
+                      className="w-full min-h-[120px] text-base leading-relaxed border-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-lg p-3 resize-y"
+                      placeholder="Describe your recipe..."
+                      aria-label="Recipe description"
+                      onBlur={() => setActiveEditField(null)}
+                    />
+                  </div>
+                ) : (
+                  <p 
+                    className={`text-base leading-relaxed text-gray-700 ${isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}`}
+                    onClick={isEditing ? () => activateFieldEdit('description') : undefined}
+                    data-edit-field="description"
+                  >
+                    {edited?.description || description || 'No description available.'}
+                  </p>
+                )}
+              </div>
+              
+              {/* Meta Pills */}
+              <div className="flex items-center gap-3 md:gap-4 flex-wrap gap-y-2">
+                {/* Servings */}
+                {(content.servings || content.serves) && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)]">
+                    <i className="fa-solid fa-utensils text-[#cc7c2e]"></i>
+                    <span className="text-gray-700">{content.servings || content.serves} servings</span>
+                  </div>
+                )}
+                
+                {/* Total Time */}
+                {(prepTime || cookTime) && (
+                  <div className="relative" ref={timePopoverRef}>
+                    <button
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)] hover:shadow-[3px_3px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out"
+                      onClick={handleTimeClick}
+                      onMouseEnter={handleTimeMouseEnter}
+                      onMouseLeave={handleTimeMouseLeave}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleTimeClick();
+                        }
+                      }}
+                      aria-label={`Total time ${totalTime} minutes`}
+                    >
+                      <i className="fa-solid fa-clock text-[#cc7c2e]"></i>
+                      <span className="text-gray-700">{totalTime} min</span>
+                    </button>
+                    
+                    {/* Desktop tooltip */}
+                    {showTimePopover && window.innerWidth >= 768 && (
+                      <div 
+                        className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg z-50 whitespace-nowrap"
+                        role="tooltip"
+                      >
+                        {prepTime && cookTime ? (
+                          `Prep: ${prepTime} min • Cook: ${cookTime} min`
+                        ) : prepTime ? (
+                          `Prep: ${prepTime} min`
+                        ) : (
+                          `Cook: ${cookTime} min`
+                        )}
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                      </div>
+                    )}
+                    
+                    {/* Mobile popover */}
+                    {showTimePopover && window.innerWidth < 768 && (
+                      <div 
+                        className="absolute top-full left-0 mt-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg z-50 whitespace-nowrap"
+                        role="tooltip"
+                      >
+                        {prepTime && cookTime ? (
+                          `Prep: ${prepTime} min • Cook: ${cookTime} min`
+                        ) : prepTime ? (
+                          `Prep: ${prepTime} min`
+                        ) : (
+                          `Cook: ${cookTime} min`
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+                
+                {/* Difficulty */}
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)]">
+                  <i className="fa-solid fa-smile text-[#cc7c2e]"></i>
+                  <span className="text-gray-700">{difficulty}</span>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                                  <button onClick={() => onDownload?.(content)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white hover:brightness-110 transition-colors text-sm">
+                  <i className="fa-solid fa-download"></i>
+                  <span>Download</span>
+                </button>
+                {isSaved && (
+                  <>
+                    <button onClick={()=>setConvertOpen(true)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#e87b35] text-white hover:brightness-110 transition-colors text-sm">
+                      <i className="fa-solid fa-arrows-rotate"></i>
+                      <span>Convert</span>
+                    </button>
+                  </>
+                )}
+                <button onClick={async ()=>{
+                  try {
+                    const url = window.location.href;
+                    const shareData = { title: (edited?.title || title) || 'Recipe', url };
+                    if (navigator.share) {
+                      await navigator.share(shareData);
+                    } else {
+                      await navigator.clipboard.writeText(url);
+                      const t = document.createElement('div');
+                      t.className = 'fixed bottom-4 right-4 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow z-[9999]';
+                      t.textContent = 'Link copied to clipboard';
+                      document.body.appendChild(t);
+                      setTimeout(()=>{ t.remove(); }, 2500);
+                    }
+                  } catch {}
+                }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#6b7280] text-white hover:brightness-110 transition-colors text-sm">
+                  <i className="fa-solid fa-share-nodes"></i>
+                  <span>Share</span>
+                </button>
+              </div>
+            </div>
+            
+            {/* Desktop Layout: Two-column */}
+            <div className="hidden md:flex md:flex-row gap-6 w-full">
+            {/* Left column: Image ONLY */}
+            <div className="md:w-1/3">
+              {(image || edited?.image_url) && (
+                <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+                  <div className="relative w-full aspect-square overflow-hidden rounded-lg">
+                    <img
+                      src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
+                      alt={edited?.title || title}
+                      className="w-full h-full object-cover rounded-lg shadow-md hover:scale-105 transition-transform duration-300 ease-in-out"
+                      loading="eager"
+                      decoding="async"
+                      onClick={isEditing ? () => activateFieldEdit('image') : undefined}
+                      data-edit-field="image"
+                    />
+                  </div>
+                  {isEditing && activeEditField === 'image' && gallery.length > 1 && (
+                    <>
+                      <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
+                      <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next" data-edit-field="image">›</button>
+                    </>
+                  )}
+                  {isEditing && activeEditField === 'image' && (
+                    <div className="mt-3 flex items-center gap-2" data-edit-field="image">
+                      <button className="px-4 py-2 rounded-lg bg-[#da8146] text-white disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>{aiBusy ? 'Generating…' : 'Generate'}</button>
+                      <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
+                        const f = e.target.files && e.target.files[0];
+                        if(!f) return;
+                        try {
+                          const formData = new FormData();
+                          formData.append('image', f);
+                          const res = await fetch(`${API_BASE}/recipes/${recipeId}/image`, { method: 'POST', credentials: 'include', body: formData });
+                          if (!res.ok) throw new Error('Upload failed');
+                          const j = await res.json();
+                          setEdited(v => ({ ...(v || {}), image_url: j.image_url }));
+                        } catch (e) {
+                          alert('Failed to upload image: ' + e.message);
+                        }
+                      }} />
+                      <button className="px-4 py-2 rounded-lg bg-gray-200 text-gray-700 border border-gray-300" onClick={()=>document.getElementById('rv-upload')?.click()}>Upload</button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
+            {/* Right column: Content Stack (Description → Meta Pills → Actions) */}
+            <div className="md:w-2/3">
+              <div className="space-y-6">
+                {/* Description */}
+                <div className={`${isEditing && activeEditField === 'description' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+                  {isEditing && activeEditField === 'description' ? (
+                    <div data-edit-field="description">
+                      <textarea
+                        value={edited?.description || ''}
+                        onChange={(e)=>setEdited(v=>({...(v||{}), description: e.target.value}))}
+                        className="w-full min-h-[120px] text-base leading-relaxed border-2 border-amber-300 focus:outline-none focus:border-amber-500 rounded-lg p-3 resize-y"
+                        placeholder="Describe your recipe..."
+                        aria-label="Recipe description"
+                        onBlur={() => setActiveEditField(null)}
+                      />
+                    </div>
+                  ) : (
+                    <p 
+                      className={`text-base leading-relaxed text-gray-700 ${isEditing ? "cursor-pointer hover:bg-yellow-50 rounded px-1 transition-colors" : ""}`}
+                      onClick={isEditing ? () => activateFieldEdit('description') : undefined}
+                      data-edit-field="description"
+                    >
+                      {edited?.description || description || 'No description available.'}
+                    </p>
+                  )}
+                </div>
+                
+                {/* Meta Pills */}
+                <div className="flex items-center gap-3 md:gap-4 flex-wrap gap-y-2">
+                  {/* Servings */}
+                  {(content.servings || content.serves) && (
+                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)]">
+                      <i className="fa-solid fa-utensils text-[#cc7c2e]"></i>
+                      <span className="text-gray-700">{content.servings || content.serves} servings</span>
+                    </div>
+                  )}
+                  
+                  {/* Total Time */}
+                  {(prepTime || cookTime) && (
+                    <div className="relative" ref={timePopoverRef}>
+                      <button
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)] hover:shadow-[3px_3px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out"
+                        onClick={handleTimeClick}
+                        onMouseEnter={handleTimeMouseEnter}
+                        onMouseLeave={handleTimeMouseLeave}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleTimeClick();
+                          }
+                        }}
+                        aria-label={`Total time ${totalTime} minutes`}
+                      >
+                        <i className="fa-solid fa-clock text-[#cc7c2e]"></i>
+                        <span className="text-gray-700">{totalTime} min</span>
+                      </button>
+                      
+                      {/* Desktop tooltip */}
+                      {showTimePopover && window.innerWidth >= 768 && (
+                        <div 
+                          className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg z-50 whitespace-nowrap"
+                          role="tooltip"
+                        >
+                          {prepTime && cookTime ? (
+                            `Prep: ${prepTime} min • Cook: ${cookTime} min`
+                          ) : prepTime ? (
+                            `Prep: ${prepTime} min`
+                          ) : (
+                            `Cook: ${cookTime} min`
+                          )}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                        </div>
+                      )}
+                      
+                      {/* Mobile popover */}
+                      {showTimePopover && window.innerWidth < 768 && (
+                        <div 
+                          className="absolute top-full left-0 mt-2 px-3 py-2 bg-gray-900 text-white text-sm rounded-lg shadow-lg z-50 whitespace-nowrap"
+                          role="tooltip"
+                        >
+                          {prepTime && cookTime ? (
+                            `Prep: ${prepTime} min • Cook: ${cookTime} min`
+                          ) : prepTime ? (
+                            `Prep: ${prepTime} min`
+                          ) : (
+                            `Cook: ${cookTime} min`
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* Difficulty */}
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-[2px_2px_0_rgba(0,0,0,0.06)]">
+                    <i className="fa-solid fa-smile text-[#cc7c2e]"></i>
+                    <span className="text-gray-700">{difficulty}</span>
+                  </div>
+                </div>
+                
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => onDownload?.(content)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#5b8959] text-white hover:brightness-110 transition-colors text-sm">
+                    <i className="fa-solid fa-download"></i>
+                    <span>Download</span>
+                  </button>
+                  {isSaved && (
+                    <>
+                      <button onClick={()=>setConvertOpen(true)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#e87b35] text-white hover:brightness-110 transition-colors text-sm">
+                        <i className="fa-solid fa-arrows-rotate"></i>
+                        <span>Convert</span>
+                      </button>
+                    </>
+                  )}
+                  <button onClick={async ()=>{
+                    try {
+                      const url = window.location.href;
+                      const shareData = { title: (edited?.title || title) || 'Recipe', url };
+                      if (navigator.share) {
+                        await navigator.share(shareData);
+                      } else {
+                        await navigator.clipboard.writeText(url);
+                        const t = document.createElement('div');
+                        t.className = 'fixed bottom-4 right-4 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow z-[9999]';
+                        t.textContent = 'Link copied to clipboard';
+                        document.body.appendChild(t);
+                        setTimeout(()=>{ t.remove(); }, 2500);
+                      }
+                    } catch {}
+                  }} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#6b7280] text-white hover:brightness-110 transition-colors text-sm">
+                    <i className="fa-solid fa-share-nodes"></i>
+                    <span>Share</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-
-        {/* Stats bar on its own row */}
-        <div className="mb-8">
-          <div className="grid grid-cols-4 gap-2 md:gap-4">
-            <div className="inline-flex items-center gap-2 px-3 py-3 bg-blue-50 rounded-lg border border-blue-100">
-                              <i className="fa-solid fa-utensils mr-1 text-blue-600"></i>
-              <span className="text-sm text-blue-700">Servings</span>
-              <span className="text-sm font-semibold text-blue-900">{content.servings || content.serves || '—'}</span>
-            </div>
-            <div className="inline-flex items-center gap-2 px-3 py-3 bg-amber-50 rounded-lg border border-amber-100">
-              <ClockIcon className="w-5 h-5 text-amber-600" aria-hidden="true" />
-              <span className="text-sm text-amber-700">Prep Time</span>
-              <span className="text-sm font-semibold text-amber-900">{(() => { const v = content.prep_time ?? content.prep_time_minutes; return v != null && String(v) !== '' ? `${String(v).replace(/\s*minutes?\s*/i, '')} min` : '—'; })()}</span>
-            </div>
-            <div className="inline-flex items-center gap-2 px-3 py-3 bg-orange-50 rounded-lg border border-orange-100">
-              <FireIcon className="w-5 h-5 text-orange-600" aria-hidden="true" />
-              <span className="text-xs text-orange-700">Cook Time</span>
-              <span className="text-sm font-semibold text-orange-900">{(() => { const v = content.cook_time ?? content.cook_time_minutes; return v != null && String(v) !== '' ? `${String(v).replace(/\s*minutes?\s*/i, '')} min` : '—'; })()}</span>
-            </div>
-            <div className="inline-flex items-center gap-2 px-3 py-3 bg-green-50 rounded-lg border border-green-100">
-                              <i className="fa-solid fa-signal mr-1 text-green-600"></i>
-              <span className="text-sm text-green-700">Difficulty</span>
-              <span className="text-sm font-semibold text-green-900">Easy</span>
-            </div>
-          </div>
         </div>
 
-        {/* Mobile/tablet full-width badges below image, above ingredients */}
-        {/* removed MetaCards duplicate for mobile in favor of unified stats bar */}
+        {/* Toolbar - Full width wrapper matching My Recipes style */}
+        <div className="w-full bg-white rounded-2xl border border-gray-200 shadow-[4px_4px_0_rgba(0,0,0,0.06)] -mt-1 mb-6">
+          <div className="flex items-center justify-between gap-4 px-5 py-3">
+            {/* Left side: Two segment groups */}
+            <div className="flex items-center gap-4">
+              {/* Segment Group 1 - Layout */}
+              <div className="flex items-center rounded-full bg-gray-100 p-1">
+                <button
+                  onClick={() => setLayoutModeAndSave('two')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setLayoutModeAndSave('two');
+                    }
+                  }}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                    layoutMode === 'two'
+                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
+                      : 'text-gray-600'
+                  }`}
+                  title="Switch to two-column layout"
+                  aria-label="Switch to two-column layout"
+                  aria-pressed={layoutMode === 'two'}
+                >
+                  <i className="fa-solid fa-table-columns text-sm"></i>
+                  <span className="text-sm font-medium hidden sm:inline">Two Columns</span>
+                </button>
+                <button
+                  onClick={() => setLayoutModeAndSave('single')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setLayoutModeAndSave('single');
+                    }
+                  }}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                    layoutMode === 'single'
+                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
+                      : 'text-gray-600'
+                  }`}
+                  title="Switch to single-column layout"
+                  aria-label="Switch to single-column layout"
+                  aria-pressed={layoutMode === 'single'}
+                >
+                  <i className="fa-solid fa-align-justify text-sm"></i>
+                  <span className="text-sm font-medium hidden sm:inline">Single Column</span>
+                </button>
+              </div>
+              
+              {/* Segment Group 2 - Focus + TTS */}
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setHoverHighlightAndSave(!hoverHighlight)} 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setHoverHighlightAndSave(!hoverHighlight);
+                    }
+                  }}
+                  aria-pressed={hoverHighlight}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                    hoverHighlight
+                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
+                      : 'text-gray-600'
+                  }`}
+                  title={hoverHighlight ? "Disable focus mode" : "Enable focus mode"}
+                  aria-label={hoverHighlight ? "Disable focus mode" : "Enable focus mode"}
+                >
+                  {hoverHighlight ? (
+                    <i className="fa-regular fa-eye text-sm"></i>
+                  ) : (
+                    <i className="fa-regular fa-eye-slash text-sm"></i>
+                  )}
+                  <span className="text-sm font-medium hidden sm:inline">Focus</span>
+                </button>
+                
+                <button 
+                  onClick={() => setTtsActiveAndSave(!ttsActive)} 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setTtsActiveAndSave(!ttsActive);
+                    }
+                  }}
+                  aria-pressed={ttsActive}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                    ttsActive
+                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
+                      : 'text-gray-600'
+                  }`}
+                  title={ttsActive ? "Mute TTS" : "Read steps aloud"}
+                  aria-label={ttsActive ? "Mute TTS" : "Read steps aloud"}
+                >
+                  {ttsActive ? (
+                    <i className="fa-solid fa-volume-high text-sm"></i>
+                  ) : (
+                    <i className="fa-solid fa-volume-xmark text-sm"></i>
+                  )}
+                  <span className="text-sm font-medium hidden sm:inline">Read Aloud</span>
+                </button>
+                
+                <button 
+                  onClick={() => setCartModeAndSave(!cartMode)} 
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setCartModeAndSave(!cartMode);
+                    }
+                  }}
+                  aria-pressed={cartMode}
+                  className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                    cartMode
+                      ? 'bg-white text-[#5b8959] font-semibold shadow-sm border border-gray-300'
+                      : 'text-gray-600'
+                  }`}
+                  title={cartMode ? "Disable shopping list mode" : "Enable shopping list mode"}
+                  aria-label={cartMode ? "Disable shopping list mode" : "Enable shopping list mode"}
+                >
+                  <i className="fa-solid fa-cart-shopping text-sm"></i>
+                  <span className="text-sm font-medium hidden sm:inline">Shop Ingredients</span>
+                </button>
+              </div>
+            </div>
+            
+            {/* Right side: Empty for visual balance */}
+            <div></div>
+          </div>
+        </div>
 
         {/* Ingredients & Instructions as separate white cards; no outer visual title */}
         <RecipeSection id="ingredients-section" title="Ingredients & Instructions" titleHidden variant="plain" className="px-0">
-          <div className="grid gap-6 md:grid-cols-[2fr,3fr]">
-            {/* Ingredients column */}
+          <div className={`gap-6 ${layoutMode === 'two' ? 'grid md:grid-cols-[2fr,3fr]' : 'flex flex-col'}`}>
+            {/* Ingredients Card */}
             <div 
-              className={`rounded-2xl border border-black/5 shadow-sm p-4 sm:p-6 ${isEditing ? 'cursor-pointer' : ''}`}
-              style={{ background: 'rgb(250 250 250 / 95%)' }}
+              className={`bg-white rounded-2xl p-6 card-hard-shadow ${isEditing ? 'cursor-pointer' : ''}`}
               onClick={isEditing && activeEditField !== 'ingredients' ? () => activateFieldEdit('ingredients') : undefined}
               data-edit-field="ingredients"
             >
               <div className="flex items-center justify-between mb-3">
                 <h3 id="ingredients" className="text-lg font-semibold flex items-center gap-2 scroll-mt-[88px]">
+                  <i className="fa-solid fa-carrot mr-2"></i>
                   Ingredients
                 </h3>
               </div>
@@ -1004,62 +1758,80 @@ export default function RecipeView({
                   </div>
                 </div>
                ) : (
+                <>
                 <ul className="space-y-2">
                   {ingredientsToRender.map((ing, idx) => {
                     const text = typeof ing === 'string' ? ing : `${ing.quantity || ''} ${ing.name || ''} ${ing.notes ? `(${ing.notes})` : ''}`.trim();
                     const m = /^(\S+\s+\S+)(.*)$/i.exec(text);
                     const shouldDim = false;
+                    const isSelected = selectedIngredients.has(idx);
                     return (
                       <li 
                         key={idx} 
-                        className={`flex items-start p-1 rounded ${isEditing ? 'hover:bg-yellow-50 cursor-pointer' : ''} focus:outline-none focus:ring-0 focus:border-0`}
+                        className={`flex items-start p-1 rounded ${isEditing ? 'hover:bg-yellow-50 cursor-pointer' : ''} focus:outline-none focus:ring-0 focus:border-0 ${isSelected ? 'line-through opacity-70' : ''}`}
                         onClick={isEditing ? () => activateFieldEdit('ingredients') : undefined}
                         onFocus={undefined}
                         onBlur={undefined}
                         tabIndex={-1}
                         data-edit-field="ingredients"
                       >
+                        {cartMode ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleIngredientSelection(idx);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleIngredientSelection(idx);
+                              }
+                            }}
+                            className={`w-4 h-4 mt-1 mr-3 flex-shrink-0 border-2 rounded ${isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-green-500`}
+                            aria-label={isSelected ? `Deselect ${text}` : `Select ${text}`}
+                          >
+                            {isSelected && (
+                              <svg className="w-full h-full text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                          </button>
+                        ) : (
                         <span className="text-green-600 mr-3 mt-1 flex-shrink-0">•</span>
+                        )}
                         <span className="text-gray-700">{m ? (<><strong className="font-semibold text-gray-900">{m[1]}</strong>{m[2]}</>) : text}</span>
                       </li>
                     );
                   })}
                 </ul>
+                {cartMode && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={addToShoppingList}
+                      className="w-full bg-green-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+                      aria-label="Add selected ingredients to shopping list"
+                    >
+                      <i className="fa-solid fa-list-check"></i>
+                      <span>Add to Shopping List</span>
+                    </button>
+                  </div>
+                )}
+                </>
               )}
             </div>
 
-            {/* Instructions column */}
+            {/* Instructions Card */}
             <div 
-              className={`rounded-2xl border border-black/5 shadow-sm p-4 sm:p-6 ${isEditing ? 'cursor-pointer' : ''}`}
-              style={{ background: 'rgb(250 250 250 / 95%)' }}
+              className={`bg-white rounded-2xl p-6 card-hard-shadow ${isEditing ? 'cursor-pointer' : ''}`}
               onClick={isEditing && activeEditField !== 'instructions' ? () => activateFieldEdit('instructions') : undefined}
               data-edit-field="instructions"
             >
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold flex items-center gap-2 scroll-mt-[88px]">
+                  <i className="fa-solid fa-list-ol mr-2"></i>
                   Instructions
                 </h3>
-                {!isEditing && (
-                  <button 
-                    onClick={() => setHoverHighlight(v => !v)} 
-                    aria-pressed={hoverHighlight}
-                    className={`inline-flex items-center gap-2 px-2 py-1 rounded-lg transition-colors ${
-                      hoverHighlight 
-                        ? 'text-blue-700 bg-blue-50 hover:bg-blue-100' 
-                        : 'text-gray-700 hover:text-gray-900 hover:bg-gray-100'
-                    }`}
-                    title={hoverHighlight ? "Disable focus mode" : "Enable focus mode (instructions only)"}
-                  >
-                    {hoverHighlight ? (
-                      <EyeIcon className="h-5 w-5 text-blue-600" />
-                    ) : (
-                      <EyeSlashIcon className="h-5 w-5" />
-                    )}
-                    <span className="text-sm font-medium">
-                      {hoverHighlight ? 'Focus mode ON' : 'Focus mode'}
-                    </span>
-                  </button>
-                )}
               </div>
               <div className="sr-only" aria-hidden="true"></div>
               {isEditing && activeEditField === 'instructions' ? (
@@ -1183,10 +1955,21 @@ export default function RecipeView({
         )}
 
       {variant !== 'modal' && (
-      <RecipeSection id="nutrition" title="Nutrition Information (per serving)">
+              <RecipeSection id="nutrition" title={
+                <span>
+                  <i className="fa-solid fa-fire mr-2"></i>
+                  Nutrition Information (per serving)
+                </span>
+              } className="bg-white">
         <div className="flex flex-wrap items-center gap-2 mb-2 mt-6">
-          {[{k:'calories', l:'Calories'},{k:'protein',l:'Protein'},{k:'fat',l:'Fat'},{k:'carbs',l:'Carbs'}].map(({k,l}) => (
-            <div key={k} className="inline-flex items-center gap-2 bg-white text-gray-800 rounded-full px-3 py-1 border border-gray-200">
+          {[
+            {k:'calories', l:'Calories', icon:'fa-fire', bgColor:'bg-blue-50', iconColor:'text-blue-600'},
+            {k:'protein',l:'Protein', icon:'fa-egg', bgColor:'bg-green-50', iconColor:'text-green-600'},
+            {k:'fat',l:'Fat', icon:'fa-bacon', bgColor:'bg-orange-50', iconColor:'text-orange-600'},
+            {k:'carbs',l:'Carbs', icon:'fa-bread-slice', bgColor:'bg-amber-50', iconColor:'text-amber-600'}
+          ].map(({k,l,icon,bgColor,iconColor}) => (
+            <div key={k} className={`inline-flex items-center gap-2 ${bgColor} text-gray-800 rounded-full px-3 py-1 border border-gray-200 shadow-[2px_2px_0_rgba(0,0,0,0.06)]`}>
+              <i className={`fa-solid ${icon} text-sm ${iconColor}`}></i>
               <span className="text-sm text-gray-600">{l}</span>
               <span className="text-sm font-medium">{(() => {
                 const val = resolveNutritionValue(nutrition, k);
@@ -1205,72 +1988,11 @@ export default function RecipeView({
       {/* Social section for saved recipes (omit in quick view via isSaved=false) */}
       {isSaved && (
         <div className="mt-8 mb-24">
-          {/* Tags */}
-          <RecipeSection id="tags" title="Tags" className="mt-8">
-            {currentUser ? (
-              <TagInput 
-                required={false} 
-                tags={tags.approved.map(t => ({ label: t.keyword }))} 
-                setTags={(newTags) => {
-                  const currentTags = tags.approved.map(t => t.keyword);
-                  const newTagLabels = newTags.map(t => t.label);
-                  
-                  // Find tags to add (new tags that aren't in current)
-                  const tagsToAdd = newTagLabels.filter(tag => !currentTags.includes(tag));
-                  
-                  // Find tags to remove (current tags that aren't in new)
-                  const tagsToRemove = currentTags.filter(tag => !newTagLabels.includes(tag));
-                  
-                  // Add new tags
-                  if (tagsToAdd.length > 0) {
-                    addTags(tagsToAdd);
-                  }
-                  
-                  // Remove tags
-                  tagsToRemove.forEach(tag => removeTag(tag));
-                }} 
-                placeholder="Add new tag and press Add" 
-              />
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {(() => {
-                  const approved = (tags.approved||[]);
-                  const out = [...approved];
-                  try {
-                    const rc = recipe || {};
-                    const conv = rc.conversion || {};
-                    if (conv.isVariant) out.push({ keyword: 'Variant', type: 'variant' });
-                    const presets = ((conv.constraints||{}).presets||[]).map(p=>String(p).toLowerCase());
-                    const label = (p)=> p==='plant-based' ? 'Plant based' : p.charAt(0).toUpperCase()+p.slice(1);
-                    ['vegan','vegetarian','pescetarian'].forEach(p=>{ if (presets.includes(p)) out.push({ keyword: label(p), type: 'diet' }); });
-                  } catch {}
-                  return out.map((t, idx) => (
-                    <span key={`tag-${idx}-${t.keyword}`} className={`inline-flex items-center px-2 py-1 rounded-full text-xs border ${chipCls(t.type, t.keyword)}`}>
-                                            {t.keyword.toLowerCase() === 'vegan' && <i className="fa-solid fa-leaf mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'vegetarian' && <i className="fa-solid fa-carrot mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'zesty' && <i className="fa-solid fa-lemon mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'pescatarian' && <i className="fa-solid fa-fish mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'seafood' && <i className="fa-solid fa-shrimp mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'fastfood' && <i className="fa-solid fa-burger mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'spicy' && <i className="fa-solid fa-pepper-hot mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'chicken' && <i className="fa-solid fa-drumstick-bite mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'eggs' && <i className="fa-solid fa-egg mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'cheese' && <i className="fa-solid fa-cheese mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'fruits' && <i className="fa-solid fa-apple-whole mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'wine' && <i className="fa-solid fa-wine-bottle mr-1"></i>}
-                      {t.keyword.toLowerCase() === 'pasta' && <i className="fa-solid fa-bacon mr-1"></i>}
-                      <span className="font-medium">{t.keyword.charAt(0).toUpperCase() + t.keyword.slice(1)}</span>
-                    </span>
-                  ));
-                })()}
-              </div>
-            )}
-          </RecipeSection>
 
           {/* Source section */}
           {variant !== 'modal' && sourceUrl && (
-            <RecipeSection id="source" title="Source" className="mt-4">
-              <div className="bg-gray-50 p-4 rounded-lg flex items-center gap-3">
+            <RecipeSection id="source" title="Source" className="mt-4 bg-white">
+              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200 shadow-[4px_4px_0_rgba(0,0,0,0.06)] hover:shadow-[6px_6px_0_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-transform transition-shadow duration-200 ease-out flex items-center gap-3">
                 <LinkIcon className="h-5 w-5 text-gray-400 flex-shrink-0" />
                 <a href={sourceUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate">{sourceUrl}</a>
               </div>
@@ -1284,7 +2006,7 @@ export default function RecipeView({
               onOpenRecipeInModal={variant === 'modal' ? (id)=>onOpenRecipeInModal?.(id) : undefined}
               sort={sort}
               renderSection={(variantsContent) => variantsContent ? (
-                <RecipeSection id="variants" title="Variants" titleHidden className="mt-4">
+                <RecipeSection id="variants" title="Variants" titleHidden className="mt-4 bg-white">
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="scroll-mt-[88px] text-xl font-semibold">Variants</h2>
                     <select 
@@ -1303,24 +2025,19 @@ export default function RecipeView({
             />
           )}
 
-          {/* Ratings */}
-          <RecipeSection id="ratings" title="Ratings" className="mt-4">
-            <div className="flex items-center gap-2" role="radiogroup" aria-label="Rate 1 to 5">
-              {[1,2,3,4,5].map(v => (
-                <button key={v} className={`w-6 h-6 ${v <= (rating.userValue || Math.round(rating.average)) ? 'text-yellow-400' : 'text-gray-300'}`} onClick={()=>putRating(v)}>
-                  <svg viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
-                </button>
-              ))}
-              <span className="text-sm text-gray-600 ml-2">{Number(rating.average||0).toFixed(2)} ({rating.count})</span>
-            </div>
-          </RecipeSection>
+
 
       {/* Comments */}
-      <RecipeSection id="comments" title="Comments" className="mt-8">
+      <RecipeSection id="comments" title={
+        <span>
+          <i className="fa-solid fa-comment mr-2"></i>
+          Comments
+        </span>
+      } className="mt-8 bg-white">
             <div className="bg-gray-50 rounded-lg p-4">
               <textarea value={commentInput} onChange={(e)=>setCommentInput(e.target.value)} rows={3} className="w-full bg-white px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="Write a comment..." />
               <div className="flex justify-end mt-2">
-                <button onClick={postComment} className="flex items-center justify-center bg-green-600 text-white font-semibold py-2.5 px-5 rounded-lg hover:bg-green-700 transition-colors text-sm">Send</button>
+                <button onClick={postComment} className="flex items-center justify-center bg-[#5b8959] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">Send</button>
               </div>
               <div className="mt-6">
                 {(() => {
@@ -1332,7 +2049,7 @@ export default function RecipeView({
                   const renderThread = (list, level=0) => (
                     <div>
                       {list.map((c) => (
-                        <div key={c.id} className={`border border-gray-200 rounded-lg p-3 bg-white mb-3 ${level>0? 'ml-6 md:ml-10' : ''}`}>
+                        <div key={c.id} className={`border border-gray-200 rounded-2xl p-3 bg-white mb-3 shadow-[2px_2px_0_rgba(0,0,0,0.04)] ${level>0? 'ml-6 md:ml-10' : ''}`}>
                           <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2">
                               {c.user?.avatar && (
@@ -1411,7 +2128,6 @@ export default function RecipeView({
           {isSticky && <div className="h-24" />}
         </div>
       )}
-      </div>
 
       {/* Action Bar after content */}
       {variant !== 'modal' && (
@@ -1432,7 +2148,7 @@ export default function RecipeView({
             )}
           </div>
           <div className="flex flex-wrap justify-end gap-3">
-            <button onClick={() => onDownload?.(content)} className="flex items-center justify-center bg-[#00b5c3] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
+                            <button onClick={() => onDownload?.(content)} className="flex items-center justify-center bg-[#5b8959] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
               <span>Download</span>
             </button>
             {!isSaved && (
@@ -1445,6 +2161,26 @@ export default function RecipeView({
               <>
                 <button onClick={()=>setConvertOpen(true)} className="flex items-center justify-center gap-2 bg-[#e87b35] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
                   <span>Convert</span>
+                </button>
+                <button onClick={async ()=>{
+                  try {
+                    const url = window.location.href;
+                    const shareData = { title: (edited?.title || title) || 'Recipe', url };
+                    if (navigator.share) {
+                      await navigator.share(shareData);
+                    } else {
+                      await navigator.clipboard.writeText(url);
+                      // Simple toast fallback
+                      const t = document.createElement('div');
+                      t.className = 'fixed bottom-4 right-4 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow z-[9999]';
+                      t.textContent = 'Link copied to clipboard';
+                      document.body.appendChild(t);
+                      setTimeout(()=>{ t.remove(); }, 2500);
+                    }
+                  } catch {}
+                }} className="flex items-center justify-center gap-2 bg-[#6b7280] text-white font-semibold py-2.5 px-5 rounded-lg hover:brightness-110 transition-colors text-sm">
+                  <i className="fa-solid fa-share-nodes mr-2"></i>
+                  <span>Share</span>
                 </button>
               {isEditing ? (
                 <>
@@ -1606,6 +2342,7 @@ export default function RecipeView({
           }}
         />
       )}
+      </div>
     </div>
   );
 }
