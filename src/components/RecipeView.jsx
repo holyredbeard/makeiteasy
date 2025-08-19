@@ -204,6 +204,9 @@ export default function RecipeView({
   const [showTimePopover, setShowTimePopover] = useState(false);
   const [showNutritionDetails, setShowNutritionDetails] = useState(false);
   const [highlightedNutritionRow, setHighlightedNutritionRow] = useState(null);
+  const [nutritionData, setNutritionData] = useState(null);
+  const [nutritionLoading, setNutritionLoading] = useState(false);
+  const [nutritionError, setNutritionError] = useState(null);
   const timePopoverRef = useRef(null);
   const titleInputRef = useRef(null);
   const nutritionTableRef = useRef(null);
@@ -434,6 +437,13 @@ export default function RecipeView({
     }
   }, [originalServings, recipeId]);
 
+  // Fetch nutrition data when component mounts or servings change
+  useEffect(() => {
+    if (currentServings && ingredients.length > 0) {
+      fetchNutritionData(currentServings);
+    }
+  }, [currentServings, ingredients, edited?.ingredients]);
+
   const setCurrentServingsAndSave = (servings) => {
     setCurrentServings(servings);
     localStorage.setItem(`recipe:${recipeId}:servings`, servings.toString());
@@ -509,6 +519,15 @@ export default function RecipeView({
   };
 
   const getScaledNutrition = useMemo(() => {
+    // Use backend nutrition data if available, otherwise fall back to content data
+    if (nutritionData) {
+      return {
+        perServing: nutritionData.perServing || {},
+        total: nutritionData.total || {}
+      };
+    }
+    
+    // Fallback to content data
     const nutrition = content.nutritional_information || content.nutrition || content.nutritionPerServing || {};
     const totalNutrition = {
       calories: (nutrition.calories || 0) * originalServings,
@@ -536,7 +555,7 @@ export default function RecipeView({
       },
       total: totalNutrition
     };
-  }, [content.nutritional_information, content.nutrition, content.nutritionPerServing, originalServings, currentServings]);
+  }, [nutritionData, content.nutritional_information, content.nutrition, content.nutritionPerServing, originalServings, currentServings]);
 
   // Nutrition detail functions
   const handleNutritionChipClick = (nutritionKey) => {
@@ -575,6 +594,49 @@ export default function RecipeView({
     if (!rdi) return null;
     
     return Math.round((value / rdi) * 100);
+  };
+
+  // Fetch nutrition data from backend
+  const fetchNutritionData = async (servings) => {
+    try {
+      setNutritionLoading(true);
+      setNutritionError(null);
+      
+      const ingredientsToUse = edited?.ingredients || ingredients;
+      const ingredientsForAPI = ingredientsToUse.map(ing => {
+        if (typeof ing === 'string') {
+          return { raw: ing };
+        } else {
+          return { raw: `${ing.quantity || ''} ${ing.name || ''}`.trim() };
+        }
+      });
+
+      const response = await fetch(`${API_BASE}/nutrition/calc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          recipeId: recipeId,
+          servings: servings,
+          ingredients: ingredientsForAPI
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setNutritionData(data);
+    } catch (error) {
+      console.error('Failed to fetch nutrition data:', error);
+      setNutritionError(error.message);
+      setNutritionData(null);
+    } finally {
+      setNutritionLoading(false);
+    }
   };
 
   const title = content.title || '';
@@ -2217,6 +2279,7 @@ export default function RecipeView({
             const perServing = getScaledNutrition.perServing[k];
             const total = getScaledNutrition.total[k];
             const isInteractive = showNutritionDetails;
+            const isLoading = nutritionLoading;
             
             return (
               <div 
@@ -2240,11 +2303,11 @@ export default function RecipeView({
                 `}
               >
                 <i className={`fa-solid ${icon} text-sm ${iconColor}`}></i>
-                                 <div className="flex flex-col">
-                   <div className="text-sm font-semibold text-gray-900">
-                     {perServing || '—'}{k === 'calories' ? ' kcal' : 'g'}
-                   </div>
-                 </div>
+                                                 <div className="flex flex-col">
+                  <div className="text-sm font-semibold text-gray-900">
+                    {isLoading ? '...' : (perServing || '—')}{k === 'calories' ? ' kcal' : 'g'}
+                  </div>
+                </div>
                 {isInteractive && (
                   <i className="fa-solid fa-chevron-right text-xs text-gray-400 ml-1"></i>
                 )}
@@ -2258,9 +2321,17 @@ export default function RecipeView({
           onClick={() => setShowNutritionDetails(!showNutritionDetails)}
           className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors duration-200 mb-4"
           aria-expanded={showNutritionDetails}
+          disabled={nutritionLoading}
         >
-          {showNutritionDetails ? 'Dölj detaljer' : 'Visa detaljer'}
+          {nutritionLoading ? 'Laddar...' : (showNutritionDetails ? 'Dölj detaljer' : 'Visa detaljer')}
         </button>
+
+        {/* Error message */}
+        {nutritionError && (
+          <div className="text-sm text-red-600 mb-4">
+            Näringsdata kunde inte hämtas just nu. {nutritionError}
+          </div>
+        )}
 
         {/* Nutrition Details Table */}
         {showNutritionDetails && (
@@ -2272,6 +2343,7 @@ export default function RecipeView({
                   <tr className="border-b border-gray-200">
                     <th className="text-left py-2 px-3 font-medium text-gray-700">Ämne</th>
                     <th className="text-right py-2 px-3 font-medium text-gray-700">Per portion</th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-700">Total batch</th>
                     <th className="text-right py-2 px-3 font-medium text-gray-700">%RI</th>
                   </tr>
                 </thead>
@@ -2288,13 +2360,16 @@ export default function RecipeView({
                     {key: 'cholesterol', label: 'Kolesterol', unit: 'mg'}
                   ].map(({key, label, unit, showKj, calculated}) => {
                     const perServing = getScaledNutrition.perServing[key];
+                    const total = getScaledNutrition.total[key];
                     const rdi = getNutritionRDI(key, perServing);
                     const isHighlighted = highlightedNutritionRow === key;
                     
                     // Calculate salt from sodium if needed
                     let displayValue = perServing;
-                    if (calculated && key === 'sodium' && perServing) {
-                      displayValue = Math.round(perServing * 2.5);
+                    let totalValue = total;
+                    if (calculated && key === 'sodium') {
+                      if (perServing) displayValue = Math.round(perServing * 2.5);
+                      if (total) totalValue = Math.round(total * 2.5);
                     }
                     
                     return (
@@ -2312,6 +2387,15 @@ export default function RecipeView({
                           {showKj && displayValue && (
                             <span className="text-xs text-gray-500 ml-1">
                               ({Math.round(displayValue * 4.184)} kJ)
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-right text-gray-900">
+                          {totalValue || '—'}
+                          {totalValue && unit}
+                          {showKj && totalValue && (
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({Math.round(totalValue * 4.184)} kJ)
                             </span>
                           )}
                         </td>
@@ -2339,13 +2423,16 @@ export default function RecipeView({
                 {key: 'cholesterol', label: 'Kolesterol', unit: 'mg'}
               ].map(({key, label, unit, showKj, calculated}) => {
                 const perServing = getScaledNutrition.perServing[key];
+                const total = getScaledNutrition.total[key];
                 const rdi = getNutritionRDI(key, perServing);
                 const isHighlighted = highlightedNutritionRow === key;
                 
                 // Calculate salt from sodium if needed
                 let displayValue = perServing;
-                if (calculated && key === 'sodium' && perServing) {
-                  displayValue = Math.round(perServing * 2.5);
+                let totalValue = total;
+                if (calculated && key === 'sodium') {
+                  if (perServing) displayValue = Math.round(perServing * 2.5);
+                  if (total) totalValue = Math.round(total * 2.5);
                 }
                 
                 return (
@@ -2357,19 +2444,37 @@ export default function RecipeView({
                     `}
                   >
                     <div className="font-medium text-gray-900 mb-1">{label}</div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">
-                        {displayValue || '—'}
-                        {displayValue && unit}
-                        {showKj && displayValue && (
-                          <span className="text-xs text-gray-500 ml-1">
-                            ({Math.round(displayValue * 4.184)} kJ)
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-gray-600">
-                        {rdi ? `${rdi}% RI` : '—'}
-                      </span>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Per portion:</span>
+                        <span className="text-gray-900">
+                          {displayValue || '—'}
+                          {displayValue && unit}
+                          {showKj && displayValue && (
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({Math.round(displayValue * 4.184)} kJ)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Total batch:</span>
+                        <span className="text-gray-900">
+                          {totalValue || '—'}
+                          {totalValue && unit}
+                          {showKj && totalValue && (
+                            <span className="text-xs text-gray-500 ml-1">
+                              ({Math.round(totalValue * 4.184)} kJ)
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">%RI:</span>
+                        <span className="text-gray-900">
+                          {rdi ? `${rdi}%` : '—'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );

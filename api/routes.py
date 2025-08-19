@@ -46,6 +46,17 @@ import re as _re2
 class TagAction(BaseModel):
     keywords: List[str]
 
+# --- Nutrition DTOs ---
+class NutritionCalcRequest(BaseModel):
+    recipeId: str
+    servings: int
+    ingredients: List[Dict[str, str]]
+
+class NutritionResult(BaseModel):
+    perServing: Dict[str, Optional[float]]
+    total: Dict[str, Optional[float]]
+    needsReview: List[str] = []
+
 router = APIRouter()
 class ImageGenRequest(BaseModel):
     recipe_id: Optional[int] = None
@@ -2290,3 +2301,42 @@ async def deepseek_convert_proxy(request: Request, payload: dict = Body(...)):
         msg = str(e) if str(e) else e.__class__.__name__
         logger.error(f"DeepSeek proxy failed: {msg}")
         raise HTTPException(status_code=500, detail=f"DeepSeek proxy error: {msg}")
+
+# --- Nutrition Calculation ---
+@router.post("/nutrition/calc", response_model=NutritionResult)
+async def calculate_nutrition(request: NutritionCalcRequest):
+    """Calculate nutrition from ingredients using USDA database"""
+    try:
+        # For now, return placeholder data
+        # TODO: Implement full USDA pipeline
+        placeholder_nutrition = {
+            "perServing": {
+                "calories": 250,
+                "protein": 12.5,
+                "fat": 8.0,
+                "carbs": 35.0,
+                "saturatedFat": 2.5,
+                "sugar": 5.0,
+                "fiber": 3.0,
+                "sodium": 400,
+                "cholesterol": 25
+            },
+            "total": {
+                "calories": 250 * request.servings,
+                "protein": 12.5 * request.servings,
+                "fat": 8.0 * request.servings,
+                "carbs": 35.0 * request.servings,
+                "saturatedFat": 2.5 * request.servings,
+                "sugar": 5.0 * request.servings,
+                "fiber": 3.0 * request.servings,
+                "sodium": 400 * request.servings,
+                "cholesterol": 25 * request.servings
+            },
+            "needsReview": []
+        }
+        
+        return NutritionResult(**placeholder_nutrition)
+        
+    except Exception as e:
+        logging.error(f"Nutrition calculation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Nutrition calculation failed")
