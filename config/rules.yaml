@@ -1,0 +1,36 @@
+exclude_names:
+  - water
+  - ice
+
+salt:
+  density_g_per_ml: 1.2
+  sodium_fraction: 0.393
+
+spices:
+  default_grams_if_missing: 1.5
+  max_grams_per_recipe: 10
+  match:
+    - pepper
+    - black pepper
+    - white pepper
+    - cinnamon
+    - chili flakes
+
+brand_strip:
+  patterns:
+    - "\\bbarilla\\b"
+    - "\\bideal\\w*\\b"
+    - "\\bde\\s*cecco\\b"
+
+bounds:
+  nuts:
+    cup_grams_min: 80
+    cup_grams_max: 130
+  pasta_dry:
+    per_liter_min: 300
+    per_liter_max: 800
+  spices_any:
+    per_item_max_g: 10
+
+
+

@@ -15,6 +15,7 @@ from api.routes import router as recipes_router
 from api.auth_routes import router as auth_router
 from api.google_auth import router as google_auth_router
 from logic.video_processing import preload_vision_models
+from logic.job_queue import start_worker_background
 
 # --- App Initialization ---
 # Always load .env and override to ensure fresh keys are picked up on restart
@@ -68,6 +69,17 @@ app.include_router(recipes_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1/auth", tags=["authentication"])
 app.include_router(google_auth_router, prefix="/api/v1/auth", tags=["google-auth"])
 
+@app.on_event("startup")
+async def startup_event():
+    """Start job workers on application startup"""
+    try:
+        import asyncio
+        loop = asyncio.get_event_loop()
+        start_worker_background(loop, num_workers=2)
+        logging.info("Job workers started on startup")
+    except Exception as e:
+        logging.error(f"Failed to start job workers on startup: {e}")
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "message": "Server is running"}
@@ -112,7 +124,7 @@ def find_and_kill_process_on_port(port):
 if __name__ == "__main__":
     import uvicorn
     
-    PORT = 8001
+    PORT = 8000
     
     # Ensure the port is free before starting the server
     find_and_kill_process_on_port(PORT)
@@ -127,6 +139,14 @@ if __name__ == "__main__":
             preload_vision_models()
         except Exception:
             pass
+        # Start background job worker
+        try:
+            import asyncio
+            loop = asyncio.get_event_loop()
+            start_worker_background(loop, num_workers=2)
+            logging.info("Job workers started successfully")
+        except Exception as _e:
+            logging.warning(f"Job worker could not start: {_e}")
         uvicorn.run(
             "main:app",
             host="127.0.0.1",

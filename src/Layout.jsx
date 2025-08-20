@@ -17,7 +17,7 @@ import {
 import { Facebook, Instagram, Youtube, Music } from 'lucide-react';
 // Logging UI disabled
 
-const API_BASE = 'http://localhost:8001/api/v1';
+const API_BASE = 'http://localhost:8000/api/v1';
 const API_ROOT = API_BASE.replace(/\/api\/v1$/, '');
 
 function normalizeBackendUrl(pathOrUrl) {

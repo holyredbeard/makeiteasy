@@ -12,7 +12,7 @@ import RecipeListToolbar from './components/RecipeListToolbar';
 import { useRecipeListSettings } from './hooks/useRecipeListSettings';
 import TagList from './components/TagList';
 
-const API_BASE = 'http://localhost:8001/api/v1';
+const API_BASE = 'http://localhost:8000/api/v1';
 
 const CreateCollectionForm = ({ onCreated }) => {
     const [title, setTitle] = useState('');
@@ -51,8 +51,8 @@ const CreateCollectionForm = ({ onCreated }) => {
 };
 
 // API_BASE already defined above
-const STATIC_BASE = 'http://localhost:8001';
-const PROXY = `${STATIC_BASE}/api/v1/proxy-image?url=`;
+const STATIC_BASE = 'http://localhost:8000';
+const PROXY = `${API_BASE}/proxy-image?url=`;
 // --- Tagging UI components ---
 const TagChip = ({ label, type, status, onRemove }) => {
     const styleByType = {
@@ -121,14 +121,14 @@ const TagPicker = ({ canEdit, onAdd, suggestions }) => {
 const normalizeUrlPort = (url) => {
     if (!url || typeof url !== 'string') return url;
     return url
-        .replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
-        .replace('http://localhost:8000', 'http://localhost:8001');
+        .replace('http://127.0.0.1:8001', 'http://127.0.0.1:8000')
+        .replace('http://localhost:8001', 'http://localhost:8000');
 };
 
 const asThumbSrc = (imageUrl) => {
     const url = normalizeUrlPort(imageUrl);
     if (!url) return null;
-    if (url.startsWith('http://localhost:8001') || url.startsWith('http://127.0.0.1:8001') || url.startsWith('/')) {
+    if (url.startsWith('http://localhost:8000') || url.startsWith('http://127.0.0.1:8000') || url.startsWith('/')) {
         return url.startsWith('http') ? url : STATIC_BASE + url;
     }
     return PROXY + encodeURIComponent(url);
@@ -758,7 +758,7 @@ const MyRecipes = () => {
 
     const openPicker = async () => {
         try {
-            const res = await fetch('http://localhost:8001/api/v1/collections', { credentials: 'include' });
+            const res = await fetch('http://localhost:8000/api/v1/collections', { credentials: 'include' });
             const data = await res.json();
             setCollections(Array.isArray(data) ? data : []);
         } catch {}
@@ -878,7 +878,7 @@ const MyRecipes = () => {
                   <div className="space-y-3 max-h-60 overflow-auto">
                     {collections.map(c => (
                       <button key={c.id} className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 border" onClick={async()=>{
-                        await fetch(`http://localhost:8001/api/v1/collections/${c.id}/recipes`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ recipe_id: pickerRecipe.id }) });
+                        await fetch(`http://localhost:8000/api/v1/collections/${c.id}/recipes`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ recipe_id: pickerRecipe.id }) });
                         setShowPicker(false);
                       }}>
                         <div className="flex items-center gap-3">
@@ -904,7 +904,7 @@ const MyRecipes = () => {
                 <div className="bg-white rounded-2xl max-w-lg w-full p-6" onClick={(e)=>e.stopPropagation()}>
                   <h3 className="text-2xl font-bold mb-4">New Collection</h3>
                   <CreateCollectionForm onCreated={async (cid)=>{ if (cid) {
-                    await fetch(`http://localhost:8001/api/v1/collections/${cid}/recipes`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ recipe_id: pickerRecipe.id }) });
+                    await fetch(`http://localhost:8000/api/v1/collections/${cid}/recipes`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify({ recipe_id: pickerRecipe.id }) });
                   } setShowCreate(false); setShowPicker(false); }} />
                 </div>
               </div>

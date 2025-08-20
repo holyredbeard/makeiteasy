@@ -26,6 +26,87 @@ from logic.video_processing import (
     analyze_frames_with_blip
 )
 from logic.nutrition_calculator import NutritionCalculator
+from core.database import db
+from logic.job_queue import enqueue_nutrition_compute
+
+router = APIRouter()
+
+@router.get("/nutrition/admin/summary")
+async def nutrition_admin_summary():
+    try:
+        from core.database import db as _db
+        con = _db.get_connection()
+        cur = con.cursor()
+        cur.execute("SELECT COUNT(*) FROM nutrition_snapshots WHERE status='ready'")
+        ready = int(cur.fetchone()[0] or 0)
+        cur.execute("SELECT COUNT(*) FROM nutrition_snapshots WHERE status='pending'")
+        pending = int(cur.fetchone()[0] or 0)
+        cur.execute("SELECT COUNT(*) FROM nutrition_snapshots WHERE status='error'")
+        error = int(cur.fetchone()[0] or 0)
+        con.close()
+        return {"ready": ready, "pending": pending, "error": error, "lastRun": None}
+    except Exception as e:
+        logger.error(f"nutrition_admin_summary error: {e}")
+        raise HTTPException(status_code=500, detail="summary failed")
+
+@router.get("/nutrition/admin/list")
+async def nutrition_admin_list(status: Optional[str] = None, q: Optional[str] = None):
+    try:
+        from core.database import db as _db
+        con = _db.get_connection()
+        cur = con.cursor()
+        base = "SELECT sr.id, ns.status, ns.updated_at, sr.source_url FROM saved_recipes sr LEFT JOIN nutrition_snapshots ns ON ns.recipe_id = sr.id"
+        where = []
+        params = []
+        if status:
+            where.append("ns.status = ?")
+            params.append(status)
+        if q:
+            where.append("sr.source_url LIKE ?")
+            params.append(f"%{q}%")
+        sql = base + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY sr.id DESC"
+        cur.execute(sql, tuple(params))
+        rows = []
+        for rid, st, upd, title in cur.fetchall():
+            # quick skipped count
+            meta = _db.get_nutrition_snapshot(rid) or {}
+            skipped_count = len((meta.get('meta') or {}).get('skipped') or [])
+            rows.append({"id": rid, "title": title, "status": st or 'pending', "updated_at": upd, "anomaly": 0, "skipped_count": skipped_count})
+        con.close()
+        return rows
+    except Exception as e:
+        logger.error(f"nutrition_admin_list error: {e}")
+        raise HTTPException(status_code=500, detail="list failed")
+
+@router.post("/nutrition/admin/recompute-errors")
+async def nutrition_recompute_errors():
+    try:
+        from core.database import db as _db
+        con = _db.get_connection()
+        cur = con.cursor()
+        cur.execute("SELECT recipe_id FROM nutrition_snapshots WHERE status='error'")
+        ids = [r[0] for r in cur.fetchall()]
+        con.close()
+        import asyncio
+        for rid in ids:
+            try:
+                await enqueue_nutrition_compute(int(rid))
+            except Exception:
+                continue
+        return {"queued": len(ids)}
+    except Exception as e:
+        logger.error(f"nutrition_recompute_errors error: {e}")
+        raise HTTPException(status_code=500, detail="recompute-errors failed")
+
+@router.get("/nutrition/{recipe_id}/meta")
+async def get_nutrition_meta(recipe_id: int):
+    try:
+        snap = db.get_nutrition_snapshot(recipe_id)
+        return snap or {}
+    except Exception as e:
+        logger.error(f"get_nutrition_meta error: {e}")
+        raise HTTPException(status_code=500, detail="meta failed")
+from logic.translator import resolve, translate_canonical
 from backend.transcribe.faster_whisper_engine import transcribe_audio_stream
 from logic.recipe_parser import analyze_video_content
 from logic.pdf_generator import generate_pdf
@@ -57,8 +138,14 @@ class NutritionResult(BaseModel):
     perServing: Dict[str, Optional[float]]
     total: Dict[str, Optional[float]]
     needsReview: List[str] = []
-
-router = APIRouter()
+    # Optional diagnostics/trace fields from calculator (not required for UI but useful)
+    warnings: List[str] = []
+    translationStats: Optional[Dict[str, int]] = None
+    explanations: Optional[List[Dict[str, Any]]] = None
+    debugEntries: Optional[List[Dict[str, Any]]] = None
+    implausibleItems: Optional[List[str]] = None
+    meta: Optional[Dict[str, Any]] = None
+    
 class ImageGenRequest(BaseModel):
     recipe_id: Optional[int] = None
     seed: Optional[int] = None
@@ -1217,6 +1304,24 @@ async def create_collection(request: Request, payload: dict = Body(...), current
     cid = db.create_collection(current_user.id, title, description, visibility, image_url)
     return {"ok": True, "id": cid}
 
+@router.get("/collections/{collection_id}/like", tags=["Collections"])
+@limiter.limit("240/minute")
+async def get_collection_like_status(collection_id: int, request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM collection_likes WHERE collection_id = ? AND user_id = ?", (collection_id, current_user.id))
+            liked = c.fetchone() is not None
+            c.execute("SELECT likes_count FROM collections WHERE id = ?", (collection_id,))
+            result = c.fetchone()
+            likes_count = result[0] if result else 0
+        return {"ok": True, "data": {"liked": liked, "likes_count": likes_count}}
+    except Exception as e:
+        logger.error(f"Failed to get like status for collection {collection_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not get like status")
+
 @router.post("/collections/{collection_id}/like", tags=["Collections"])
 @limiter.limit("120/minute")
 async def toggle_collection_like(collection_id: int, request: Request, current_user: Optional[User] = Depends(get_current_active_user)):
@@ -1512,6 +1617,184 @@ async def scrape_recipe(request: Request, url_payload: dict = Body(...), current
         logger.error(f"Error scraping URL {url}: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
+@router.get("/scrape-recipe-stream", tags=["Recipes"])
+@limiter.limit("30/minute")
+async def scrape_recipe_stream(request: Request, url: str):
+    """Server-Sent Events: streamar progressiv scraping med tidiga patchar.
+    Events:
+      - struct 'recipe_init': { title?, source_url, placeholder_image? }
+      - struct 'status': { message }
+      - struct 'recipe_patch': { any fields: title, description, ingredients, instructions, image_url, servings, times }
+      - struct 'image_ready': { image_url }
+      - struct 'done': { recipe }
+      - struct 'error': { message }
+    """
+    job_id = str(uuid.uuid4())
+
+    async def send_struct(ev_type: str, payload: dict) -> str:
+        body = {"jobId": job_id, "type": ev_type, "payload": payload}
+        return f"data: {json.dumps(body)}\n\n"
+
+    async def generator():
+        try:
+            from logic.web_scraper_new import FlexibleWebCrawler
+            crawler = FlexibleWebCrawler()
+            base_url = str(request.base_url)
+
+            # 1) Init + skeleton
+            yield await send_struct('status', {"message": "Initierar..."})
+            title_guess = None
+            image_guess = None
+            try:
+                html = await crawler._fetch_html_simple(url)
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(html, 'html.parser')
+                # Title guess from H1
+                try:
+                    h1 = soup.find('h1')
+                    if h1:
+                        t = h1.get_text(strip=True)
+                        if t and len(t) >= 3:
+                            title_guess = t
+                except Exception:
+                    pass
+                # Early OG image
+                try:
+                    image_guess = crawler.content_extractor.find_image_url(soup, url)
+                except Exception:
+                    image_guess = None
+            except Exception:
+                soup = None
+
+            yield await send_struct('recipe_init', {
+                "title": title_guess or '',
+                "source_url": url,
+                "image_url": image_guess or None,
+            })
+
+            # 2) Quick sources
+            yield await send_struct('status', {"message": "Extraherar snabbdatastrukturer..."})
+            result = None
+            if soup is not None:
+                try:
+                    result = await crawler._extract_quick_sources(soup, url)
+                except Exception:
+                    result = None
+            if result:
+                # Send patch immediately
+                patch = {k: v for k, v in result.items() if k in (
+                    'title','description','ingredients','instructions','image_url','servings','prep_time_minutes','cook_time_minutes','total_time_minutes','lang'
+                )}
+                yield await send_struct('recipe_patch', patch)
+                yield await send_struct('status', {"message": "Normaliserar..."})
+                try:
+                    normalized = await crawler._normalize_and_enrich(result, url, soup)
+                except Exception:
+                    normalized = result
+                # Diff image
+                try:
+                    if (normalized.get('image_url') and normalized.get('image_url') != result.get('image_url')):
+                        yield await send_struct('image_ready', {"image_url": normalized.get('image_url')})
+                except Exception:
+                    pass
+                # Final done
+                yield await send_struct('done', {"recipe": normalized})
+                return
+
+            # 3) Playwright fallback
+            yield await send_struct('status', {"message": "Renderar sida (JS)..."})
+            soup2 = None
+            try:
+                html2 = await crawler._fetch_html_with_playwright(url)
+                from bs4 import BeautifulSoup
+                soup2 = BeautifulSoup(html2, 'html.parser')
+            except Exception:
+                soup2 = None
+            result2 = None
+            if soup2 is not None:
+                try:
+                    result2 = await crawler._extract_quick_sources(soup2, url)
+                except Exception:
+                    result2 = None
+            if result2:
+                patch = {k: v for k, v in result2.items() if k in (
+                    'title','description','ingredients','instructions','image_url','servings','prep_time_minutes','cook_time_minutes','total_time_minutes','lang'
+                )}
+                yield await send_struct('recipe_patch', patch)
+                yield await send_struct('status', {"message": "Normaliserar..."})
+                try:
+                    normalized = await crawler._normalize_and_enrich(result2, url, soup2)
+                except Exception:
+                    normalized = result2
+                try:
+                    if (normalized.get('image_url') and normalized.get('image_url') != result2.get('image_url')):
+                        yield await send_struct('image_ready', {"image_url": normalized.get('image_url')})
+                except Exception:
+                    pass
+                yield await send_struct('done', {"recipe": normalized})
+                return
+
+            # 4) AI fallback
+            yield await send_struct('status', {"message": "Kör AI-parser..."})
+            final = None
+            try:
+                # choose soup2 if available
+                work_soup = soup2 or soup
+                if work_soup is None and url:
+                    html3 = await crawler._fetch_html_simple(url)
+                    from bs4 import BeautifulSoup
+                    work_soup = BeautifulSoup(html3, 'html.parser')
+                final = await crawler._extract_recipe_from_soup(work_soup, url)
+            except Exception:
+                final = None
+            if not final:
+                # Fallback: minst titel + bild + källa
+                fallback_title = title_guess or ''
+                fallback_img = image_guess or None
+                try:
+                    if not fallback_title or not fallback_img:
+                        # Best-effort hämta snabbt
+                        html4 = await crawler._fetch_html_simple(url)
+                        from bs4 import BeautifulSoup
+                        s4 = BeautifulSoup(html4, 'html.parser')
+                        if not fallback_title:
+                            h1 = s4.find('h1')
+                            if h1:
+                                t = h1.get_text(strip=True)
+                                if t and len(t) >= 3:
+                                    fallback_title = t
+                        if not fallback_img:
+                            try:
+                                fallback_img = crawler.content_extractor.find_image_url(s4, url)
+                            except Exception:
+                                fallback_img = None
+                except Exception:
+                    pass
+                minimal = {
+                    "title": fallback_title or "",
+                    "image_url": fallback_img or None,
+                    "source_url": url,
+                    "ingredients": [],
+                    "instructions": []
+                }
+                yield await send_struct('done', {"recipe": minimal})
+                return
+            # Already normalized in that flow, but ensure
+            try:
+                final = await crawler._normalize_and_enrich(final, url, soup2 or soup)
+            except Exception:
+                pass
+            yield await send_struct('done', {"recipe": final})
+        except Exception as e:
+            logger.error(f"scrape_recipe_stream error: {e}")
+            try:
+                yield await send_struct('error', {"message": str(e)})
+            except Exception:
+                pass
+
+    from starlette.responses import StreamingResponse
+    return StreamingResponse(generator(), media_type='text/event-stream')
+
 # --- Ratings Endpoints ---
 @router.get("/recipes/{recipe_id}/ratings")
 @limiter.limit("120/minute")
@@ -1552,6 +1835,24 @@ async def delete_recipe_rating(recipe_id: int, request: Request, current_user: U
         raise HTTPException(status_code=500, detail="Could not delete rating.")
 
 # --- Recipe Likes Endpoints ---
+@router.get("/recipes/{recipe_id}/like")
+@limiter.limit("240/minute")
+async def get_recipe_like_status(recipe_id: int, request: Request, current_user: User = Depends(get_current_active_user)):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        with db.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT 1 FROM recipe_likes WHERE recipe_id = ? AND user_id = ?", (recipe_id, current_user.id))
+            liked = c.fetchone() is not None
+            c.execute("SELECT likes_count FROM saved_recipes WHERE id = ?", (recipe_id,))
+            result = c.fetchone()
+            likes_count = result[0] if result else 0
+        return {"ok": True, "data": {"liked": liked, "likes_count": likes_count}}
+    except Exception as e:
+        logger.error(f"Failed to get like status for recipe {recipe_id}: {e}")
+        raise HTTPException(status_code=500, detail="Could not get like status")
+
 @router.post("/recipes/{recipe_id}/like")
 @limiter.limit("120/minute")
 async def toggle_recipe_like(recipe_id: int, request: Request, current_user: User = Depends(get_current_active_user)):
@@ -2310,13 +2611,177 @@ async def calculate_nutrition(request: NutritionCalcRequest):
     try:
         logging.info(f"Nutrition endpoint called with {len(request.ingredients)} ingredients, {request.servings} servings")
         
+        # Persist recipe_ingredients resolution (best-effort)
+        try:
+            rid = None
+            try:
+                rid = int(request.recipeId)
+            except Exception:
+                rid = None
+            lang_guess = 'sv'
+            for item in (request.ingredients or []):
+                raw = (item.get('raw') or '').strip()
+                if not raw:
+                    continue
+                res = resolve(raw, lang_guess)
+                db.insert_recipe_ingredient(rid or 0, raw, res.get('canonical_ingredient_id'), res.get('confidence'), res.get('source'))
+        except Exception as _e_persist:
+            logging.warning(f"persist recipe_ingredients failed: {_e_persist}")
+
         # Use real USDA integration
         calculator = NutritionCalculator()
-        result = await calculator.calculate_nutrition(request.ingredients, request.servings)
-        
-        logging.info(f"Nutrition calculation completed: {result}")
+        result = await calculator.calculate_nutrition(request.ingredients, request.servings, recipe_id=request.recipeId)
+
+        # Concise, human-readable summary instead of dumping entire object
+        try:
+            ps = (result or {}).get('perServing', {}) or {}
+            warnings_count = len((result or {}).get('warnings', []) or [])
+            review_count = len((result or {}).get('needsReview', []) or [])
+            debug_len = len((result or {}).get('debugEntries', []) or [])
+            compact = (
+                f"kcal={ps.get('calories', '—')} "
+                f"protein={ps.get('protein', '—')}g "
+                f"fat={ps.get('fat', '—')}g "
+                f"carbs={ps.get('carbs', '—')}g "
+                f"salt={(ps.get('salt') if ps.get('salt') is not None else (round((ps.get('sodium', 0) * 2.5 / 1000), 1) if isinstance(ps.get('sodium'), (int, float)) else '—'))}g"
+            )
+            logging.info(
+                "Nutrition done: servings=%s items=%s %s | warnings=%s needsReview=%s debugEntries=%s",
+                request.servings,
+                len(request.ingredients or []),
+                compact,
+                warnings_count,
+                review_count,
+                debug_len,
+            )
+        except Exception:
+            pass
         return NutritionResult(**result)
-        
     except Exception as e:
         logging.error(f"Nutrition calculation failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Nutrition calculation failed")
+
+@router.get("/nutrition/{recipe_id}")
+async def get_nutrition_snapshot(recipe_id: int):
+    """Return cached nutrition snapshot; enqueue compute only on first miss to avoid poll loops."""
+    try:
+        snap = db.get_nutrition_snapshot(recipe_id)
+        if snap:
+            status = snap.get("status", "pending")
+            resp = {"status": status, "meta": snap.get("meta"), "updated_at": snap.get("updated_at")}
+            if status == "ready" and snap.get("snapshot"):
+                resp["data"] = snap.get("snapshot")
+            # Timeout: if pending > 15s, flip to error so klienten ser något (reduced from 30s)
+            if status == "pending":
+                from datetime import datetime, timedelta
+                try:
+                    ts = snap.get("updated_at")
+                    dt = datetime.fromisoformat(ts) if isinstance(ts, str) else None
+                    if dt and (datetime.now() - dt) > timedelta(seconds=15):
+                        db.upsert_nutrition_snapshot(recipe_id, status="error", snapshot=None, meta={"error": "timeout"})
+                        return {"status": "error", "meta": {"error": "timeout"}}
+                except Exception:
+                    pass
+            return resp
+        # No record yet → set pending + enqueue once
+        try:
+            db.upsert_nutrition_snapshot(recipe_id, status="pending", snapshot=None, meta={"reason": "miss", "queued": True})
+        except Exception:
+            pass
+        try:
+            import asyncio
+            asyncio.create_task(enqueue_nutrition_compute(int(recipe_id)))
+        except Exception:
+            pass
+        return {"status": "pending", "meta": {"queued": True}}
+    except Exception as e:
+        logging.error(f"get_nutrition_snapshot error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get nutrition snapshot")
+
+@router.post("/ingredients/resolve")
+async def resolve_ingredient(payload: dict = Body(...)):
+    """Resolve an ingredient string to canonical id with confidence and source."""
+    try:
+        text = (payload.get('text') or '').strip()
+        lang = (payload.get('lang') or 'sv').strip().lower()
+        if not text:
+            raise HTTPException(status_code=400, detail="text required")
+        res = resolve(text, lang)
+        return res
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"resolve_ingredient failed: {e}")
+        raise HTTPException(status_code=500, detail="resolve failed")
+
+@router.get("/ingredients/translations")
+async def get_ingredient_translations(lang: str = 'sv', ids: Optional[str] = None):
+    try:
+        # Optional on-demand backfill if ids provided (comma-separated canonical ids)
+        if ids:
+            for part in ids.split(','):
+                try:
+                    cid = int(part)
+                    translate_canonical(cid, lang)
+                except Exception:
+                    continue
+        mapping = db.get_translations_for_lang(lang)
+        return mapping
+    except Exception as e:
+        logger.error(f"get_ingredient_translations failed: {e}")
+        raise HTTPException(status_code=500, detail="translations failed")
+
+
+
+@router.post("/nutrition/{recipe_id}/recompute")
+async def recompute_nutrition_snapshot(recipe_id: int):
+    """Force a recomputation: set status=pending and enqueue job once."""
+    try:
+        try:
+            db.upsert_nutrition_snapshot(recipe_id, status="pending", snapshot=None, meta={"reason": "manual_recompute"})
+        except Exception:
+            pass
+        try:
+            import asyncio
+            asyncio.create_task(enqueue_nutrition_compute(int(recipe_id)))
+        except Exception:
+            pass
+        return {"ok": True, "status": "pending"}
+    except Exception as e:
+        logger.error(f"recompute_nutrition_snapshot error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enqueue recompute")
+
+@router.post("/nutrition/{recipe_id}/sync")
+async def sync_compute_nutrition(recipe_id: int):
+    """Dev fallback: compute synchronously and save ready snapshot immediately."""
+    try:
+        from core.database import db as _db
+        try:
+            rid = int(recipe_id)
+        except Exception:
+            raise HTTPException(status_code=400, detail="invalid recipe id")
+        rec = _db.get_saved_recipe(rid)
+        if not rec:
+            raise HTTPException(status_code=404, detail="recipe not found")
+        content = rec.recipe_content.model_dump() if hasattr(rec.recipe_content, 'model_dump') else {}
+        ingredients = []
+        for ing in content.get('ingredients', []) or []:
+            if isinstance(ing, str):
+                ingredients.append({'raw': ing})
+            elif isinstance(ing, dict):
+                ingredients.append({'raw': f"{ing.get('quantity') or ''} {ing.get('name') or ''}".strip()})
+        servings = int(content.get('serves') or 4)
+        from logic.safe_mode_calculator import compute_safe_snapshot
+        calc_res = await compute_safe_snapshot(ingredients, servings)
+        per = (calc_res or {}).get('perServing', {})
+        nonzero = sum(1 for v in per.values() if isinstance(v, (int, float)) and v)
+        if nonzero == 0:
+            db.upsert_nutrition_snapshot(rid, status="error", snapshot=None, meta={"error": "empty snapshot"})
+            return {"status": "error", "meta": {"error": "empty snapshot"}}
+        db.upsert_nutrition_snapshot(rid, status="ready", snapshot=calc_res, meta={"timing": {"mode": "sync"}})
+        return {"status": "ready", "data": calc_res}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"sync_compute_nutrition error: {e}")
+        raise HTTPException(status_code=500, detail="sync compute failed")

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useOutletContext, useNavigate, Link } from 'react-router-dom';
 import { CameraIcon, PlayCircleIcon, GlobeAltIcon, MusicalNoteIcon, LinkIcon as LinkIconHero, MapPinIcon } from '@heroicons/react/24/outline';
 
-const API_BASE = 'http://localhost:8001/api/v1';
+const API_BASE = 'http://localhost:8000/api/v1';
 const API_ROOT = API_BASE.replace(/\/api\/v1$/, '');
 
 function normalizeBackendUrl(pathOrUrl) {

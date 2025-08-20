@@ -9,6 +9,7 @@ import RecipePage from './RecipePage';
 import CollectionsPage from './CollectionsPage.jsx';
 import CreateRecipe from './CreateRecipe.jsx';
 import UserPublicProfile from './pages/UserPublicProfile.jsx';
+import NutritionAdmin from './pages/NutritionAdmin.jsx';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="profile" element={<Profile />} />
         <Route path="users/:username" element={<UserPublicProfile />} />
         <Route path="recipes/:id" element={<RecipePage />} />
+        <Route path="admin/nutrition" element={<NutritionAdmin />} />
         <Route path="shopping-list" element={<div>Shop List Page - Coming Soon</div>} />
       </Route>
     </Routes>

@@ -1,0 +1,806 @@
+units:
+  tsp_ml: 5
+  tbsp_ml: 15
+  cup_ml: 240
+  dl_ml: 100
+  l_ml: 1000
+
+policy:
+  spice_default_grams: 1.5
+  spice_per_recipe_max: 10
+  exclude_names: ["water","ice"]
+  salt:
+    density_g_per_ml: 1.2
+    sodium_fraction: 0.393
+
+categories:
+  butter_fats_solid:
+    match: ["butter","margarine","ghee"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 14.2
+    density_g_per_ml: 0.911
+  oils:
+    match: ["oil","olive oil","canola oil","rapeseed oil"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 13.6
+    density_g_per_ml: 0.907
+  sugar_granulated:
+    match: ["sugar","granulated sugar","white sugar"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 12.5
+    density_g_per_ml: 0.83
+  sugar_brown:
+    match: ["brown sugar","light brown sugar","dark brown sugar"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 12.5
+    density_g_per_ml: 0.85
+  syrup_honey:
+    match: ["honey","maple syrup","golden syrup"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 21.0
+    density_g_per_ml: 1.41
+  flour_wheat:
+    match: [
+      "mjöl","flour","bread flour","all-purpose flour","plain flour","cake flour",
+      "cornflour","corn starch","majsstärkelse","majsmjöl","rice flour","potato flour",
+      "grahamsmjöl","rågmjöl","rye flour","dinkel","spelt","durum"
+    ]
+    default_unit: "cup"
+    gram_per_cup: 120
+    density_g_per_ml: 0.55
+  rice_dry:
+    match: [
+      "ris","rice","basmati","basmati rice","jasmine","jasmine rice","long-grain rice","short-grain rice",
+      "arborio","risotto rice","sushi rice","brown rice","wild rice"
+    ]
+    default_unit: "cup"
+    gram_per_cup: 190
+    density_g_per_ml: 0.85
+  pasta_dry:
+    match: ["pasta","spaghetti","penne","fusilli","macaroni","tagliatelle","lasagne","lasagne sheets","tortellini","gnocchi","idealmakaroner","gammaldags idealmakaroner","makaroner"]
+    default_unit: "cup"
+    gram_per_cup: 100
+    density_g_per_ml: 0.43
+    bounds:
+      per_liter_min: 300
+      per_liter_max: 800
+  legumes_dry:
+    match: [
+      "lins","linser","lentils","chickpeas","garbanzo","kidney beans","black beans","white beans","cannellini","butter beans","pinto beans","adzuki","beans (dry)"
+    ]
+    default_unit: "cup"
+    gram_per_cup: 190
+    density_g_per_ml: 0.80
+  legumes_cooked:
+    match: ["lentils cooked","beans cooked","linser kokta","bönor kokta"]
+    default_unit: "cup"
+    gram_per_cup: 175
+  nuts_halves:
+    match: ["pecans","walnuts","almonds"]
+    default_unit: "cup"
+    gram_per_cup: 100
+    density_g_per_ml: 0.41
+    bounds:
+      cup_grams_min: 80
+      cup_grams_max: 130
+  spices_ground:
+    match: ["black pepper","white pepper","cinnamon","cumin","paprika","turmeric","nutmeg","ginger (ground)","chili powder","peppar","svartpeppar","vitpeppar","white pepper"]
+    default_unit: "tsp"
+    gram_per_tsp: 2.5
+    max_per_recipe_g: 10
+
+  salt:
+    match: ["salt","table salt","sea salt","kosher salt","flingsalt","flake salt","himalayan salt","pink salt"]
+    default_unit: "tsp"
+    gram_per_tsp: 6.0
+    density_g_per_ml: 1.2
+  citrus:
+    match: ["lemon","lime"]
+    default_unit: "each"
+    grams_per_each: 65
+    juice_grams_per_each: 35
+  onion:
+    match: ["onion","yellow onion","red onion"]
+    default_unit: "each"
+    grams_per_each: 130
+    gram_per_cup_sliced: 150
+  bell_pepper:
+    match: ["bell pepper","red bell pepper","green bell pepper"]
+    default_unit: "each"
+    grams_per_each: 130
+  canned_tomatoes:
+    match: ["crushed tomatoes","diced tomatoes","tomato sauce (can)"]
+    default_unit: "can"
+    grams_per_can: 400
+  milk_dairy:
+    match: ["milk","whole milk","skim milk","mjölk","liter mjölk","liter milk"]
+    default_unit: "cup"
+    gram_per_cup: 244
+    density_g_per_ml: 1.03
+  plant_milks:
+    match: ["soy milk","oat milk","almond milk"]
+    default_unit: "cup"
+    gram_per_cup: 245
+    density_g_per_ml: 1.03
+  cheese_hard:
+    match: ["cheese","cheddar","parmesan"]
+    default_unit: "gram"
+    gram_per_cup_grated: 100
+  vegan_cheese:
+    match: ["vegan cheese","plant-based cheese"]
+    default_unit: "gram"
+    slice_grams: 22
+  tofu:
+    match: ["tofu","smoked tofu","firm tofu"]
+    default_unit: "gram"
+    gram_per_cup_cubed: 248
+  beef:
+    match: ["beef","steak","flank steak","sirloin"]
+    default_unit: "gram"
+    gram_per_cup_cubed: 135
+  lettuce_leafy:
+    match: ["lettuce","romaine","iceberg","spinach"]
+    default_unit: "cup"
+    gram_per_cup: 30
+  potatoes:
+    match: ["potato","potatoes"]
+    default_unit: "each"
+    grams_per_each: 170
+
+    density_g_per_ml: 0.90
+
+  oats:
+    match: ["havregryn","oats","rolled oats","porridge oats","quick oats"]
+    default_unit: "cup"
+    density_g_per_ml: 0.40
+
+  grains_misc:
+    match: ["quinoa","bulgur","couscous","amaranth","hirs","millet","teff","freekeh","kamut","farro","spelt berries"]
+    default_unit: "cup"
+    density_g_per_ml: 0.60
+
+  bread_baked:
+    match: ["bröd","bread","loaf","baguette","ciabatta","sourdough","flatbread","naan","pita","wrap","tortilla","bap","bun","roll"]
+    default_unit: "gram"
+    density_g_per_ml: 1.0
+
+  crackers_biscuits:
+    match: ["kex","cracker","biscuits","digestive","cookies","digestives","shortbread"]
+    default_unit: "gram"
+    density_g_per_ml: 0.50
+
+  cakes_pastries:
+    match: ["kaka","cake","brownie","muffin","cupcake","tårta","pie","paj"]
+    default_unit: "gram"
+    density_g_per_ml: 0.50
+
+  corn_kernels:
+    match: ["majs","corn kernels","sweetcorn","cob"]
+    default_unit: "cup"
+    density_g_per_ml: 0.80
+
+  peas_green:
+    match: ["ärtor","peas","green peas","sugar snap peas","snow peas"]
+    default_unit: "cup"
+    density_g_per_ml: 0.70
+
+
+  # --- Protein: Meat & Poultry ---
+  protein_meat:
+    match: [
+      "kyckling","chicken","hen","broiler","rooster",
+      "nötfärs","ground beef","minced beef","beef","oxkött","steak","roast beef","sirloin","ribeye","entrecote",
+      "fläskkött","pork","ham","prosciutto","serrano","jamon","char siu",
+      "lamm","lamb","mutton",
+      "anka","ank","duck","gås","goose","turkey","kalkon",
+      "vilt","venison","hjort","älg","moose","ren","reindeer",
+      "korv","sausage","wurst","chorizo","salami","hot dog","bratwurst",
+      "bacon","pancetta","lardon"
+    ]
+    default_unit: "gram"
+    density_g_per_ml: 1.0
+
+  # --- Protein: Seafood ---
+  protein_seafood:
+    match: [
+      "räkor","shrimp","prawns","scampi",
+      "lax","salmon","gravad lax","smoked salmon",
+      "tonfisk","tuna","albacore","yellowfin",
+      "torsk","cod","haddock","kolja",
+      "sill","herring","ansjovis","anchovy","sardine","makrill","mackerel",
+      "abborre","perch","gädda","pike","öring","trout","karp","carp","zander","gös",
+      "musslor","mussels","hjärtmusslor","clams","kokkels","oysters","ostron",
+      "krabba","crab","hummer","lobster","kräfta","crayfish",
+      "bläckfisk","squid","octopus","calamari","sepia"
+    ]
+    default_unit: "gram"
+    density_g_per_ml: 1.0
+
+  # --- Protein: Eggs ---
+  eggs:
+    match: ["ägg","egg","eggs","st ägg","st egg"]
+    default_unit: "each"
+    grams_per_each: 60
+
+  # --- Protein: Veg Alternatives ---
+  protein_veg_alt:
+    match: ["tofu","bean curd","tempeh","seitan","wheat gluten"]
+    default_unit: "gram"
+    density_g_per_ml: 1.0
+
+  # --- Protein: Cheese ---
+  protein_cheese:
+    match: [
+      "halloumi","halloumi cheese",
+      "ost","cheese","mozzarella","feta","parmesan","cheddar","gouda","edam","brie","camembert","gruyere","emmental","manchego","ricotta","cottage cheese","cream cheese","blue cheese","stilton","gorgonzola","roquefort"
+    ]
+    default_unit: "gram"
+    density_g_per_ml: 1.0
+
+  # === VEGETABLES — ALLIUMS (lökfamiljen) ===
+  vegetables_alliums:
+    match: ["lök","onion","yellow onion","red onion","brown onion","shallot","schalottenlök","spring onion","green onion","scallion","leek","purjolök","garlic","vitlök"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — ROOTS & TUBERS (rotfrukter) ===
+  vegetables_roots_tubers:
+    match: ["morot","carrot","palsternacka","parsnip","rova","turnip","kålrot","rutabaga","betor","beet","beetroot","sellerirot","celeriac","persiljerot","parsley root","yam","sötpotatis","sweet potato"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — CRUCIFEROUS (korsblommiga) ===
+  vegetables_cruciferous:
+    match: ["kål","cabbage","vitkål","white cabbage","rödkål","red cabbage","savoy","savoy cabbage","spetskål","pointed cabbage","pak choi","bok choy","pak choi","grönkål","kale","svartkål","cavolo nero","broccoli","broccolini","blomkål","cauliflower","brysselkål","brussels sprouts"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — NIGHTSHADES (potatisväxter, exkl. potatis) ===
+  vegetables_nightshades:
+    match: ["paprika","bell pepper","pepper(?!corn)","chili","chilli","jalapeño","habanero","tomat","tomato","tomatillo","aubergine","eggplant","zucchini","courgette"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — CUCURBITS & GOURDS (gurkväxter) ===
+  vegetables_cucurbits:
+    match: ["gurka","cucumber","pickles?","pumpa","pumpkin","butternut","squash(?!.*courgette)","spaghetti squash","melon(?! seeds)","cantaloupe","honeydew"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — LEAFY GREENS & SALADS (bladgrönt) ===
+  vegetables_leafy_greens:
+    match: ["sallad","lettuce","romaine","iceberg","cos","lollo","rucola","arugula","rocket","spenat","spinach","mâche","lambs lettuce","maché","fältsallad","endive","frisées?","radicchio","chard","mangold"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — LEGUMES (gröna ärter, bönskidor m.m.) ===
+  vegetables_legumes:
+    match: ["ärtor","peas","green peas","sockerärter","sugar snap peas","snow peas","edamame","green beans","haricots verts","vaxbönor","runner beans"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — CORN & KERNELS ===
+  vegetables_corn:
+    match: ["majs","corn( kernels)?","sweetcorn","corn on the cob","majskolv"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — MUSHROOMS (svamp) ===
+  vegetables_mushrooms:
+    match: ["svamp","mushroom","champignon","button mushroom","portobello","shiitake","enoki","oyster mushroom","kantarell","chanterelle","trattkantarell","porcini","karljohan","morel"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — AROMATICS & STALKS (selleri, fänkål m.m.) ===
+  vegetables_aromatics:
+    match: ["selleri(stjälk)?","celery","fänkål","fennel","rabarber","rhubarb","sparris","asparagus","ok[aå]ra","okra"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === VEGETABLES — OLIVES & CAPERS ===
+  vegetables_olives_capers:
+    match: ["oliv(er)?","olive(s)?","capers?","kapris"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === FRUIT — CITRUS ===
+  fruit_citrus:
+    match: ["citron","lemon","lime","apelsin","orange","blodapelsin","blood orange","grapefrukt","grapefruit","mandarin","clementin","tangerine","yuzu","bergamott"]
+    category: fruit
+    normalize: "{amount} g {ingredient}"
+
+  # === FRUIT — BERRIES (bär) ===
+  fruit_berries:
+    match: ["b[äa]r","berries","strawberries","jordgubbar","hallon","raspberries","bl[åa]b[äa]r","blueberries","lingon","lingonberries","tranb[äa]r","cranberries","bj[öo]rnb[äa]r","blackberries","vinb[äa]r","currants"]
+    category: fruit
+    normalize: "{amount} g {ingredient}"
+
+  # === FRUIT — POMES, STONE, TROPICAL ===
+  fruit_pomes_stone_tropical:
+    match: ["äpple","apple","päron","pear","kvitten","quince","persika","peach","nektarin","nectarine","plommon","plum","k[öo]rsb[äa]r","cherries","mango","ananas","pineapple","papaya","granatäpple","pomegranate","kiwi","banan","banana"]
+    category: fruit
+    normalize: "{amount} g {ingredient}"
+
+  # === FRUIT — DRIED FRUIT & RAISINS ===
+  fruit_dried:
+    match: ["russin","raisins","sultan[ai]ner","sultanas","torkade aprikoser","dried apricots","dadlar","dates","fikon","figs","torkad frukt","dried fruit"]
+    category: fruit
+    normalize: "{amount} g {ingredient}"
+
+  # === FRUIT — TOMATO PRODUCTS (för passata/krossade) ===
+  vegetables_tomato_products:
+    match: ["krossade tomater","crushed tomatoes","passata","tomato pur[ée]e","tomatpur[ée]","tomats[åa]s","tomato sauce"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === PICKLES & FERMENTS ===
+  vegetables_pickles_ferments:
+    match: ["surk[åa]l","sauerkraut","kimchi","pickled","inlagd(a)?","gurka i lag","pickles"]
+    category: vegetables
+    normalize: "{amount} g {ingredient}"
+
+  # === GENERAL CATCH-ALL FOR VEG/FRUIT WITHOUT UNIT ===
+  produce_general:
+    match: ["tomat(er)?","tomato(es)?","lök(ar)?","onion(s)?","morot(ter)?","carrot(s)?","paprika(or)?","pepper(s)?","potatis(ar)?","potato(es)?","apple(s)?","äpple(n)?","pear(s)?","päron","banana(s)?","banan(er)?"]
+    category: produce
+    normalize: "{amount} st {ingredient}"
+
+  # === JUICE / PURÉE — LIQUIDS FROM PRODUCE ===
+  fruit_juice_puree:
+    match: ["juice","pur[ée]e","p[üu]r[ée]","must","jus","coulis","smoothie"]
+    category: fruit
+    normalize: "{amount} ml {ingredient}"
+
+  # === DAIRY & DAIRY ALTERNATIVES ===
+  dairy_yogurt:
+    match: ["yoghurt","yogurt","greek yogurt","natural yogurt","vaniljyoghurt","vanilla yogurt","skyr","quark","kvarg"]
+    default_unit: "cup"
+    gram_per_cup: 245
+    density_g_per_ml: 1.03
+
+  dairy_cream:
+    match: ["grädde","cream","whipping cream","heavy cream","light cream","sour cream","crème fraîche","vispgrädde","matlagningsgrädde"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 15.0
+    density_g_per_ml: 1.0
+
+  dairy_butter_margarine:
+    match: ["smör","butter","margarin","margarine","bregott","lätta","ghee","clarified butter"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 14.2
+    density_g_per_ml: 0.911
+
+  # === CONDIMENTS & SAUCES ===
+  condiments_mustard:
+    match: ["senap","mustard","dijon mustard","whole grain mustard","honey mustard","english mustard"]
+    default_unit: "tsp"
+    gram_per_tsp: 5.0
+    density_g_per_ml: 1.1
+
+  condiments_ketchup:
+    match: ["ketchup","tomato ketchup","catsup"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 17.0
+    density_g_per_ml: 1.15
+
+  condiments_mayonnaise:
+    match: ["majonnäs","mayonnaise","aioli","garlic mayonnaise"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 14.0
+    density_g_per_ml: 0.93
+
+  condiments_soy_sauce:
+    match: ["sojasås","soy sauce","tamari","shoyu","light soy sauce","dark soy sauce"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 18.0
+    density_g_per_ml: 1.2
+
+  condiments_vinegar:
+    match: ["vinäger","vinegar","apple cider vinegar","balsamic vinegar","red wine vinegar","white wine vinegar","rice vinegar"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 15.0
+    density_g_per_ml: 1.0
+
+  # === HERBS & FRESH SPICES ===
+  herbs_fresh:
+    match: ["persilja","parsley","basilika","basil","dill","dill weed","timjan","thyme","rosmarin","rosemary","oregano","mynta","mint","koriander","coriander","cilantro","salladslök","chives","dragon","tarragon","salvia","sage"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 3.0
+    density_g_per_ml: 0.2
+
+  # === NUTS & SEEDS ===
+  nuts_almonds:
+    match: ["mandlar","almonds","almond flakes","almond meal","almond flour","mandelmassa","marzipan"]
+    default_unit: "cup"
+    gram_per_cup: 95
+    density_g_per_ml: 0.38
+
+  nuts_walnuts:
+    match: ["valnötter","walnuts","walnut halves","walnut pieces"]
+    default_unit: "cup"
+    gram_per_cup: 100
+    density_g_per_ml: 0.40
+
+  nuts_cashews:
+    match: ["cashewnötter","cashews","cashew nuts","cashew pieces"]
+    default_unit: "cup"
+    gram_per_cup: 130
+    density_g_per_ml: 0.52
+
+  nuts_peanuts:
+    match: ["jordnötter","peanuts","peanut butter","jordnötssmör","peanut oil"]
+    default_unit: "cup"
+    gram_per_cup: 145
+    density_g_per_ml: 0.58
+
+  seeds_sunflower:
+    match: ["solrosfrön","sunflower seeds","pumpafrön","pumpkin seeds","sesamfrön","sesame seeds","linfrön","flax seeds","chia seeds"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 10.0
+    density_g_per_ml: 0.4
+
+  # === GRAINS & CEREALS ===
+  grains_barley:
+    match: ["korn","barley","pearl barley","hulled barley","kornmjöl","barley flour"]
+    default_unit: "cup"
+    gram_per_cup: 200
+    density_g_per_ml: 0.85
+
+  grains_buckwheat:
+    match: ["bovete","buckwheat","buckwheat groats","bovetemjöl","buckwheat flour"]
+    default_unit: "cup"
+    gram_per_cup: 170
+    density_g_per_ml: 0.72
+
+  grains_rye:
+    match: ["råg","rye","rågmjöl","rye flour","rågbröd","rye bread"]
+    default_unit: "cup"
+    gram_per_cup: 120
+    density_g_per_ml: 0.55
+
+  # === SWEETENERS & SUGARS ===
+  sweeteners_artificial:
+    match: ["aspartam","aspartame","saccharin","sukralos","sucralose","stevia","stevia extract","xylitol","erythritol","monk fruit","monk fruit extract"]
+    default_unit: "tsp"
+    gram_per_tsp: 4.0
+    density_g_per_ml: 0.8
+
+  sweeteners_syrups:
+    match: ["agave","agave syrup","agavesirap","sirap","syrup","golden syrup","corn syrup","glucose syrup","fruktos","fructose","fruktossirap","fructose syrup"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 21.0
+    density_g_per_ml: 1.41
+
+  # === BAKING INGREDIENTS ===
+  baking_yeast:
+    match: ["jäst","yeast","active dry yeast","instant yeast","fresh yeast","färsk jäst","torkad jäst"]
+    default_unit: "tsp"
+    gram_per_tsp: 3.0
+    density_g_per_ml: 0.6
+
+  baking_baking_powder:
+    match: ["bakpulver","baking powder","bikarbonat","bicarbonate of soda","natron","baking soda","sodium bicarbonate"]
+    default_unit: "tsp"
+    gram_per_tsp: 4.0
+    density_g_per_ml: 0.8
+
+  baking_vanilla:
+    match: ["vanilj","vanilla","vaniljextrakt","vanilla extract","vaniljpulver","vanilla powder","vaniljstång","vanilla bean"]
+    default_unit: "tsp"
+    gram_per_tsp: 4.0
+    density_g_per_ml: 0.8
+
+  # === ALCOHOL & WINE ===
+  alcohol_wine:
+    match: ["vin","wine","rött vin","red wine","vitt vin","white wine","rosévin","rosé wine","champagne","prosecco","cava"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+  alcohol_beer:
+    match: ["öl","beer","lager","ale","stout","porter","pilsner","wheat beer","veteöl"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+  alcohol_spirits:
+    match: ["vodka","whisky","whiskey","gin","rum","tequila","brandy","cognac","schnapps","akvavit","aquavit"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 15.0
+    density_g_per_ml: 1.0
+
+  # === PROCESSED FOODS ===
+  processed_tomato_paste:
+    match: ["tomatpuré","tomato paste","tomatkoncentrat","tomato concentrate"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 16.0
+    density_g_per_ml: 1.07
+
+  processed_stock_broth:
+    match: ["buljong","stock","broth","chicken stock","beef stock","vegetable stock","fish stock","buljongtärning","stock cube"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+  processed_coconut_milk:
+    match: ["kokosmjölk","coconut milk","kokosgrädde","coconut cream","kokosvatten","coconut water"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+  # === FROZEN FOODS ===
+  frozen_vegetables:
+    match: ["frysta grönsaker","frozen vegetables","frysta ärter","frozen peas","frysta bönor","frozen beans","fryst majs","frozen corn"]
+    default_unit: "cup"
+    gram_per_cup: 150
+    density_g_per_ml: 0.6
+
+  frozen_fruits:
+    match: ["frysta bär","frozen berries","frysta jordgubbar","frozen strawberries","frysta mango","frozen mango"]
+    default_unit: "cup"
+    gram_per_cup: 150
+    density_g_per_ml: 0.6
+
+  # === CANNED FOODS ===
+  canned_beans:
+    match: ["konservbönor","canned beans","kidney beans (can)","black beans (can)","chickpeas (can)","garbanzo beans (can)"]
+    default_unit: "cup"
+    gram_per_cup: 180
+    density_g_per_ml: 0.72
+
+  canned_fish:
+    match: ["konservfisk","canned fish","tonfisk i olja","tuna in oil","tonfisk i vatten","tuna in water","sardiner","sardines","makrill","mackerel"]
+    default_unit: "can"
+    gram_per_can: 120
+    density_g_per_ml: 1.0
+
+  # === SPECIALTY INGREDIENTS ===
+  specialty_miso:
+    match: ["miso","miso paste","red miso","white miso","yellow miso"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 18.0
+    density_g_per_ml: 1.2
+
+  specialty_wasabi:
+    match: ["wasabi","wasabi paste","wasabi powder"]
+    default_unit: "tsp"
+    gram_per_tsp: 5.0
+    density_g_per_ml: 1.0
+
+  specialty_curry_paste:
+    match: ["currypasta","curry paste","red curry paste","green curry paste","yellow curry paste","massaman curry paste"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 16.0
+    density_g_per_ml: 1.07
+
+  specialty_tahini:
+    match: ["tahini","sesame paste","sesampasta"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 15.0
+    density_g_per_ml: 1.0
+
+  specialty_hummus:
+    match: ["hummus","humus","kikärtsmos","chickpea dip"]
+    default_unit: "cup"
+    gram_per_cup: 250
+    density_g_per_ml: 1.04
+
+  # === DRIED INGREDIENTS ===
+  dried_herbs:
+    match: ["torkad persilja","dried parsley","torkad basilika","dried basil","torkad oregano","dried oregano","torkad timjan","dried thyme"]
+    default_unit: "tsp"
+    gram_per_tsp: 1.0
+    density_g_per_ml: 0.2
+
+  dried_mushrooms:
+    match: ["torkad svamp","dried mushrooms","torkade kantareller","dried chanterelles","torkade porcini","dried porcini"]
+    default_unit: "cup"
+    gram_per_cup: 30
+    density_g_per_ml: 0.12
+
+  # === BEVERAGES ===
+  beverages_coffee:
+    match: ["kaffe","coffee","espresso","filter coffee","french press coffee","pour over coffee"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+  beverages_tea:
+    match: ["te","tea","black tea","green tea","herbal tea","krämte","chamomile tea","pepparmynta","peppermint tea"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+  beverages_juice:
+    match: ["apelsinjuice","orange juice","äppeljuice","apple juice","tranbärsjuice","cranberry juice","tomatjuice","tomato juice"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+  # === ADDITIONAL IMPORTANT CATEGORIES ===
+  
+  # === BAKING & COOKING AIDS ===
+  baking_eggs:
+    match: ["ägg","egg","eggs","large egg","medium egg","small egg","äggula","egg yolk","äggvita","egg white"]
+    default_unit: "each"
+    grams_per_each: 60
+    density_g_per_ml: 1.0
+
+  baking_gelatin:
+    match: ["gelatin","gelatine","agar agar","agar-agar","vegetable gelatin","plant gelatin"]
+    default_unit: "tsp"
+    gram_per_tsp: 3.0
+    density_g_per_ml: 0.6
+
+  baking_chocolate:
+    match: ["choklad","chocolate","dark chocolate","mörk choklad","milk chocolate","mjölkchoklad","white chocolate","vit choklad","cocoa powder","kakao","cocoa","chocolate chips","chokladchips"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 8.0
+    density_g_per_ml: 0.53
+
+  # === CONDIMENTS & SPREADS ===
+  condiments_hot_sauce:
+    match: ["chilisås","hot sauce","sriracha","tabasco","frank's","buffalo sauce","wing sauce"]
+    default_unit: "tsp"
+    gram_per_tsp: 5.0
+    density_g_per_ml: 1.0
+
+  condiments_worcestershire:
+    match: ["worcestershire sauce","worcestershire","worcester sauce"]
+    default_unit: "tsp"
+    gram_per_tsp: 5.0
+    density_g_per_ml: 1.0
+
+  condiments_fish_sauce:
+    match: ["fisksås","fish sauce","nam pla","nuoc mam","anchovy sauce"]
+    default_unit: "tsp"
+    gram_per_tsp: 5.0
+    density_g_per_ml: 1.0
+
+  condiments_oyster_sauce:
+    match: ["ostronsås","oyster sauce","hoisin sauce","hoisin","plum sauce"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 18.0
+    density_g_per_ml: 1.2
+
+  # === DAIRY ALTERNATIVES ===
+  dairy_vegan_cream:
+    match: ["havregrädde","oat cream","soy cream","sojagrädde","coconut cream","kokosgrädde","almond cream","mandelgrädde","cashew cream","cashewgrädde"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 15.0
+    density_g_per_ml: 1.0
+
+  dairy_vegan_yogurt:
+    match: ["havreyoghurt","oat yogurt","soy yogurt","sojayoghurt","coconut yogurt","kokosyoghurt","almond yogurt","mandelyoghurt"]
+    default_unit: "cup"
+    gram_per_cup: 245
+    density_g_per_ml: 1.03
+
+  # === GRAINS & CEREALS - ADDITIONAL ===
+  grains_amaranth:
+    match: ["amarant","amaranth","amaranth flour","amarantmjöl"]
+    default_unit: "cup"
+    gram_per_cup: 200
+    density_g_per_ml: 0.85
+
+  grains_millet:
+    match: ["hirs","millet","millet flour","hirsmjöl"]
+    default_unit: "cup"
+    gram_per_cup: 200
+    density_g_per_ml: 0.85
+
+  grains_teff:
+    match: ["teff","teff flour","teffmjöl"]
+    default_unit: "cup"
+    gram_per_cup: 180
+    density_g_per_ml: 0.76
+
+  # === NUTS & SEEDS - ADDITIONAL ===
+  nuts_pistachios:
+    match: ["pistagenötter","pistachios","pistachio nuts","pistachio kernels"]
+    default_unit: "cup"
+    gram_per_cup: 120
+    density_g_per_ml: 0.48
+
+  nuts_hazelnuts:
+    match: ["hasselnötter","hazelnuts","hazelnut kernels","filberts"]
+    default_unit: "cup"
+    gram_per_cup: 135
+    density_g_per_ml: 0.54
+
+  nuts_pecans:
+    match: ["pecannötter","pecans","pecan nuts","pecan halves"]
+    default_unit: "cup"
+    gram_per_cup: 100
+    density_g_per_ml: 0.40
+
+  seeds_hemp:
+    match: ["hampfrön","hemp seeds","hemp hearts","hampfrö"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 10.0
+    density_g_per_ml: 0.4
+
+  seeds_pumpkin:
+    match: ["pumpafrön","pumpkin seeds","pepitas","pumpkin kernels"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 10.0
+    density_g_per_ml: 0.4
+
+  # === SPECIALTY INGREDIENTS - ADDITIONAL ===
+  specialty_nutritional_yeast:
+    match: ["näringsjäst","nutritional yeast","nooch","vegan parmesan"]
+    default_unit: "tbsp"
+    gram_per_tbsp: 8.0
+    density_g_per_ml: 0.32
+
+  specialty_agar_agar:
+    match: ["agar agar","agar-agar","vegetable gelatin","plant gelatin"]
+    default_unit: "tsp"
+    gram_per_tsp: 2.0
+    density_g_per_ml: 0.4
+
+  specialty_psyllium:
+    match: ["psyllium","psyllium husk","psyllium fiber","psylliumfröskal"]
+    default_unit: "tsp"
+    gram_per_tsp: 3.0
+    density_g_per_ml: 0.6
+
+  # === FLOUR ALTERNATIVES ===
+  flour_almond:
+    match: ["mandelmjöl","almond flour","almond meal","ground almonds"]
+    default_unit: "cup"
+    gram_per_cup: 95
+    density_g_per_ml: 0.38
+
+  flour_coconut:
+    match: ["kokosmjöl","coconut flour","coconut meal"]
+    default_unit: "cup"
+    gram_per_cup: 120
+    density_g_per_ml: 0.48
+
+  flour_chickpea:
+    match: ["kikärtsmjöl","chickpea flour","gram flour","besan"]
+    default_unit: "cup"
+    gram_per_cup: 120
+    density_g_per_ml: 0.48
+
+  # === SWEETENERS - ADDITIONAL ===
+  sweeteners_monk_fruit:
+    match: ["monk fruit","monk fruit extract","monk fruit sweetener","lohan guo"]
+    default_unit: "tsp"
+    gram_per_tsp: 4.0
+    density_g_per_ml: 0.8
+
+  sweeteners_allulose:
+    match: ["allulose","allulose sweetener","rare sugar"]
+    default_unit: "tsp"
+    gram_per_tsp: 4.0
+    density_g_per_ml: 0.8
+
+  # === FROZEN & CANNED - ADDITIONAL ===
+  frozen_pizza:
+    match: ["fryst pizza","frozen pizza","pizza crust","pizzabotten","pizza base"]
+    default_unit: "each"
+    grams_per_each: 300
+    density_g_per_ml: 0.5
+
+  canned_coconut_milk:
+    match: ["konserv kokosmjölk","canned coconut milk","coconut milk (can)","kokosmjölk (burk)"]
+    default_unit: "can"
+    grams_per_can: 400
+    density_g_per_ml: 1.0
+
+  # === BEVERAGES - ADDITIONAL ===
+  beverages_broth:
+    match: ["buljong","broth","stock","chicken broth","beef broth","vegetable broth","fish broth","buljongtärning","stock cube"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+  beverages_plant_milk:
+    match: ["havredryck","oat milk","soy milk","sojamjölk","almond milk","mandeldryck","cashew milk","cashewdryck","rice milk","rismjölk","hemp milk","hampdryck"]
+    default_unit: "cup"
+    gram_per_cup: 240
+    density_g_per_ml: 1.0
+
+

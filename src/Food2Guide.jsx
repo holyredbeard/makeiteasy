@@ -30,14 +30,14 @@ import Spinner from './components/Spinner';
 import TagInput from './components/TagInput';
 import RecipeView from './components/RecipeView';
 
-const API_BASE = 'http://localhost:8001/api/v1';
-const STATIC_BASE = 'http://localhost:8001';
+const API_BASE = 'http://localhost:8000/api/v1';
+const STATIC_BASE = 'http://localhost:8000';
 
 const normalizeUrlPort = (url) => {
   if (!url || typeof url !== 'string') return url;
   return url
-    .replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
-    .replace('http://localhost:8000', 'http://localhost:8001');
+    .replace('http://127.0.0.1:8001', 'http://127.0.0.1:8000')
+    .replace('http://localhost:8001', 'http://localhost:8000');
 };
 
 // Replaced by orange ring spinner component
@@ -728,29 +728,48 @@ export default function Food2Guide() {
       setIsScraping(true);
       setStreamStatus('Scraping recipe from website...');
       try {
-        const response = await fetch(`${API_BASE}/scrape-recipe`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({ url: videoUrl })
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ detail: 'An unknown error occurred during scraping.' }));
-          throw new Error(errorData.detail || 'Failed to scrape recipe. The website might be using anti-scraping technologies.');
-        }
-
-        const result = await response.json();
-        if (result && result.recipe) {
-          setRecipeData(result.recipe);
-        } else {
-          throw new Error('Scraper returned no recipe data. The website structure might not be supported.');
-        }
+        // Progressive SSE stream
+        const streamUrl = `${API_BASE}/scrape-recipe-stream?url=${encodeURIComponent(videoUrl)}`;
+        const es = new EventSource(streamUrl);
+        const recipePatch = {};
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data || '{}');
+            const type = data.type;
+            const payload = data.payload || {};
+            if (type === 'status') {
+              setStreamStatus(payload.message || '');
+            } else if (type === 'recipe_init') {
+              setRecipeData(prev => ({ ...(prev || {}), title: payload.title || prev?.title, source_url: payload.source_url, image_url: payload.image_url || prev?.image_url }));
+            } else if (type === 'recipe_patch') {
+              Object.assign(recipePatch, payload);
+              setRecipeData(prev => ({ ...(prev || {}), ...recipePatch }));
+            } else if (type === 'image_ready') {
+              setRecipeData(prev => ({ ...(prev || {}), image_url: payload.image_url }));
+            } else if (type === 'done') {
+              setRecipeData(payload.recipe || {});
+              setStreamStatus('');
+              setIsStreaming(false);
+              setIsScraping(false);
+              es.close();
+            } else if (type === 'error') {
+              setStreamError(payload.message || 'Scraping failed');
+              setIsStreaming(false);
+              setIsScraping(false);
+              es.close();
+            }
+          } catch (e) {
+            // ignore parse errors
+          }
+        };
+        es.onerror = () => {
+          setStreamError('Stream connection failed');
+          setIsStreaming(false);
+          setIsScraping(false);
+          try { es.close(); } catch {}
+        };
       } catch (err) {
         setStreamError(err.message);
-      } finally {
         setIsStreaming(false);
         setIsScraping(false);
       }

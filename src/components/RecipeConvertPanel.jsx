@@ -182,7 +182,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
     try {
       setImageBusy(true);
       setImageNotice('');
-      const res = await fetch('http://localhost:8001/api/v1/images/generate', {
+      const res = await fetch('http://localhost:8000/api/v1/images/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -223,7 +223,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
     try {
       const newImages = [];
       for (let i = 0; i < count; i++) {
-        const res = await fetch('http://localhost:8001/api/v1/images/generate', {
+        const res = await fetch('http://localhost:8000/api/v1/images/generate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -270,7 +270,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
       diffs.sort((a,b)=>a.d-b.d);
       setImageAspect(diffs[0].label);
     };
-    img.src = originalImage.startsWith('http') ? originalImage : `http://localhost:8001${originalImage}`;
+    img.src = originalImage.startsWith('http') ? originalImage : `http://localhost:8000${originalImage}`;
   }, [originalImage]);
 
   // Reset image state when preview changes; no auto generation

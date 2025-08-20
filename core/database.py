@@ -193,6 +193,45 @@ class DatabaseManager:
                 """
             )
 
+            # --- Nutrition snapshots for fast recipe page loads ---
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS nutrition_snapshots (
+                    recipe_id INTEGER PRIMARY KEY,
+                    snapshot TEXT,
+                    status TEXT NOT NULL DEFAULT 'pending',
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    meta TEXT
+                )
+                """
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_nutrition_snapshots_status ON nutrition_snapshots(status)")
+
+            # --- USDA FDC foods cache (json response), for 14-day reuse ---
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS fdc_foods (
+                    fdc_id INTEGER PRIMARY KEY,
+                    json TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+            # --- Density catalog (learned/fallback) ---
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS density_catalog (
+                    category TEXT,
+                    form TEXT,
+                    g_per_ml REAL,
+                    source TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (category, form)
+                )
+                """
+            )
+
             # --- Collections ---
             cursor.execute(
                 """
@@ -323,12 +362,189 @@ class DatabaseManager:
                 )
                 """
             )
+            # --- Canonical ingredients & translation tables ---
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS canonical_ingredients (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name_en TEXT NOT NULL UNIQUE,
+                    fdc_id TEXT,
+                    category TEXT,
+                    synonyms TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ingredient_aliases (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    alias_text TEXT NOT NULL,
+                    lang TEXT NOT NULL,
+                    canonical_ingredient_id INTEGER NOT NULL,
+                    confidence REAL DEFAULT 1.0,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (canonical_ingredient_id) REFERENCES canonical_ingredients(id),
+                    UNIQUE(alias_text, lang, canonical_ingredient_id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ingredient_translations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    canonical_ingredient_id INTEGER NOT NULL,
+                    lang TEXT NOT NULL,
+                    translated_name TEXT NOT NULL,
+                    source TEXT,
+                    confidence REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (canonical_ingredient_id) REFERENCES canonical_ingredients(id),
+                    UNIQUE(canonical_ingredient_id, lang)
+                )
+                """
+            )
+            # Ensure new columns exist for migrated DBs
+            cursor.execute("PRAGMA table_info(ingredient_translations)")
+            _it_cols = {row[1] for row in cursor.fetchall()}
+            if 'source' not in _it_cols:
+                try:
+                    cursor.execute("ALTER TABLE ingredient_translations ADD COLUMN source TEXT")
+                except Exception:
+                    pass
+            if 'confidence' not in _it_cols:
+                try:
+                    cursor.execute("ALTER TABLE ingredient_translations ADD COLUMN confidence REAL")
+                except Exception:
+                    pass
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS recipe_ingredients (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    recipe_id INTEGER NOT NULL,
+                    canonical_ingredient_id INTEGER,
+                    original_text TEXT NOT NULL,
+                    confidence REAL,
+                    source TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (recipe_id) REFERENCES saved_recipes(id),
+                    FOREIGN KEY (canonical_ingredient_id) REFERENCES canonical_ingredients(id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS translation_cache (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key_hash TEXT NOT NULL UNIQUE,
+                    name_raw TEXT NOT NULL,
+                    lang TEXT NOT NULL,
+                    name_en TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    confidence REAL DEFAULT 1.0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            # Seed some canonical ingredients
+            try:
+                seed_items = [
+                    ("light soy sauce", "condiment"),
+                    ("soy sauce", "condiment"),
+                    ("elbow macaroni", "pasta"),
+                    ("garlic", "vegetable"),
+                    ("crushed tomatoes", "vegetable"),
+                    ("sour cream", "dairy"),
+                    ("scallion", "vegetable"),
+                    ("smoked tofu", "protein"),
+                    ("vegan sausage", "protein"),
+                    ("soy milk", "beverage"),
+                    ("vegan cheese", "dairy"),
+                    ("black pepper", "spice"),
+                    ("salt", "spice"),
+                    ("water", "beverage"),
+                    ("flaxseed", "seed"),
+                    ("olive oil", "oil")
+                ]
+                for name_en, category in seed_items:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO canonical_ingredients (name_en, category) VALUES (?, ?)",
+                        (name_en, category)
+                    )
+                # Seed Swedish aliases
+                alias_rows = [
+                    ("ljus soja", "sv", "light soy sauce"),
+                    ("soja", "sv", "soy sauce"),
+                    ("idealmakaroner", "sv", "elbow macaroni"),
+                    ("gammaldags idealmakaroner", "sv", "elbow macaroni"),
+                    ("vitlöksklyftor", "sv", "garlic"),
+                    ("vitlök", "sv", "garlic"),
+                    ("krossade tomater", "sv", "crushed tomatoes"),
+                    ("gräddfil", "sv", "sour cream"),
+                    ("salladslök", "sv", "scallion"),
+                    ("rökt tofu", "sv", "smoked tofu"),
+                    ("veganska korvar", "sv", "vegan sausage"),
+                    ("vegansk korv", "sv", "vegan sausage"),
+                    ("sojamjölk", "sv", "soy milk"),
+                    ("vegansk ost", "sv", "vegan cheese"),
+                    ("svartpeppar", "sv", "black pepper"),
+                    ("peppar", "sv", "black pepper"),
+                    ("salt", "sv", "salt"),
+                    ("vatten", "sv", "water"),
+                    ("linfrö", "sv", "flaxseed"),
+                    ("linfröägg", "sv", "flaxseed")
+                ]
+                for alias_text, lang, canonical_name in alias_rows:
+                    cursor.execute(
+                        "INSERT OR IGNORE INTO ingredient_aliases (alias_text, lang, canonical_ingredient_id, confidence) "
+                        "VALUES (?, ?, (SELECT id FROM canonical_ingredients WHERE name_en = ?), 1.0)",
+                        (alias_text, lang, canonical_name)
+                    )
+            except Exception as _seed_err:
+                logger.warning(f"Seeding canonical ingredients failed: {_seed_err}")
             conn.commit()
             logger.info("Database initialized successfully")
 
             # Seed canonical tags once
             self._seed_canonical_tags(cursor)
             conn.commit()
+
+            # --- Lightweight crawler caches ---
+            try:
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS domain_fingerprints (
+                        domain TEXT PRIMARY KEY,
+                        selectors_json TEXT,
+                        schema_json TEXT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS ingredient_parse_cache (
+                        key TEXT PRIMARY KEY,
+                        original TEXT NOT NULL,
+                        parsed_json TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+                cursor.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS domain_stats (
+                        domain TEXT PRIMARY KEY,
+                        last_3_fail_rates_json TEXT,
+                        prefer_html_list INT,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """
+                )
+                conn.commit()
+            except Exception as _crawl_err:
+                logger.warning(f"Crawler cache tables init failed: {_crawl_err}")
 
     def create_user(self, user_data: UserCreate) -> Optional[User]:
         try:
@@ -380,6 +596,180 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error getting user by email '{email}': {e}")
             return None
+
+    # --- Crawler cache helpers ---
+    def get_domain_fingerprint(self, domain: str) -> Optional[dict]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT selectors_json, schema_json FROM domain_fingerprints WHERE domain=?", (domain,))
+                row = c.fetchone()
+                if not row:
+                    return None
+                import json as _json
+                selectors = None
+                schema = None
+                try:
+                    selectors = _json.loads(row[0]) if row[0] else None
+                except Exception:
+                    selectors = None
+                try:
+                    schema = _json.loads(row[1]) if row[1] else None
+                except Exception:
+                    schema = None
+                return {"selectors": selectors, "schema": schema}
+        except Exception as e:
+            logger.warning(f"get_domain_fingerprint failed for {domain}: {e}")
+            return None
+
+    def upsert_domain_fingerprint(self, domain: str, selectors: Optional[list] = None, schema: Optional[dict] = None):
+        try:
+            import json as _json
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    """
+                    INSERT INTO domain_fingerprints(domain, selectors_json, schema_json, updated_at)
+                    VALUES(?,?,?,CURRENT_TIMESTAMP)
+                    ON CONFLICT(domain) DO UPDATE SET
+                        selectors_json=COALESCE(excluded.selectors_json, domain_fingerprints.selectors_json),
+                        schema_json=COALESCE(excluded.schema_json, domain_fingerprints.schema_json),
+                        updated_at=CURRENT_TIMESTAMP
+                    """,
+                    (domain, _json.dumps(selectors) if selectors else None, _json.dumps(schema) if schema else None)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"upsert_domain_fingerprint failed for {domain}: {e}")
+
+    def get_ingredient_parse_cache(self, key: str) -> Optional[str]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT parsed_json FROM ingredient_parse_cache WHERE key=?", (key,))
+                row = c.fetchone()
+                return row[0] if row else None
+        except Exception:
+            return None
+
+    def upsert_ingredient_parse_cache(self, key: str, original: str, parsed_json: str):
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    """
+                    INSERT INTO ingredient_parse_cache(key, original, parsed_json, created_at)
+                    VALUES(?,?,?,CURRENT_TIMESTAMP)
+                    ON CONFLICT(key) DO UPDATE SET parsed_json=excluded.parsed_json
+                    """,
+                    (key, original, parsed_json)
+                )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"upsert_ingredient_parse_cache failed: {e}")
+
+    # --- Ingredient utilities ---
+    def get_all_canonical(self) -> list[dict]:
+        with self.get_connection() as conn:
+            c = conn.cursor()
+            c.execute("SELECT id, name_en FROM canonical_ingredients")
+            rows = c.fetchall()
+            return [{"id": int(r[0]), "name_en": r[1]} for r in rows]
+
+    def get_or_create_canonical(self, name_en: str) -> Optional[int]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT id FROM canonical_ingredients WHERE LOWER(name_en)=LOWER(?)", (name_en,))
+                row = c.fetchone()
+                if row:
+                    return int(row[0])
+                c.execute("INSERT INTO canonical_ingredients (name_en) VALUES (?)", (name_en,))
+                conn.commit()
+                return int(c.lastrowid)
+        except Exception as e:
+            logger.error(f"get_or_create_canonical failed for '{name_en}': {e}")
+            return None
+
+    def upsert_alias(self, alias_text: str, lang: str, canonical_id: int, confidence: float, source: str = "auto"):
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    "INSERT OR IGNORE INTO ingredient_aliases (alias_text, lang, canonical_ingredient_id, confidence, notes) VALUES (?, ?, ?, ?, ?)",
+                    (alias_text.strip().lower(), lang.strip().lower(), canonical_id, confidence, source),
+                )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"upsert_alias failed: {e}")
+
+    def upsert_translation(self, canonical_id: int, lang: str, translated_name: str, source: Optional[str] = None, confidence: Optional[float] = None):
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    "INSERT OR REPLACE INTO ingredient_translations (canonical_ingredient_id, lang, translated_name, source, confidence) VALUES (?, ?, ?, ?, ?)",
+                    (canonical_id, lang.strip().lower(), translated_name.strip(), source, confidence),
+                )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"upsert_translation failed: {e}")
+
+    def get_translations_for_lang(self, lang: str) -> dict[int, str]:
+        with self.get_connection() as conn:
+            c = conn.cursor()
+            c.execute(
+                "SELECT canonical_ingredient_id, translated_name FROM ingredient_translations WHERE lang = ?",
+                (lang.strip().lower(),),
+            )
+            return {int(row[0]): row[1] for row in c.fetchall()}
+
+    def get_translation_for(self, canonical_id: int, lang: str) -> Optional[str]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT translated_name FROM ingredient_translations WHERE canonical_ingredient_id=? AND lang=? LIMIT 1", (canonical_id, lang.strip().lower()))
+                row = c.fetchone()
+                return row[0] if row else None
+        except Exception:
+            return None
+
+    def get_alias_for_canonical(self, canonical_id: int, lang: str) -> Optional[tuple[str, float]]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    "SELECT ia.alias_text, ia.confidence FROM ingredient_aliases ia WHERE ia.canonical_ingredient_id=? AND ia.lang=? ORDER BY ia.confidence DESC LIMIT 1",
+                    (canonical_id, lang.strip().lower()),
+                )
+                row = c.fetchone()
+                if row:
+                    return (row[0], float(row[1] or 0.9))
+        except Exception:
+            pass
+        return None
+
+    def get_canonical_name(self, canonical_id: int) -> Optional[str]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT name_en FROM canonical_ingredients WHERE id=?", (canonical_id,))
+                row = c.fetchone()
+                return row[0] if row else None
+        except Exception:
+            return None
+
+    def insert_recipe_ingredient(self, recipe_id: int, original_text: str, canonical_id: Optional[int], confidence: Optional[float], source: Optional[str]):
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    "INSERT INTO recipe_ingredients (recipe_id, original_text, canonical_ingredient_id, confidence, source) VALUES (?, ?, ?, ?, ?)",
+                    (recipe_id, original_text, canonical_id, confidence, source),
+                )
+                conn.commit()
+        except Exception as e:
+            logger.warning(f"insert_recipe_ingredient failed: {e}")
 
     def get_user_by_id(self, user_id: int) -> Optional[User]:
         try:
@@ -1473,5 +1863,100 @@ class DatabaseManager:
             for role in roles:
                 cursor.execute("INSERT OR IGNORE INTO user_roles (user_id, role) VALUES (?, ?)", (user_id, role))
             conn.commit()
+
+    # ---------------------- Nutrition Snapshots API ----------------------
+    def get_nutrition_snapshot(self, recipe_id: int) -> Optional[dict]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT snapshot, status, updated_at, meta FROM nutrition_snapshots WHERE recipe_id=?", (recipe_id,))
+                row = c.fetchone()
+                if not row:
+                    return None
+                snapshot_json, status, updated_at, meta_json = row
+                try:
+                    snapshot = json.loads(snapshot_json) if snapshot_json else None
+                except Exception:
+                    snapshot = None
+                try:
+                    meta = json.loads(meta_json) if meta_json else None
+                except Exception:
+                    meta = None
+                return {"recipe_id": recipe_id, "snapshot": snapshot, "status": status, "updated_at": updated_at, "meta": meta}
+        except Exception as e:
+            logger.error(f"get_nutrition_snapshot failed: {e}")
+            return None
+
+    def upsert_nutrition_snapshot(self, recipe_id: int, status: str, snapshot: Optional[dict] = None, meta: Optional[dict] = None):
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    "INSERT INTO nutrition_snapshots (recipe_id, snapshot, status, updated_at, meta) VALUES (?,?,?,?,?)\n                     ON CONFLICT(recipe_id) DO UPDATE SET snapshot=excluded.snapshot, status=excluded.status, updated_at=CURRENT_TIMESTAMP, meta=excluded.meta",
+                    (
+                        recipe_id,
+                        json.dumps(snapshot) if snapshot is not None else None,
+                        status,
+                        datetime.now().isoformat(sep=' ', timespec='seconds'),
+                        json.dumps(meta) if meta is not None else None,
+                    ),
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"upsert_nutrition_snapshot failed: {e}")
+
+    # ---------------------- FDC Cache Helpers ----------------------
+    def get_fdc_food(self, fdc_id: int) -> Optional[dict]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT json, updated_at FROM fdc_foods WHERE fdc_id=?", (fdc_id,))
+                row = c.fetchone()
+                if not row:
+                    return None
+                data_json, updated_at = row
+                try:
+                    data = json.loads(data_json)
+                except Exception:
+                    data = None
+                return {"fdc_id": fdc_id, "json": data, "updated_at": updated_at}
+        except Exception as e:
+            logger.error(f"get_fdc_food failed: {e}")
+            return None
+
+    def upsert_fdc_food(self, fdc_id: int, data: dict):
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    "INSERT INTO fdc_foods (fdc_id, json, updated_at) VALUES (?,?,?)\n                     ON CONFLICT(fdc_id) DO UPDATE SET json=excluded.json, updated_at=excluded.updated_at",
+                    (fdc_id, json.dumps(data), datetime.now().isoformat(sep=' ', timespec='seconds')),
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"upsert_fdc_food failed: {e}")
+
+    # ---------------------- Density Catalog Helpers ----------------------
+    def upsert_density(self, category: str, form: str, g_per_ml: float, source: str):
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute(
+                    "INSERT INTO density_catalog (category, form, g_per_ml, source, updated_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)\n                     ON CONFLICT(category, form) DO UPDATE SET g_per_ml=excluded.g_per_ml, source=excluded.source, updated_at=CURRENT_TIMESTAMP",
+                    (category, form, g_per_ml, source),
+                )
+                conn.commit()
+        except Exception as e:
+            logger.error(f"upsert_density failed: {e}")
+
+    def get_density(self, category: str, form: str) -> Optional[float]:
+        try:
+            with self.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT g_per_ml FROM density_catalog WHERE category=? AND form=?", (category, form))
+                row = c.fetchone()
+                return float(row[0]) if row else None
+        except Exception:
+            return None
 
 db = DatabaseManager()

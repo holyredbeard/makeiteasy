@@ -7,14 +7,14 @@ import PageContainer from './components/PageContainer';
 import CollectionCard from './components/CollectionCard';
 import TagList from './components/TagList';
 
-const API_BASE = 'http://localhost:8001/api/v1';
-const STATIC_BASE = 'http://localhost:8001';
+const API_BASE = 'http://localhost:8000/api/v1';
+const STATIC_BASE = 'http://localhost:8000';
 
 const normalizeUrl = (url) => {
   if (!url || typeof url !== 'string') return null;
   let u = url;
-  if (u.startsWith('http://127.0.0.1:8000')) u = u.replace('http://127.0.0.1:8000', STATIC_BASE);
-  if (u.startsWith('http://localhost:8000')) u = u.replace('http://localhost:8000', STATIC_BASE);
+  if (u.startsWith('http://127.0.0.1:8001')) u = u.replace('http://127.0.0.1:8001', STATIC_BASE);
+  if (u.startsWith('http://localhost:8001')) u = u.replace('http://localhost:8001', STATIC_BASE);
   if (u.startsWith('/')) u = STATIC_BASE + u;
   return u;
 };

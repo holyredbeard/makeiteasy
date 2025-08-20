@@ -3,7 +3,7 @@ import { useParams, Link, useOutletContext } from 'react-router-dom';
 import RecipeView from '../components/RecipeView';
 
 // NOTE: We reuse existing API base; where services/hooks exist in the app, wire them in. Until then, we use simple fetches.
-const API_BASE = 'http://localhost:8001/api/v1';
+const API_BASE = 'http://localhost:8000/api/v1';
 const API_ROOT = API_BASE.replace(/\/api\/v1$/, '');
 const STATIC_BASE = API_ROOT;
 const PROXY = `${API_BASE}/proxy-image?url=`;
@@ -17,8 +17,8 @@ function normalizeBackendUrl(pathOrUrl) {
 function normalizeUrlPort(url) {
   if (!url || typeof url !== 'string') return url;
   return url
-    .replace('http://127.0.0.1:8000', 'http://127.0.0.1:8001')
-    .replace('http://localhost:8000', 'http://localhost:8001');
+    .replace('http://127.0.0.1:8001', 'http://127.0.0.1:8000')
+    .replace('http://localhost:8001', 'http://localhost:8000');
 }
 
 function asThumbSrc(imageUrl) {

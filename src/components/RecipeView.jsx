@@ -25,8 +25,8 @@ import { SYSTEM_PROMPT, buildUserPayload, buildSystemPrompt } from './DeepSeekPr
 import DeepSeekPreviewDiff from './DeepSeekPreviewDiff';
 import VariantsList from './VariantsList';
 
-const API_BASE = 'http://localhost:8001/api/v1';
-const STATIC_BASE = 'http://localhost:8001';
+const API_BASE = 'http://localhost:8000/api/v1';
+const STATIC_BASE = 'http://localhost:8000';
 
 // --- Helpers: split quantity from ingredient line ---
 const UNIT_WORDS = new Set([
@@ -516,9 +516,16 @@ export default function RecipeView({
   const getScaledNutrition = useMemo(() => {
     // Use backend nutrition data if available, otherwise fall back to content data
     if (nutritionData) {
+      const per = nutritionData.perServing || {};
+      const tot = nutritionData.total || {};
+      const servingsForScale = Number(currentServings || originalServings || 1) || 1;
+      // Always compute Total batch relative to the servings currently selected in the UI
+      const computedTotal = Object.fromEntries(
+        Object.entries(per).map(([k, v]) => [k, (typeof v === 'number' && Number.isFinite(v)) ? Math.round(v * servingsForScale * 10) / 10 : (typeof tot[k] === 'number' ? tot[k] : null)])
+      );
       return {
-        perServing: nutritionData.perServing || {},
-        total: nutritionData.total || {}
+        perServing: per,
+        total: computedTotal
       };
     }
     
@@ -551,6 +558,9 @@ export default function RecipeView({
       total: totalNutrition
     };
   }, [nutritionData, content.nutritional_information, content.nutrition, content.nutritionPerServing, originalServings, currentServings]);
+
+  // Helpers to avoid NaN rendering
+  const asNumberOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
   // Nutrition detail functions
   const handleNutritionChipClick = (nutritionKey) => {
@@ -593,12 +603,14 @@ export default function RecipeView({
 
   // Fetch nutrition data from backend
   const fetchNutritionData = async (servings) => {
+    const logGroup = `[Nutrition] fetch ${new Date().toISOString()} recipeId=${recipeId} servings=${servings}`;
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     try {
       setNutritionLoading(true);
       setNutritionError(null);
-      
+
       const ingredientsToUse = edited?.ingredients || ingredients;
-      
+
       const ingredientsForAPI = ingredientsToUse.map(ing => {
         if (typeof ing === 'string') {
           return { raw: ing };
@@ -610,8 +622,19 @@ export default function RecipeView({
       const requestBody = {
         recipeId: recipeId ? String(recipeId) : 'unknown',
         servings: servings,
-        ingredients: ingredientsForAPI
+        ingredients: ingredientsForAPI,
       };
+
+      // Console logging: compact, human-readable
+      try {
+        console.groupCollapsed(logGroup);
+        const sample = ingredientsForAPI.slice(0, 5).map(i => `- ${i.raw}`).join('\n');
+        console.log(`-> POST ${API_BASE}/nutrition/calc`);
+        console.log(`-> servings=${servings} items=${ingredientsForAPI.length}`);
+        if (ingredientsForAPI.length > 0) {
+          console.log(`-> sample ingredients (first ${Math.min(5, ingredientsForAPI.length)}):\n${sample}${ingredientsForAPI.length > 5 ? '\n...' : ''}`);
+        }
+      } catch {}
 
       const response = await fetch(`${API_BASE}/nutrition/calc`, {
         method: 'POST',
@@ -622,19 +645,142 @@ export default function RecipeView({
         body: JSON.stringify(requestBody)
       });
 
+      // Console logging: response status
+      try {
+        console.log(`<= status ${response.status} ok=${response.ok}`);
+      } catch {}
+
       if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        try { console.log('response.text', text?.slice(0, 2000)); } catch {}
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
+      // Console logging: concise summary
+      try {
+        const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const p = data?.perServing || {};
+        const compact = `kcal=${p?.calories ?? '—'} protein=${p?.protein ?? '—'}g fat=${p?.fat ?? '—'}g carbs=${p?.carbs ?? '—'}g salt=${(p?.salt != null ? p.salt : (typeof p?.sodium === 'number' ? (p.sodium * 2.5 / 1000).toFixed(1) : '—'))}g`;
+        const warnCount = Array.isArray(data?.warnings) ? data.warnings.length : 0;
+        const reviewCount = Array.isArray(data?.needsReview) ? data.needsReview.length : 0;
+        console.log(`<= summary (${Math.round(t1 - t0)}ms): ${compact} | warnings=${warnCount} needsReview=${reviewCount}`);
+        // Optional detailed table if explicitly enabled in console
+        if (typeof window !== 'undefined' && window.__NUTRITION_DEBUG && Array.isArray(data?.debugEntries)) {
+          const rows = data.debugEntries.map(e => ({
+            original: e.original,
+            normalized: e.normalized,
+            grams: e.grams,
+            kcal: e.contribution?.calories,
+            protein: e.contribution?.protein,
+            fat: e.contribution?.fat,
+            carbs: e.contribution?.carbs,
+            salt: e.contribution?.salt,
+            source: e.source_hit
+          }));
+          console.table(rows);
+        }
+      } catch {}
       setNutritionData(data);
     } catch (error) {
-      console.error('Failed to fetch nutrition data:', error);
+      try { console.error('[Nutrition] fetch error', String(error && error.message ? error.message : error)); } catch {}
       setNutritionError(error.message);
       setNutritionData(null);
     } finally {
       setNutritionLoading(false);
+      try { console.groupEnd(logGroup); } catch {}
     }
+  };
+
+  // Snapshot-first fetch: GET /nutrition/:recipeId with polling when pending
+  const [snapshotPolls, setSnapshotPolls] = useState(0);
+  const fetchNutritionSnapshot = async (attempt = 0) => {
+    if (!recipeId) return;
+    const url = `${API_BASE}/nutrition/${recipeId}`;
+    const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    try {
+      setNutritionLoading(true);
+      // Plain text, no object spam
+      console.log(`[Nutrition] SNAPSHOT GET ${url}`);
+      const res = await fetch(url, { credentials: 'include' });
+      const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      console.log(`[Nutrition] STATUS ${res.status} in ${Math.round(t1 - t0)}ms`);
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        console.warn(`[Nutrition] NON-OK ${res.status}: ${String(text || '').slice(0,200)}`);
+        return;
+      }
+      const json = await res.json();
+      if (json?.status === 'ready' && json?.data) {
+        const p = json.data?.perServing || {};
+        const summary = `kcal=${p.calories ?? '-'} protein=${p.protein ?? '-'}g fat=${p.fat ?? '-'}g carbs=${p.carbs ?? '-'}g salt=${(p.salt ?? '-') }g`;
+        console.log(`[Nutrition] READY ${summary}`);
+        // Print plain-text per-ingredient debug lines, if present
+        try {
+          const lines = json?.data?.meta?.debugLines;
+          if (Array.isArray(lines) && lines.length) {
+            console.log('[Nutrition] DEBUG\n' + lines.join('\n'));
+          }
+        } catch {}
+        setNutritionData(json.data);
+        setNutritionError(null);
+        setNutritionLoading(false);
+        setSnapshotPolls(0);
+        return;
+      }
+      // Pending
+      console.log(`[Nutrition] PENDING (poll ${attempt + 1})`);
+      // Pending → poll a few times with backoff
+      const nextAttempt = attempt + 1;
+      setSnapshotPolls(nextAttempt);
+      if (nextAttempt <= 12) { // ~ up to ~18s total with backoff
+        const delay = Math.min(3000, 800 + nextAttempt * 600);
+        setTimeout(() => fetchNutritionSnapshot(nextAttempt), delay);
+      } else {
+        console.warn('snapshot pending too long; stop polling');
+        setNutritionLoading(false);
+      }
+    } catch (e) {
+      console.error('[Nutrition] snapshot error', e);
+      setNutritionLoading(false);
+    } finally {}
+  };
+
+  // --- Ingredient translations for UI ---
+  const [uiTranslations, setUiTranslations] = useState({});
+  const uiLang = 'sv';
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const url = `${API_BASE}/ingredients/translations?lang=${uiLang}`;
+      const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      try {
+        console.groupCollapsed(`[Translations] GET ${url}`);
+        const res = await fetch(url, { credentials: 'include' });
+        console.log('status', res.status);
+        if (res.ok) {
+          const json = await res.json();
+          console.log('count', Object.keys(json || {}).length);
+          if (!cancelled) setUiTranslations(json || {});
+        } else {
+          const text = await res.text().catch(() => '');
+          console.warn('non-OK response', res.status, text?.slice(0, 500));
+        }
+      } catch (e) {
+        console.error('[Translations] error', e);
+      } finally {
+        const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        console.log('timing.ms', Math.round(t1 - t0));
+        console.groupEnd(`[Translations] GET ${url}`);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [API_BASE]);
+
+  // Helper to render ingredient name with translation if we know canonical id via explanations
+  const getDisplayName = (rawName) => {
+    // fallback: just return provided name
+    return rawName;
   };
 
   const title = content.title || '';
@@ -645,10 +791,24 @@ export default function RecipeView({
 
   // Fetch nutrition data when component mounts or servings change
   useEffect(() => {
-    if (currentServings && ingredients.length > 0 && recipeId) {
+    const reason = [];
+    if (!currentServings) reason.push('no currentServings');
+    if (!(ingredients.length > 0)) reason.push('no ingredients');
+    if (!recipeId) reason.push('no recipeId');
+    console.log('[Nutrition] effect trigger', { currentServings, ingredientsCount: ingredients.length, recipeId, reason: reason.length ? reason.join(', ') : 'ok' });
+    // Snapshot-first path
+    if (recipeId && !nutritionData) {
+      fetchNutritionSnapshot(0);
+    }
+    // Fallback compute path (e.g., after user edits ingredients/servings)
+    if (currentServings && ingredients.length > 0 && recipeId && edited?.ingredients) {
       fetchNutritionData(currentServings);
     }
   }, [currentServings, ingredients, edited?.ingredients, recipeId]);
+
+  const skippedCount = (() => {
+    try { return Array.isArray(nutritionData?.meta?.skipped) ? nutritionData.meta.skipped.length : 0; } catch { return 0; }
+  })();
   const ingredientsToRender = useMemo(() => {
     const ingredientsToUse = edited?.ingredients || ingredients;
     const baseIngredients = variant === 'modal' ? ingredientsToUse.slice(0, 8) : ingredientsToUse;
@@ -2273,6 +2433,12 @@ export default function RecipeView({
                   Nutrition Information
                 </span>
               } className="bg-white">
+        {/* Safe Mode notice */}
+        {nutritionData?.meta?.safe_mode && (
+          <div className="text-sm text-gray-500 mb-2">
+            Safe Mode: {skippedCount} ingredients skipped or defaulted.
+          </div>
+        )}
         {/* Nutrition Chips */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           {[
@@ -2333,8 +2499,21 @@ export default function RecipeView({
 
         {/* Error message */}
         {nutritionError && (
-          <div className="text-sm text-red-600 mb-4">
-            Näringsdata kunde inte hämtas just nu. {nutritionError}
+          <div className="flex items-center justify-between text-sm text-red-600 mb-4">
+            <span>Nutrition calculation failed. {nutritionError}</span>
+            <button
+              onClick={async ()=>{
+                try {
+                  const url = `${API_BASE.replace('/api/v1','')}/api/v1/nutrition/${recipeId}/recompute`;
+                  await fetch(url, { method:'POST' });
+                  setNutritionError(null);
+                  fetchNutritionSnapshot(0);
+                } catch (e) {}
+              }}
+              className="ml-4 px-3 py-1.5 border border-red-300 rounded text-red-700 hover:bg-red-50"
+            >
+              Recompute
+            </button>
           </div>
         )}
 
@@ -2364,8 +2543,8 @@ export default function RecipeView({
                     {key: 'sodium', label: 'Salt', unit: 'g', calculated: true},
                     {key: 'cholesterol', label: 'Kolesterol', unit: 'mg'}
                   ].map(({key, label, unit, showKj, calculated}) => {
-                    const perServing = getScaledNutrition.perServing[key];
-                    const total = getScaledNutrition.total[key];
+                    const perServing = asNumberOrNull(getScaledNutrition.perServing[key]);
+                    const total = asNumberOrNull(getScaledNutrition.total[key]);
                     const rdi = getNutritionRDI(key, perServing);
                     const isHighlighted = highlightedNutritionRow === key;
                     
@@ -2373,8 +2552,20 @@ export default function RecipeView({
                     let displayValue = perServing;
                     let totalValue = total;
                     if (calculated && key === 'sodium') {
-                      if (perServing) displayValue = Math.round(perServing * 2.5);
-                      if (total) totalValue = Math.round(total * 2.5);
+                      const saltPerServing = asNumberOrNull(getScaledNutrition.perServing['salt']);
+                      const saltTotal = asNumberOrNull(getScaledNutrition.total['salt']);
+                      if (saltPerServing != null) {
+                        // Backend provides salt already in grams
+                        displayValue = Math.round(saltPerServing * 10) / 10;
+                      } else if (perServing != null) {
+                        // Convert sodium (mg) -> salt (g): mg * 2.5 / 1000
+                        displayValue = Math.round(((perServing * 2.5) / 1000) * 10) / 10;
+                      }
+                      if (saltTotal != null) {
+                        totalValue = Math.round(saltTotal * 10) / 10;
+                      } else if (total != null) {
+                        totalValue = Math.round(((total * 2.5) / 1000) * 10) / 10;
+                      }
                     }
                     
                     return (
@@ -2387,18 +2578,18 @@ export default function RecipeView({
                       >
                         <td className="py-2 px-3 text-gray-900">{label}</td>
                         <td className="py-2 px-3 text-right text-gray-900">
-                          {displayValue || '—'}
-                          {displayValue && unit}
-                          {showKj && displayValue && (
+                          {displayValue != null ? displayValue : '—'}
+                          {displayValue != null && unit}
+                          {showKj && displayValue != null && (
                             <span className="text-xs text-gray-500 ml-1">
                               ({Math.round(displayValue * 4.184)} kJ)
                             </span>
                           )}
                         </td>
                         <td className="py-2 px-3 text-right text-gray-900">
-                          {totalValue || '—'}
-                          {totalValue && unit}
-                          {showKj && totalValue && (
+                          {totalValue != null ? totalValue : '—'}
+                          {totalValue != null && unit}
+                          {showKj && totalValue != null && (
                             <span className="text-xs text-gray-500 ml-1">
                               ({Math.round(totalValue * 4.184)} kJ)
                             </span>
@@ -2427,8 +2618,8 @@ export default function RecipeView({
                 {key: 'sodium', label: 'Salt', unit: 'g', calculated: true},
                 {key: 'cholesterol', label: 'Kolesterol', unit: 'mg'}
               ].map(({key, label, unit, showKj, calculated}) => {
-                const perServing = getScaledNutrition.perServing[key];
-                const total = getScaledNutrition.total[key];
+                const perServing = asNumberOrNull(getScaledNutrition.perServing[key]);
+                const total = asNumberOrNull(getScaledNutrition.total[key]);
                 const rdi = getNutritionRDI(key, perServing);
                 const isHighlighted = highlightedNutritionRow === key;
                 
@@ -2436,8 +2627,18 @@ export default function RecipeView({
                 let displayValue = perServing;
                 let totalValue = total;
                 if (calculated && key === 'sodium') {
-                  if (perServing) displayValue = Math.round(perServing * 2.5);
-                  if (total) totalValue = Math.round(total * 2.5);
+                  const saltPerServing = asNumberOrNull(getScaledNutrition.perServing['salt']);
+                  const saltTotal = asNumberOrNull(getScaledNutrition.total['salt']);
+                  if (saltPerServing != null) {
+                    displayValue = Math.round(saltPerServing * 10) / 10;
+                  } else if (perServing != null) {
+                    displayValue = Math.round(((perServing * 2.5) / 1000) * 10) / 10;
+                  }
+                  if (saltTotal != null) {
+                    totalValue = Math.round(saltTotal * 10) / 10;
+                  } else if (total != null) {
+                    totalValue = Math.round(((total * 2.5) / 1000) * 10) / 10;
+                  }
                 }
                 
                 return (
@@ -2453,9 +2654,9 @@ export default function RecipeView({
                       <div className="flex justify-between">
                         <span className="text-gray-600">Per portion:</span>
                         <span className="text-gray-900">
-                          {displayValue || '—'}
-                          {displayValue && unit}
-                          {showKj && displayValue && (
+                          {displayValue != null ? displayValue : '—'}
+                          {displayValue != null && unit}
+                          {showKj && displayValue != null && (
                             <span className="text-xs text-gray-500 ml-1">
                               ({Math.round(displayValue * 4.184)} kJ)
                             </span>
@@ -2465,9 +2666,9 @@ export default function RecipeView({
                       <div className="flex justify-between">
                         <span className="text-gray-600">Total batch:</span>
                         <span className="text-gray-900">
-                          {totalValue || '—'}
-                          {totalValue && unit}
-                          {showKj && totalValue && (
+                          {totalValue != null ? totalValue : '—'}
+                          {totalValue != null && unit}
+                          {showKj && totalValue != null && (
                             <span className="text-xs text-gray-500 ml-1">
                               ({Math.round(totalValue * 4.184)} kJ)
                             </span>

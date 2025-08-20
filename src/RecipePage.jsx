@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import RecipeView from './components/RecipeView';
 
-const API_BASE = 'http://localhost:8001/api/v1';
-const STATIC_BASE = 'http://localhost:8001';
+const API_BASE = 'http://localhost:8000/api/v1';
+const STATIC_BASE = 'http://localhost:8000';
 const SITE_NAME = 'Food2Guide';
 const TW_SITE = '@Food2Guide';
 const TW_CREATOR = '@Food2Guide';

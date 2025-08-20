@@ -12,8 +12,8 @@ const colors = {
   accent2: '#F97316',
 };
 
-const API_BASE = 'http://localhost:8001/api/v1';
-const STATIC_BASE = 'http://localhost:8001';
+const API_BASE = 'http://localhost:8000/api/v1';
+const STATIC_BASE = 'http://localhost:8000';
 
 const Chip = ({ children }: { children: React.ReactNode }) => (
   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-sm bg-sky-50 text-sky-700 border border-sky-200">

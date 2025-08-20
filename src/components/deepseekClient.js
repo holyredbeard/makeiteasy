@@ -8,7 +8,7 @@ export async function convertRecipeWithDeepSeek({ apiKey, baseURL = 'https://api
   const startedAt = Date.now();
   console.info('[Convert] Preview → calling proxy (fast=%s)...', fast);
   try {
-    const proxy = await fetch('http://localhost:8001/api/v1/llm/deepseek/convert', {
+    const proxy = await fetch('http://localhost:8000/api/v1/llm/deepseek/convert', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
