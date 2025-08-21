@@ -165,8 +165,39 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
       if (typeof inst === 'string') return { step: idx + 1, description: inst, image_path: null };
       return { ...inst, step: inst.step || idx + 1 };
     });
+    const splitQuantityFromText = (raw) => {
+      const line = String(raw || '').trim();
+      if (!line) return { quantity: '', name: '' };
+      const tokens = line.split(/\s+/);
+      const UNIT_WORDS = new Set(['tsp','teaspoon','teaspoons','tbsp','tablespoon','tablespoons','cup','cups','pinch','pint','pints','quart','quarts','ounce','ounces','oz','lb','lbs','ml','cl','dl','l','g','gram','grams','kg','kilogram','kilograms','kopp','koppar','tsk','msk','st','pkt','krm']);
+      const unicodeFracs = '¼½¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞';
+      const isNumberLike = (t) => {
+        const x = t.replace(/[()]/g,'').trim();
+        if (!x) return false;
+        if (unicodeFracs.includes(x)) return true;
+        if (/^\d+(?:[\.,]\d+)?$/.test(x)) return true;
+        if (/^\d+\/\d+$/.test(x)) return true;
+        if (/^\d+(?:[\.,]\d+)?\s*[–-]\s*\d+(?:[\.,]\d+)?$/.test(x)) return true;
+        if (/^\d+\s+\d+\/\d+$/.test(x)) return true;
+        return false;
+      };
+      const picked = [];
+      for (let i=0;i<tokens.length;i+=1){
+        const tok = tokens[i];
+        if (i===0){ if(!isNumberLike(tok)) break; picked.push(tok); continue; }
+        const norm = tok.toLowerCase().replace(/[.,]/g,'');
+        if (isNumberLike(tok) || UNIT_WORDS.has(norm)) picked.push(tok); else break;
+      }
+      if (picked.length===0) return { quantity:'', name: line };
+      const quantity = picked.join(' ');
+      const name = line.slice(quantity.length).trim();
+      return { quantity, name };
+    };
     const formattedIngredients = (recipeData.ingredients || []).map(ing => {
-      if (typeof ing === 'string') return { name: ing, quantity: '', notes: null };
+      if (typeof ing === 'string') {
+        const { quantity, name } = splitQuantityFromText(ing);
+        return { name, quantity, notes: null };
+      }
       return ing;
     });
     let formattedNutritionalInfo = null;
@@ -314,7 +345,8 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
 
       const formattedIngredients = (recipeData.ingredients || []).map(ing => {
         if (typeof ing === 'string') {
-          return { name: ing, quantity: '', notes: null };
+          const { quantity, name } = splitQuantityFromText(ing);
+          return { name, quantity, notes: null };
         }
         return ing;
       });
@@ -740,7 +772,7 @@ export default function Food2Guide() {
             if (type === 'status') {
               setStreamStatus(payload.message || '');
             } else if (type === 'recipe_init') {
-              setRecipeData(prev => ({ ...(prev || {}), title: payload.title || prev?.title, source_url: payload.source_url, image_url: payload.image_url || prev?.image_url }));
+              setRecipeData(prev => ({ ...(prev || {}), title: payload.title, source_url: payload.source_url, image_url: payload.image_url || prev?.image_url }));
             } else if (type === 'recipe_patch') {
               Object.assign(recipePatch, payload);
               setRecipeData(prev => ({ ...(prev || {}), ...recipePatch }));

@@ -425,8 +425,22 @@ export default function RecipeView({
     const saved = localStorage.getItem(`recipe:${recipeId}:servings`);
     return saved ? parseInt(saved, 10) : (content.servings || content.serves || 4);
   });
-  const originalServings = useMemo(() => content.servings || content.serves || 4, [content.servings, content.serves]);
-  const servingsFactor = useMemo(() => currentServings / originalServings, [currentServings, originalServings]);
+  const originalServings = useMemo(() => {
+    const raw = content.servings || content.serves || 4;
+    if (typeof raw === 'number') return raw;
+    const m = String(raw).match(/\d+(?:[\.,]\d+)?/);
+    return m ? parseFloat(m[0].replace(',', '.')) : 4;
+  }, [content.servings, content.serves]);
+  const servingsFactor = useMemo(() => {
+    const numCurrent = Number(currentServings);
+    const numOriginal = Number(originalServings);
+    if (!Number.isFinite(numCurrent) || !Number.isFinite(numOriginal) || numOriginal === 1) {
+      return Number.isFinite(numCurrent) && Number.isFinite(numOriginal) && numOriginal !== 0
+        ? numCurrent / numOriginal
+        : 1;
+    }
+    return numCurrent / numOriginal;
+  }, [currentServings, originalServings]);
 
   // Update currentServings when recipe changes
   useEffect(() => {
@@ -459,16 +473,65 @@ export default function RecipeView({
   };
 
   const scaleQuantity = (quantity, factor) => {
-    if (!quantity || shouldNotScale(quantity)) return quantity;
-    
-    // Parse quantity and scale
-    const scaled = parseFloat(quantity) * factor;
-    
-    return scaled;
+    if (!quantity || factor === 1) return quantity;
+    if (!Number.isFinite(factor)) return quantity;
+    if (shouldNotScale(quantity)) return quantity;
+
+    if (typeof quantity !== 'string') {
+      const num = Number(quantity);
+      return Number.isFinite(num) ? num * factor : quantity;
+    }
+
+    let q = quantity.trim();
+    let prefix = '';
+    const caMatch = q.match(/^ca\s+/i);
+    if (caMatch) {
+      prefix = caMatch[0].trim() + ' ';
+      q = q.slice(caMatch[0].length).trim();
+    }
+
+    const unicodeMap = { '¼': 0.25, '½': 0.5, '¾': 0.75, '⅓': 1/3, '⅔': 2/3, '⅛': 0.125, '⅜': 0.375, '⅝': 0.625, '⅞': 0.875 };
+    const unicodeClass = '¼½¾⅓⅔⅛⅜⅝⅞';
+    const re = new RegExp(`^(?:\\d+\\s+\\d+/\\d+|\\d+[.,]?\\d*\\s*[${unicodeClass}]?|[${unicodeClass}]|\\d+/\\d+|\\d+[.,]?\\d*)`);
+    const m = q.match(re);
+    if (!m) return quantity;
+
+    const numStr = m[0];
+    let value = NaN;
+    const normalizeComma = (s) => s.replace(',', '.');
+
+    if (/^\d+\s+\d+\/\d+$/.test(numStr)) {
+      const [i, frac] = numStr.split(/\s+/);
+      const [n, d] = frac.split('/').map(Number);
+      value = Number(i) + (d ? n/d : 0);
+    } else if (new RegExp(`^\\d+[.,]?\\d*\\s*[${unicodeClass}]$`).test(numStr)) {
+      const intPart = numStr.slice(0, -1);
+      const fracChar = numStr.slice(-1);
+      value = parseFloat(normalizeComma(intPart)) + (unicodeMap[fracChar] || 0);
+    } else if (new RegExp(`^[${unicodeClass}]$`).test(numStr)) {
+      value = unicodeMap[numStr] ?? NaN;
+    } else if (/^\d+\/\d+$/.test(numStr)) {
+      const [n, d] = numStr.split('/').map(Number);
+      value = d ? n/d : NaN;
+    } else {
+      value = parseFloat(normalizeComma(numStr));
+    }
+
+    if (!Number.isFinite(value)) return quantity;
+
+    const after = q.slice(numStr.length).trim();
+    const scaled = value * factor;
+    const scaledStr = String(scaled).replace(/\.0$/, '');
+    return `${prefix}${scaledStr}${after ? ' ' + after : ''}`.trim();
   };
 
   const formatQuantity = (quantity) => {
-    if (typeof quantity === 'string') return quantity;
+    if (typeof quantity === 'string') {
+      const trimmed = quantity.trim();
+      if (!trimmed || /^nan$/i.test(trimmed)) return '';
+      return trimmed;
+    }
+    if (quantity == null || Number.isNaN(quantity)) return '';
     if (quantity === 0.25) return '¼';
     if (quantity === 0.5) return '½';
     if (quantity === 0.75) return '¾';
