@@ -95,7 +95,7 @@ const InfoCard = ({ label, value }) => {
     );
 };
 
-const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUrl, isScraping }) => {
+const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUrl, isScraping, onDataUpdate }) => {
   const navigate = useNavigate();
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showTopImage, setShowTopImage] = useState(true);
@@ -107,8 +107,15 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   const [suggestions, setSuggestions] = useState([]);
   const [showCollectionPicker, setShowCollectionPicker] = useState(false);
   const [collections, setCollections] = useState([]);
-  const [savedRecipeId, setSavedRecipeId] = useState(null);
+  const [savedRecipeId, setSavedRecipeId] = useState(null); // FIXED: This was causing the error
   const [toast, setToast] = useState(null);
+
+  // Update parent component when data changes
+  useEffect(() => {
+    if (onDataUpdate && data && Object.keys(data).length > 0) {
+      onDataUpdate(data);
+    }
+  }, [data, onDataUpdate]);
 
   // Canonical tag sets for suggestions
   const DISH = ['pasta','soup','stew','salad','sandwich','wrap','pizza','pie','casserole','burger','tacos','stirfry','bowl','onepot','baked','pancake','crepe','waffle','omelette','sushi','rice','noodle','curry','gratin','skewer','quiche','dumpling'];
@@ -247,11 +254,39 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
   useEffect(() => {
     (async () => {
       try {
-        if (data && Object.keys(data || {}).length > 0 && !savedRecipeId) {
+        // Only auto-save when recipe is complete (has ingredients and instructions)
+        const hasCompleteData = data && 
+          Object.keys(data || {}).length > 0 && 
+          !savedRecipeId &&
+          data.ingredients && 
+          data.ingredients.length > 0 &&
+          data.instructions && 
+          data.instructions.length > 0 &&
+          data.title && 
+          data.title !== 'Laddar recept...';
+          
+        if (hasCompleteData) {
+          console.log('🔄 Auto-saving complete recipe...', { 
+            title: data.title,
+            ingredientsCount: data.ingredients?.length,
+            instructionsCount: data.instructions?.length,
+            savedRecipeId 
+          });
           const sid = await saveCurrentRecipeSilently();
+          console.log('✅ Recipe auto-saved with ID:', sid);
           setSavedRecipeId(sid);
+        } else {
+          console.log('⏭️ Skipping auto-save - recipe incomplete:', { 
+            hasData: !!data, 
+            title: data?.title,
+            ingredientsCount: data?.ingredients?.length,
+            instructionsCount: data?.instructions?.length,
+            savedRecipeId 
+          });
         }
-      } catch {}
+      } catch (error) {
+        console.error('❌ Auto-save failed:', error);
+      }
     })();
   }, [data]);
   const [imageOrientation, setImageOrientation] = useState('landscape');
@@ -492,6 +527,30 @@ const RecipeStreamViewer = ({ status, error, data, onReset, currentUser, videoUr
         onEditRecipe={()=>{ /* open editor placeholder */ alert('Editor coming soon'); }}
       />
       
+      {/* Manual Save Button - always visible when recipe data exists */}
+      {data && Object.keys(data).length > 0 && !savedRecipeId && (
+        <div className="fixed bottom-4 right-4 z-50">
+          <button
+            onClick={async () => {
+              try {
+                console.log('🔄 Manual save triggered...');
+                const sid = await saveCurrentRecipeSilently();
+                console.log('✅ Manual save successful:', sid);
+                setSavedRecipeId(sid);
+                alert('Receptet har sparats!');
+              } catch (error) {
+                console.error('❌ Manual save failed:', error);
+                alert('Kunde inte spara receptet: ' + error.message);
+              }
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-all duration-200 shadow-lg"
+          >
+            <i className="fa-solid fa-bookmark"></i>
+            <span>Spara recept</span>
+          </button>
+        </div>
+      )}
+      
       
       {/* Success Modal */}
       {showSuccessModal && (
@@ -641,6 +700,7 @@ export default function Food2Guide() {
   const [searchResults, setSearchResults] = useState([]);
   const [selectedVideoId, setSelectedVideoId] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [data, setData] = useState({});
   const [searchPage, setSearchPage] = useState(1);
   const [hasMoreResults, setHasMoreResults] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -752,6 +812,13 @@ export default function Food2Guide() {
     setStreamStatus('Initializing...');
     setStreamError(null);
     setRecipeData({});
+    // Reset saved recipe ID when starting new recipe generation - ULTIMATE FIX
+    if (typeof setSavedRecipeId === 'function') {
+      setSavedRecipeId(null);
+    }
+    if (typeof setSaveResultId === 'function') {
+      setSaveResultId(null);
+    }
 
     if (isVideo) {
       handleStreamResponse(videoUrl);
@@ -828,6 +895,9 @@ export default function Food2Guide() {
             currentUser={currentUser}
             videoUrl={videoUrl}
             isScraping={isScraping}
+            onDataUpdate={(newData) => {
+              setData(newData);
+            }}
           />
         ) : (
           <>

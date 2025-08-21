@@ -611,6 +611,9 @@ Return ONLY the JSON:"""
         if not recipe.get('nutritional_information') and recipe.get('ingredients'):
             recipe['nutritional_information'] = self._generate_nutrition_data(recipe['ingredients'])
         
+        # Format ingredients and instructions for database compatibility
+        recipe = self._format_for_database(recipe)
+        
         return recipe
     
     def _extract_image_url(self, url: str) -> Optional[str]:
@@ -698,6 +701,64 @@ Return ONLY the JSON:"""
                 'sugar': 5
             }
         return None
+    
+    def _format_for_database(self, recipe: Dict) -> Dict:
+        """Format recipe data for database compatibility"""
+        # Format ingredients
+        if recipe.get('ingredients'):
+            formatted_ingredients = []
+            for ingredient in recipe['ingredients']:
+                if isinstance(ingredient, str):
+                    # Parse string ingredient into structured format
+                    text = ingredient.strip()
+                    if text:
+                        # Better parsing: look for quantity + unit pattern
+                        import re
+                        # Pattern: number + optional fraction + unit + rest
+                        pattern = r'^(\d+(?:\/\d+)?(?:\s*\d+\/\d+)?)\s*([a-zA-ZåäöÅÄÖ]+)\s+(.+)$'
+                        match = re.match(pattern, text)
+                        if match:
+                            quantity = f"{match.group(1)} {match.group(2)}"
+                            name = match.group(3)
+                        else:
+                            # Fallback: assume first part is quantity, rest is name
+                            parts = text.split(' ', 1)
+                            if len(parts) > 1 and any(char.isdigit() for char in parts[0]):
+                                quantity = parts[0]
+                                name = parts[1]
+                            else:
+                                quantity = ''
+                                name = text
+                        formatted_ingredients.append({
+                            'name': name,
+                            'quantity': quantity,
+                            'notes': None
+                        })
+                    else:
+                        formatted_ingredients.append({
+                            'name': ingredient,
+                            'quantity': '',
+                            'notes': None
+                        })
+                else:
+                    formatted_ingredients.append(ingredient)
+            recipe['ingredients'] = formatted_ingredients
+        
+        # Format instructions
+        if recipe.get('instructions'):
+            formatted_instructions = []
+            for i, instruction in enumerate(recipe['instructions'], 1):
+                if isinstance(instruction, str):
+                    formatted_instructions.append({
+                        'step': i,
+                        'description': instruction.strip(),
+                        'image_path': None
+                    })
+                else:
+                    formatted_instructions.append(instruction)
+            recipe['instructions'] = formatted_instructions
+        
+        return recipe
     
     def _create_fallback(self, url: str, error: str) -> Dict:
         """Create fallback recipe"""

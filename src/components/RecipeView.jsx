@@ -521,7 +521,24 @@ export default function RecipeView({
 
     const after = q.slice(numStr.length).trim();
     const scaled = value * factor;
-    const scaledStr = String(scaled).replace(/\.0$/, '');
+    
+    // Round the scaled value appropriately
+    let roundedScaled;
+    if (scaled < 0.1) {
+      // For very small values, round to 2 decimal places
+      roundedScaled = Math.round(scaled * 100) / 100;
+    } else if (scaled < 1) {
+      // For values less than 1, round to 1 decimal place
+      roundedScaled = Math.round(scaled * 10) / 10;
+    } else if (scaled < 10) {
+      // For values 1-10, round to 1 decimal place
+      roundedScaled = Math.round(scaled * 10) / 10;
+    } else {
+      // For larger values, round to whole numbers
+      roundedScaled = Math.round(scaled);
+    }
+    
+    const scaledStr = String(roundedScaled).replace(/\.0$/, '');
     return `${prefix}${scaledStr}${after ? ' ' + after : ''}`.trim();
   };
 
@@ -532,11 +549,35 @@ export default function RecipeView({
       return trimmed;
     }
     if (quantity == null || Number.isNaN(quantity)) return '';
-    if (quantity === 0.25) return '¼';
-    if (quantity === 0.5) return '½';
-    if (quantity === 0.75) return '¾';
-    if (quantity === 0.33) return '⅓';
-    if (quantity === 0.67) return '⅔';
+    
+    // Handle common fractions
+    if (Math.abs(quantity - 0.25) < 0.01) return '¼';
+    if (Math.abs(quantity - 0.5) < 0.01) return '½';
+    if (Math.abs(quantity - 0.75) < 0.01) return '¾';
+    if (Math.abs(quantity - 0.33) < 0.01) return '⅓';
+    if (Math.abs(quantity - 0.67) < 0.01) return '⅔';
+    if (Math.abs(quantity - 0.125) < 0.01) return '⅛';
+    if (Math.abs(quantity - 0.375) < 0.01) return '⅜';
+    if (Math.abs(quantity - 0.625) < 0.01) return '⅝';
+    if (Math.abs(quantity - 0.875) < 0.01) return '⅞';
+    
+    // For very small values, show as decimal
+    if (quantity < 0.1 && quantity > 0) {
+      return quantity.toFixed(2).replace(/\.?0+$/, '');
+    }
+    
+    // For values less than 1, show 1 decimal place if not whole
+    if (quantity < 1) {
+      const rounded = Math.round(quantity * 10) / 10;
+      return rounded.toString();
+    }
+    
+    // For larger values, show as whole number if close to whole
+    const rounded = Math.round(quantity);
+    if (Math.abs(quantity - rounded) < 0.1) {
+      return rounded.toString();
+    }
+    
     return quantity.toString();
   };
 
