@@ -99,7 +99,7 @@ class NutritionCalculator:
             'msk': 15.0, 'tablespoon': 15.0, 'tablespoons': 15.0, 'tbsp': 15.0,
             'krm': 1.0, 'kryddmått': 1.0,
             # Pieces
-            'st': 1.0, 'stycken': 1.0, 'piece': 1.0, 'pieces': 1.0,
+            'st': 1.0, 'styck': 1.0, 'stycken': 1.0, 'piece': 1.0, 'pieces': 1.0,
             'burk': 1.0, 'burkar': 1.0, 'can': 1.0, 'cans': 1.0,
             'paket': 1.0, 'package': 1.0, 'packages': 1.0,
             'klyfta': 1.0, 'klyftor': 1.0, 'clove': 1.0, 'cloves': 1.0,

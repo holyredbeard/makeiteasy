@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { GROUPS, resolvePresets, getDisabledPresets, getVisibleAddOns, getLockedPresets, labelForPreset } from './presetRules';
 import Spinner from './Spinner';
 
+const STATIC_BASE = 'http://localhost:8000';
+
 const PRESETS = [
   // Diet style
   'vegan','plant-based','vegetarian','pescetarian','omnivore','Mediterranean','whole30','zesty','seafood',
@@ -444,7 +446,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
                   {/* Original card */}
                   <div className={`relative inline-block border rounded ${selectedIndex===0?'ring-2 ring-blue-500':''}`} onClick={()=>setSelectedIndex(0)}>
                     {originalImage ? (
-                      <img src={originalImage.startsWith('http') ? originalImage : `http://localhost:8001${originalImage}`} alt="Original" className="w-56 h-40 object-cover rounded aspect-square" />
+                      <img src={originalImage.startsWith('http') ? originalImage : `${STATIC_BASE}${originalImage}`} alt="Original" className="w-56 h-40 object-cover rounded aspect-square" />
                     ) : (
                       <div className="w-56 h-40 flex items-center justify-center text-sm text-gray-500 bg-gray-50 rounded">No original</div>
                     )}
@@ -454,7 +456,7 @@ export default function RecipeConvertPanel({ isOpen, onClose, onPreview, onApply
                   {/* AI cards */}
                   {aiImages.map((img, idx) => (
                     <div key={idx} className={`relative inline-block border rounded ${selectedIndex===idx+1?'ring-2 ring-blue-500':''}`} onClick={()=>setSelectedIndex(idx+1)}>
-                      <img src={`http://localhost:8001${img.url}`} alt={`AI ${idx+1}`} className="w-56 h-40 object-cover rounded aspect-square" />
+                      <img src={`${STATIC_BASE}${img.url}`} alt={`AI ${idx+1}`} className="w-56 h-40 object-cover rounded aspect-square" />
                       <span className="absolute top-2 left-2 text-xs px-2 py-0.5 rounded-full bg-gray-800/80 text-white">AI #{idx+1}</span>
                       <span className="absolute top-2 right-2 text-xs px-2 py-0.5 rounded-full bg-white/90 text-gray-800 border">{img.aspect}</span>
                       {selectedIndex===idx+1 && <span className="absolute bottom-2 left-2 text-xs px-2 py-0.5 rounded-full bg-blue-600 text-white">Selected</span>}

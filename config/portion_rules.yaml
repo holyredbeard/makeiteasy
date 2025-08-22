@@ -218,9 +218,15 @@ categories:
 
   # --- Protein: Eggs ---
   eggs:
-    match: ["ägg","egg","eggs","st ägg","st egg"]
+    match: ["ägg","egg","eggs","st ägg","st egg","styck ägg","stycken ägg"]
     default_unit: "each"
     grams_per_each: 60
+
+  # --- Protein: Fish Roe/Caviar ---
+  fish_roe:
+    match: ["löjrom","stenbitsrom","rom","caviar","roe","fish roe","red caviar","black caviar"]
+    default_unit: "gram"
+    default_grams: 30
 
   # --- Protein: Veg Alternatives ---
   protein_veg_alt:

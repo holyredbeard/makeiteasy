@@ -51,7 +51,13 @@ export default function RecipePage() {
   useEffect(() => {
     try {
       const content = recipe?.recipe_content || {};
-      const title = content.title || 'Recipe';
+      const decodeHtmlEntities = (text) => {
+        if (!text) return '';
+        const textarea = document.createElement('textarea');
+        textarea.innerHTML = text;
+        return textarea.value;
+      };
+      const title = decodeHtmlEntities(content.title || 'Recipe');
       if (typeof document !== 'undefined') document.title = `${title} – Food2Guide`;
       const img = content.image_url || content.thumbnail_path || content.img || '';
       const absImage = img ? (String(img).startsWith('http') ? img : `${STATIC_BASE}${img}`) : undefined;

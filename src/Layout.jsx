@@ -703,7 +703,7 @@ export default function Layout() {
       />
 
       {showWelcome && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg text-lg font-semibold animate-fade-in-out">
+        <div className="fixed bottom-6 right-6 z-50 bg-green-600 text-white px-6 py-3 rounded-xl shadow-lg text-lg font-semibold animate-fade-in-out">
           Welcome, {currentUser?.full_name || currentUser?.email}!
         </div>
       )}

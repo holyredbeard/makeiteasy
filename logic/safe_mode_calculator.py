@@ -80,6 +80,7 @@ def _parse_qty_unit_name(text: str) -> Tuple[Optional[float], Optional[str], str
             'g': 'g', 'gram': 'g',
             'kg': 'kg', 'kilogram': 'kg',
             'cup': 'cup', 'kopp': 'cup',
+            'st': 'each', 'styck': 'each', 'stycken': 'each',  # Handle "2 st ägg" as "2 each"
             'recept': 'each',  # Handle "1 recept" as "1 each"
             'krm': 'tsp',      # 1 krm = 1 ml ≈ 0.2 tsp
         }
@@ -105,6 +106,7 @@ WL = {
     'pecans_cup_g': 100.0,
     'pasta_cup_g': 100.0,
     'milk_cup_g': 245.0,
+    'egg_each_g': 60.0,
 }
 
 ML = {'tsp': 5.0, 'tbsp': 15.0, 'cup': 240.0, 'dl': 100.0, 'l': 1000.0}
@@ -129,6 +131,8 @@ def _wl_grams(name: str, qty: float, unit: Optional[str]) -> Optional[float]:
         return qty * WL['pasta_cup_g']
     if ('milk' in n or 'soy' in n) and u in ('cup',):
         return qty * WL['milk_cup_g']
+    if ('ägg' in n or 'egg' in n) and u in ('each', 'st', 'styck'):
+        return qty * WL['egg_each_g']
     return None
 
 
@@ -265,6 +269,7 @@ async def compute_safe_snapshot(ingredients: List[Dict[str, str]], servings: int
         if 'lök' in n or 'onion' in n: return dict(calories=40, protein=1.1, fat=0.1, saturatedFat=0.0, carbs=9.3, sugar=4.7, fiber=1.7, sodium=4, cholesterol=0)
         if 'vitlök' in n or 'garlic' in n: return dict(calories=149, protein=6.4, fat=0.5, saturatedFat=0.1, carbs=33.1, sugar=1.0, fiber=2.1, sodium=17, cholesterol=0)
         if 'ägg' in n or 'egg' in n: return dict(calories=155, protein=12.6, fat=10.6, saturatedFat=3.3, carbs=1.1, sugar=1.1, fiber=0.0, sodium=124, cholesterol=373)
+        if 'rom' in n or 'caviar' in n or 'roe' in n: return dict(calories=264, protein=24.0, fat=18.0, saturatedFat=4.0, carbs=4.0, sugar=0.0, fiber=0.0, sodium=1500, cholesterol=588)
         if 'peppar' in n or 'pepper' in n: return dict(calories=251, protein=10.4, fat=3.3, saturatedFat=1.4, carbs=64.0, sugar=0.6, fiber=25.3, sodium=20, cholesterol=0)
         # Handle "recept" items
         if 'carne asada' in n: return dict(calories=300, protein=20.0, fat=0.0, saturatedFat=0.0, carbs=60.0, sugar=0.0, fiber=20.0, sodium=6200, cholesterol=0)
@@ -275,6 +280,8 @@ async def compute_safe_snapshot(ingredients: List[Dict[str, str]], servings: int
         if 'jalapeño' in n or 'jalapeno' in n: return dict(calories=29, protein=0.9, fat=0.4, saturatedFat=0.1, carbs=6.5, sugar=4.1, fiber=2.8, sodium=3, cholesterol=0)
         if 'cotijaost' in n or 'cotija cheese' in n: return dict(calories=366, protein=20.0, fat=30.0, saturatedFat=19.0, carbs=3.0, sugar=0.0, fiber=0.0, sodium=1400, cholesterol=95)
         if 'lime' in n: return dict(calories=30, protein=0.7, fat=0.2, saturatedFat=0.0, carbs=10.5, sugar=1.7, fiber=2.8, sodium=2, cholesterol=0)
+        if 'crème fraiche' in n or 'creme fraiche' in n or 'sour cream' in n: return dict(calories=193, protein=2.5, fat=19.0, saturatedFat=12.0, carbs=4.0, sugar=3.0, fiber=0.0, sodium=40, cholesterol=60)
+        if 'dill' in n or 'dillkvist' in n: return dict(calories=43, protein=3.5, fat=1.1, saturatedFat=0.0, carbs=7.0, sugar=0.0, fiber=2.1, sodium=61, cholesterol=0)
         return None
 
     spice_acc = 0.0
@@ -314,7 +321,11 @@ async def compute_safe_snapshot(ingredients: List[Dict[str, str]], servings: int
                 # We have nutritional data and quantity - estimate grams
                 if unit and unit.lower() in ('each', 'st', 'styck', 'pcs', 'pc'):
                     # For "each" items, use reasonable defaults
-                    if 'carne asada' in lname or 'chicken tinga' in lname:
+                    if 'ägg' in lname or 'egg' in lname:
+                        grams = float(qty) * 60.0   # 60g per egg (standard egg weight)
+                    elif 'dill' in lname or 'dillkvist' in lname:
+                        grams = float(qty) * 5.0    # 5g per dill sprig
+                    elif 'carne asada' in lname or 'chicken tinga' in lname:
                         grams = float(qty) * 200.0  # 200g per recipe portion
                     elif 'avokado' in lname or 'avocado' in lname:
                         grams = float(qty) * 150.0  # 150g per avocado
@@ -335,11 +346,23 @@ async def compute_safe_snapshot(ingredients: List[Dict[str, str]], servings: int
                 else:
                     # Avoid overriding explicit mass units; let general mass handling compute grams
                     if not unit or unit.lower() not in ('g', 'gram', 'grams', 'kg', 'kilo'):
-                        grams = float(qty) * 100.0  # fallback for ambiguous units
-                        source = 'nutrition_fallback'
+                        # Special handling for eggs without explicit unit
+                        if 'ägg' in lname or 'egg' in lname:
+                            grams = float(qty) * 60.0  # 60g per egg
+                            source = 'nutrition_egg_fallback'
+                        elif 'rom' in lname or 'caviar' in lname or 'roe' in lname:
+                            grams = float(qty) * 30.0  # 30g per unit for fish roe/caviar
+                            source = 'nutrition_roe_fallback'
+                        else:
+                            grams = float(qty) * 100.0  # fallback for ambiguous units
+                            source = 'nutrition_fallback'
             elif nutrients is not None and qty is None:
                 # We have nutritional data but no quantity - use defaults
-                if 'carne asada' in lname or 'chicken tinga' in lname:
+                if 'ägg' in lname or 'egg' in lname:
+                    grams = 60.0   # 60g per egg
+                elif 'rom' in lname or 'caviar' in lname or 'roe' in lname:
+                    grams = 30.0   # 30g for fish roe/caviar
+                elif 'carne asada' in lname or 'chicken tinga' in lname:
                     grams = 200.0  # 200g per recipe portion
                 elif 'avokado' in lname or 'avocado' in lname:
                     grams = 150.0  # 150g per avocado
@@ -350,6 +373,7 @@ async def compute_safe_snapshot(ingredients: List[Dict[str, str]], servings: int
                 source = 'nutrition_default'
         
         # Use improved portion_resolver for missing quantities (as fallback)
+        # Only if we haven't already handled it with nutrition_default
         if grams is None and qty is None:
             if portion_resolver_available and rules:
                 try:

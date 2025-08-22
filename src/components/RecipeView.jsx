@@ -33,7 +33,7 @@ const UNIT_WORDS = new Set([
   // English
   'cup','cups','tbsp','tablespoon','tablespoons','tsp','teaspoon','teaspoons','oz','ounce','ounces','lb','lbs','pound','pounds','g','gram','grams','kg','ml','l','liter','liters','slice','slices','clove','cloves','can','cans','package','packages','pinch','dash','head','heads','stalk','stalks','bunch','bunches','piece','pieces',
   // Swedish
-  'dl','cl','msk','tsk','krm','hg','kg','l','ml','stycken','stycke','st','påse','påsar','burk','burkar','förpackning','förpackningar','klyfta','klyftor','skiva','skivor','förp'
+  'dl','cl','msk','tsk','krm','hg','kg','l','ml','g','stycken','stycke','st','påse','påsar','burk','burkar','förpackning','förpackningar','klyfta','klyftor','skiva','skivor','förp'
 ]);
 
 const isNumberLike = (token) => {
@@ -591,11 +591,29 @@ export default function RecipeView({
         }
         const scaledQuantity = scaleQuantity(quantity, servingsFactor);
         
-        // Handle discrete ingredients
+        // Handle discrete ingredients - preserve units during scaling
         if (isDiscrete(name)) {
           if (scaledQuantity < 0.5) return 'valfritt';
+          
+          // Parse the original quantity to extract both numeric value and unit
+          const parsedOriginal = splitQuantityFromText(String(quantity));
+          const originalUnit = parsedOriginal.name.trim();
           const rounded = Math.round(scaledQuantity * 2) / 2;
+          
+          // If original had a unit, preserve it in the scaled result
+          if (originalUnit && !name.toLowerCase().includes(originalUnit.toLowerCase())) {
+            return `${formatQuantity(rounded)} ${originalUnit} ${name}`.trim();
+          }
+          
           return `${formatQuantity(rounded)} ${name}`.trim();
+        }
+        
+        // For non-discrete ingredients, preserve units if they exist
+        const parsedOriginal = splitQuantityFromText(String(quantity));
+        const originalUnit = parsedOriginal.name.trim();
+        
+        if (originalUnit && !name.toLowerCase().includes(originalUnit.toLowerCase())) {
+          return `${formatQuantity(scaledQuantity)} ${originalUnit} ${name}`.trim();
         }
         
         return `${formatQuantity(scaledQuantity)} ${name}`.trim();
@@ -710,6 +728,12 @@ export default function RecipeView({
     const logGroup = `[Nutrition] fetch ${new Date().toISOString()} recipeId=${recipeId} servings=${servings}`;
     const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     try {
+      console.group('🔢 NUTRITION CALCULATION FROM SCRATCH');
+      console.log('📊 Starting detailed nutrition calculation...');
+      console.log('📋 Recipe ID:', recipeId);
+      console.log('👥 Servings:', servings);
+      console.log('⏱️  Start time:', new Date().toISOString());
+      
       setNutritionLoading(true);
       setNutritionError(null);
 
@@ -729,14 +753,17 @@ export default function RecipeView({
         ingredients: ingredientsForAPI,
       };
 
-      // Console logging: compact, human-readable
+      // Console logging: detailed API call info
       try {
-        console.groupCollapsed(logGroup);
-        const sample = ingredientsForAPI.slice(0, 5).map(i => `- ${i.raw}`).join('\n');
-        console.log(`-> POST ${API_BASE}/nutrition/calc`);
-        console.log(`-> servings=${servings} items=${ingredientsForAPI.length}`);
-        if (ingredientsForAPI.length > 0) {
-          console.log(`-> sample ingredients (first ${Math.min(5, ingredientsForAPI.length)}):\n${sample}${ingredientsForAPI.length > 5 ? '\n...' : ''}`);
+        console.log('🌐 Making API call to:', `${API_BASE}/nutrition/calc`);
+        console.log('📤 Request body:', requestBody);
+        console.log('🥘 Ingredients being processed:', ingredientsForAPI.length, 'items');
+        console.log('📝 Sample ingredients:');
+        ingredientsForAPI.slice(0, 5).forEach((ing, i) => {
+          console.log(`   ${i + 1}. ${ing.raw}`);
+        });
+        if (ingredientsForAPI.length > 5) {
+          console.log(`   ... and ${ingredientsForAPI.length - 5} more`);
         }
       } catch {}
 
@@ -751,7 +778,9 @@ export default function RecipeView({
 
       // Console logging: response status
       try {
-        console.log(`<= status ${response.status} ok=${response.ok}`);
+        console.log('📥 Response received');
+        console.log('📊 Status:', response.status, response.statusText);
+        console.log('✅ Success:', response.ok);
       } catch {}
 
       if (!response.ok) {
@@ -761,38 +790,56 @@ export default function RecipeView({
       }
 
       const data = await response.json();
-      // Console logging: concise summary
+      // Console logging: detailed results
       try {
         const t1 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        console.log('📊 Calculation completed in:', Math.round(t1 - t0), 'ms');
+        console.log('📋 Full response data:', data);
+        
         const p = data?.perServing || {};
-        const compact = `kcal=${p?.calories ?? '—'} protein=${p?.protein ?? '—'}g fat=${p?.fat ?? '—'}g carbs=${p?.carbs ?? '—'}g salt=${(p?.salt != null ? p.salt : (typeof p?.sodium === 'number' ? (p.sodium * 2.5 / 1000).toFixed(1) : '—'))}g`;
+        console.log('🍽️  Per serving results:');
+        console.log('   🔥 Calories:', p?.calories ?? '—', 'kcal');
+        console.log('   🥚 Protein:', p?.protein ?? '—', 'g');
+        console.log('   🥓 Fat:', p?.fat ?? '—', 'g');
+        console.log('   🍞 Carbs:', p?.carbs ?? '—', 'g');
+        console.log('   🧂 Salt:', p?.salt ?? '—', 'g');
+        
         const warnCount = Array.isArray(data?.warnings) ? data.warnings.length : 0;
         const reviewCount = Array.isArray(data?.needsReview) ? data.needsReview.length : 0;
-        console.log(`<= summary (${Math.round(t1 - t0)}ms): ${compact} | warnings=${warnCount} needsReview=${reviewCount}`);
-        // Optional detailed table if explicitly enabled in console
-        if (typeof window !== 'undefined' && window.__NUTRITION_DEBUG && Array.isArray(data?.debugEntries)) {
-          const rows = data.debugEntries.map(e => ({
-            original: e.original,
-            normalized: e.normalized,
-            grams: e.grams,
-            kcal: e.contribution?.calories,
-            protein: e.contribution?.protein,
-            fat: e.contribution?.fat,
-            carbs: e.contribution?.carbs,
-            salt: e.contribution?.salt,
-            source: e.source_hit
-          }));
-          console.table(rows);
+        console.log('⚠️  Warnings:', warnCount);
+        console.log('🔍 Needs review:', reviewCount);
+        
+        if (warnCount > 0) {
+          console.log('📝 Warning details:', data.warnings);
+        }
+        if (reviewCount > 0) {
+          console.log('🔍 Review items:', data.needsReview);
+        }
+        
+        // Show detailed ingredient breakdown if available
+        if (Array.isArray(data?.debugEntries)) {
+          console.log('🥘 Ingredient breakdown:');
+          data.debugEntries.forEach((entry, i) => {
+            console.log(`   ${i + 1}. ${entry.original} → ${entry.normalized} (${entry.grams}g)`);
+            if (entry.contribution) {
+              console.log(`      🔥 ${entry.contribution.calories}kcal, 🥚 ${entry.contribution.protein}g protein, 🥓 ${entry.contribution.fat}g fat, 🍞 ${entry.contribution.carbs}g carbs`);
+            }
+            console.log(`      📚 Source: ${entry.source_hit || 'Unknown'}`);
+          });
         }
       } catch {}
       setNutritionData(data);
+      console.log('✅ Nutrition data successfully set in UI');
     } catch (error) {
-      try { console.error('[Nutrition] fetch error', String(error && error.message ? error.message : error)); } catch {}
+      console.error('❌ Nutrition calculation failed:', error);
+      console.error('📝 Error message:', error.message);
+      console.error('🔍 Error details:', error);
       setNutritionError(error.message);
       setNutritionData(null);
     } finally {
       setNutritionLoading(false);
-      try { console.groupEnd(logGroup); } catch {}
+      console.log('🏁 Nutrition calculation process completed');
+      console.groupEnd(); // Close the main group
     }
   };
 
@@ -882,33 +929,33 @@ export default function RecipeView({
   }, [API_BASE]);
 
   // Helper to render ingredient name with translation if we know canonical id via explanations
+  const decodeHtmlEntities = (text) => {
+    if (!text) return '';
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = text;
+    return textarea.value;
+  };
+
   const getDisplayName = (rawName) => {
     // fallback: just return provided name
     return rawName;
   };
 
-  const title = content.title || '';
+  const title = decodeHtmlEntities(content.title || '');
   const image = content.image_url || content.thumbnail_path || content.img || null;
   const description = content.description || '';
   const ingredients = Array.isArray(content.ingredients) ? content.ingredients : [];
   const instructions = Array.isArray(content.instructions) ? content.instructions : [];
 
-  // Fetch nutrition data when component mounts or servings change
+  // Auto-fetch existing nutrition data when component mounts
   useEffect(() => {
-    const reason = [];
-    if (!currentServings) reason.push('no currentServings');
-    if (!(ingredients.length > 0)) reason.push('no ingredients');
-    if (!recipeId) reason.push('no recipeId');
-    console.log('[Nutrition] effect trigger', { currentServings, ingredientsCount: ingredients.length, recipeId, reason: reason.length ? reason.join(', ') : 'ok' });
-    // Snapshot-first path
-    if (recipeId && !nutritionData) {
+    if (recipeId && !nutritionData && !nutritionLoading) {
+      console.log('[Nutrition] Auto-fetching existing data for recipe:', recipeId);
       fetchNutritionSnapshot(0);
     }
-    // Fallback compute path (e.g., after user edits ingredients/servings)
-    if (currentServings && ingredients.length > 0 && recipeId && edited?.ingredients) {
-      fetchNutritionData(currentServings);
-    }
-  }, [currentServings, ingredients, edited?.ingredients, recipeId]);
+  }, [recipeId]);
+
+  // Manual nutrition calculation - removed automatic calculation
 
   const skippedCount = (() => {
     try { return Array.isArray(nutritionData?.meta?.skipped) ? nutritionData.meta.skipped.length : 0; } catch { return 0; }
@@ -928,25 +975,64 @@ export default function RecipeView({
         
         // Handle discrete ingredients
         if (isDiscrete(name)) {
-          if (scaledQuantity < 0.5) return 'valfritt';
-          const rounded = Math.round(scaledQuantity * 2) / 2;
-          return `${formatQuantity(rounded)} ${name}`.trim();
+          // Parse scaledQuantity to extract numeric value and unit
+          const parsedScaled = splitQuantityFromText(String(scaledQuantity));
+          const numericValue = parseFloat(parsedScaled.quantity) || 0;
+          if (numericValue < 0.5) return 'valfritt';
+          const rounded = Math.round(numericValue * 2) / 2;
+          const unit = parsedScaled.name || '';
+          const newQuantity = formatQuantity(rounded) + (unit ? ' ' + unit : '');
+          return `${newQuantity} ${name}`.trim();
+        }
+        
+        // Preserve units from original quantity
+        const parsedOriginal = splitQuantityFromText(String(quantity));
+        const originalUnit = parsedOriginal.name.trim();
+        
+        if (originalUnit && !name.toLowerCase().includes(originalUnit.toLowerCase())) {
+          return `${formatQuantity(scaledQuantity)} ${originalUnit} ${name}`.trim();
         }
         
         return `${formatQuantity(scaledQuantity)} ${name}`.trim();
       } else {
-        const scaledQuantity = scaleQuantity(ing.quantity, servingsFactor);
+        let quantity = ing.quantity;
+        let name = ing.name;
+        // If quantity is empty, try to parse name to extract quantity
+        if ((!quantity || quantity.trim() === '') && name && typeof name === 'string') {
+          const parsed = splitQuantityFromText(name);
+          quantity = parsed.quantity;
+          name = parsed.name;
+        }
+        const scaledQuantity = scaleQuantity(quantity, servingsFactor);
         
         // Handle discrete ingredients
-        if (isDiscrete(ing.name)) {
-          if (scaledQuantity < 0.5) return { ...ing, quantity: 'valfritt' };
-          const rounded = Math.round(scaledQuantity * 2) / 2;
-          return { ...ing, quantity: formatQuantity(rounded) };
+        if (isDiscrete(name)) {
+          // Parse scaledQuantity to extract numeric value and unit
+          const parsedScaled = splitQuantityFromText(String(scaledQuantity));
+          const numericValue = parseFloat(parsedScaled.quantity) || 0;
+          if (numericValue < 0.5) return { ...ing, quantity: 'valfritt', name };
+          const rounded = Math.round(numericValue * 2) / 2;
+          const unit = parsedScaled.name || '';
+          const newQuantity = formatQuantity(rounded) + (unit ? ' ' + unit : '');
+          return { ...ing, quantity: newQuantity, name };
+        }
+        
+        // Preserve units from original quantity
+        const parsedOriginal = splitQuantityFromText(String(quantity));
+        const originalUnit = parsedOriginal.name.trim();
+        
+        if (originalUnit && !name.toLowerCase().includes(originalUnit.toLowerCase())) {
+          return {
+            ...ing,
+            quantity: `${formatQuantity(scaledQuantity)} ${originalUnit}`.trim(),
+            name
+          };
         }
         
         return {
           ...ing,
-          quantity: formatQuantity(scaledQuantity)
+          quantity: formatQuantity(scaledQuantity),
+          name
         };
       }
     });
@@ -969,7 +1055,7 @@ export default function RecipeView({
   // Dynamic document title (restore on unmount) without site suffix
   const prevTitleRef = useRef(typeof document !== 'undefined' ? document.title : '');
   useEffect(() => {
-    const base = content?.title || title || 'Recipe';
+    const base = decodeHtmlEntities(content?.title || '') || title || 'Recipe';
     const withSuffix = variant === 'page' ? `${base}  Site` : base;
     if (typeof document !== 'undefined') document.title = withSuffix;
     return () => {
@@ -1068,21 +1154,70 @@ export default function RecipeView({
     }
   };
 
+  
+
   const generateAiImage = async () => {
+    if (aiBusy) return;
+  
+    const names = ((edited && edited.ingredients) ? edited.ingredients : [])
+      .map(i => ((i && i.name) ? String(i.name).trim() : ''))
+      .filter(Boolean)
+      .slice(0, 5);
+  
+    const title_ = ((edited && edited.title) ? edited.title : (title || '')).trim();
+    if (!title_ && names.length === 0) {
+      alert('Saknar titel/ingredienser för bildgenerering.');
+      return;
+    }
+  
+    const body = { title: title_, ingredients: names, allow_placeholder: false };
+  
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 60000); // 60 s timeout
+  
     try {
       setAiBusy(true);
-      const names = (edited?.ingredients || []).map(i => (i.name || '').trim()).filter(Boolean).slice(0,5);
-      const body = { title: edited?.title || title, ingredients: names, allow_placeholder: false };
-      const res = await fetch(`${API_BASE}/images/generate`, { method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include', body: JSON.stringify(body) });
-      const json = await res.json();
-      if (json?.url) {
-        setEdited(prev => ({ ...(prev || {}), image_url: json.url }));
-        const abs = json.url.startsWith('http') ? json.url : STATIC_BASE + json.url;
-        setGallery(g => { const ng = g && g.length ? [...g, abs] : [abs]; setGalleryIndex(ng.length-1); return ng; });
+  
+      const res = await fetch(`${API_BASE}/images/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+  
+      const ct = res.headers.get('content-type') || '';
+      const raw = await res.text();
+      const json = ct.indexOf('application/json') !== -1 ? JSON.parse(raw || '{}') : null;
+  
+      if (!res.ok) {
+        const msg = (json && (json.error || json.message)) || raw || `HTTP ${res.status}`;
+        throw new Error(msg);
       }
-    } catch { alert('AI image generation failed'); }
-    finally { setAiBusy(false); }
+  
+      let url = json && (json.url || (json.data && json.data.url));
+      if (!url) throw new Error('Svar saknar url');
+  
+      const abs = /^https?:\/\//i.test(url) ? url : `${STATIC_BASE}${url}`;
+  
+      setEdited(prev => ({ ...(prev || {}), image_url: abs }));
+  
+      setGallery(g => {
+        const ng = (g && g.length) ? [...g, abs] : [abs];
+        setGalleryIndex(ng.length - 1);
+        return ng;
+      });
+    } catch (err) {
+      const msg = (err && err.message) ? err.message : String(err);
+      alert('AI image generation failed: ' + msg);
+    } finally {
+      clearTimeout(t);
+      setAiBusy(false);
+    }
   };
+  
+
+
 
   // Load social data for saved recipes
   // Add global click listener for outside clicks
@@ -1629,7 +1764,7 @@ export default function RecipeView({
                     try {
                       setVisibilitySaving(true);
                       const desired = content?.conversion?.visibility === 'public' ? 'private' : 'public';
-                      const res = await fetch(`http://localhost:8001/api/v1/recipes/${recipeId}/visibility`, {
+                      const res = await fetch(`${API_BASE}/recipes/${recipeId}/visibility`, {
                         method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ visibility: desired })
                       });
                       const j = await res.json();
@@ -1755,19 +1890,34 @@ export default function RecipeView({
             {/* Mobile Layout: Image → Description → Meta Pills → Actions */}
             <div className="md:hidden space-y-6">
               {/* Image */}
-            {(image || edited?.image_url) && (
               <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+                {(image || edited?.image_url) ? (
                   <div className="relative w-full aspect-square overflow-hidden rounded-lg">
-                  <img
-                    src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
-                    alt={edited?.title || title}
+                    <img
+                      src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
+                      alt={edited?.title || title}
                       className="w-full h-full object-cover rounded-lg shadow-md hover:scale-105 transition-transform duration-300 ease-in-out"
                       loading="eager"
-                    decoding="async"
+                      decoding="async"
+                      onClick={isEditing ? () => activateFieldEdit('image') : undefined}
+                      data-edit-field="image"
+                    />
+                  </div>
+                ) : (
+                  <div 
+                    className="relative w-full aspect-square overflow-hidden rounded-lg bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
                     onClick={isEditing ? () => activateFieldEdit('image') : undefined}
                     data-edit-field="image"
-                  />
-                </div>
+                  >
+                    <div className="text-center text-gray-500">
+                      <i className="fa-solid fa-image text-4xl mb-2"></i>
+                      <p className="text-sm">No image available</p>
+                      {isEditing && (
+                        <p className="text-xs mt-1 text-gray-400">Click to add image</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {isEditing && activeEditField === 'image' && gallery.length > 1 && (
                   <>
                     <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
@@ -1801,7 +1951,6 @@ export default function RecipeView({
                     </div>
                   )}
                 </div>
-              )}
               
               {/* Description */}
               <div className={`${isEditing && activeEditField === 'description' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
@@ -1948,8 +2097,8 @@ export default function RecipeView({
             <div className="hidden md:flex md:flex-row gap-6 w-full">
             {/* Left column: Image ONLY */}
             <div className="md:w-1/3">
-              {(image || edited?.image_url) && (
-                <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+              <div className={`${isEditing && activeEditField === 'image' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
+                {(image || edited?.image_url) ? (
                   <div className="relative w-full aspect-square overflow-hidden rounded-lg">
                     <img
                       src={(isEditing && (gallery[galleryIndex])) ? gallery[galleryIndex] : ((edited?.image_url || image).startsWith('http') ? (edited?.image_url || image) : STATIC_BASE + (edited?.image_url || image))}
@@ -1961,44 +2110,58 @@ export default function RecipeView({
                       data-edit-field="image"
                     />
                   </div>
-                  {isEditing && activeEditField === 'image' && gallery.length > 1 && (
-                    <>
-                      <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
-                      <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next" data-edit-field="image">›</button>
-                    </>
-                  )}
-                  {isEditing && activeEditField === 'image' && (
-                    <div className="mt-3 flex items-center gap-2" data-edit-field="image">
-                      <button className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#da8146] text-white hover:brightness-110 transition-all duration-200 text-sm disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>
-                        <i className="fa-solid fa-wand-magic-sparkles"></i>
-                        <span>{aiBusy ? 'Generating…' : 'Generate'}</span>
-                      </button>
-                      <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
-                        const f = e.target.files && e.target.files[0];
-                        if(!f) return;
-                        try {
-                          const formData = new FormData();
-                          formData.append('image', f);
-                          const res = await fetch(`${API_BASE}/recipes/${recipeId}/image`, { method: 'POST', credentials: 'include', body: formData });
-                          if (!res.ok) throw new Error('Upload failed');
-                          const j = await res.json();
-                          setEdited(v => ({ ...(v || {}), image_url: j.image_url }));
-                        } catch (e) {
-                          alert('Failed to upload image: ' + e.message);
-                      }
-                    }} />
-                      <button className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm" onClick={()=>document.getElementById('rv-upload')?.click()}>
-                        <i className="fa-solid fa-upload"></i>
-                        <span>Upload</span>
-                      </button>
+                ) : (
+                  <div 
+                    className="relative w-full aspect-square overflow-hidden rounded-lg bg-gray-100 border-2 border-dashed border-gray-300 flex items-center justify-center cursor-pointer hover:bg-gray-200 transition-colors"
+                    onClick={isEditing ? () => activateFieldEdit('image') : undefined}
+                    data-edit-field="image"
+                  >
+                    <div className="text-center text-gray-500">
+                      <i className="fa-solid fa-image text-4xl mb-2"></i>
+                      <p className="text-sm">No image available</p>
+                      {isEditing && (
+                        <p className="text-xs mt-1 text-gray-400">Click to add image</p>
+                      )}
+                    </div>
                   </div>
                 )}
-              </div>
-            )}
+                {isEditing && activeEditField === 'image' && gallery.length > 1 && (
+                  <>
+                    <button onClick={()=>setGalleryIndex(i => (i-1+gallery.length)%gallery.length)} className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Prev" data-edit-field="image">‹</button>
+                    <button onClick={()=>setGalleryIndex(i => (i+1)%gallery.length)} className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-gray-800 w-8 h-8 rounded-full shadow flex items-center justify-center" aria-label="Next" data-edit-field="image">›</button>
+                  </>
+                )}
+                {isEditing && activeEditField === 'image' && (
+                  <div className="mt-3 flex items-center gap-2" data-edit-field="image">
+                    <button className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#da8146] text-white hover:brightness-110 transition-all duration-200 text-sm disabled:opacity-60" onClick={generateAiImage} disabled={aiBusy}>
+                      <i className="fa-solid fa-wand-magic-sparkles"></i>
+                      <span>{aiBusy ? 'Generating…' : 'Generate'}</span>
+                    </button>
+                    <input id="rv-upload" type="file" accept="image/*" className="hidden" onChange={async (e)=>{
+                      const f = e.target.files && e.target.files[0];
+                      if(!f) return;
+                      try {
+                        const formData = new FormData();
+                        formData.append('image', f);
+                        const res = await fetch(`${API_BASE}/recipes/${recipeId}/image`, { method: 'POST', credentials: 'include', body: formData });
+                        if (!res.ok) throw new Error('Upload failed');
+                        const j = await res.json();
+                        setEdited(v => ({ ...(v || {}), image_url: j.image_url }));
+                      } catch (e) {
+                        alert('Failed to upload image: ' + e.message);
+                    }
+                  }} />
+                    <button className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-500 text-white hover:bg-gray-600 transition-all duration-200 text-sm" onClick={()=>document.getElementById('rv-upload')?.click()}>
+                      <i className="fa-solid fa-upload"></i>
+                      <span>Upload</span>
+                    </button>
+                </div>
+              )}
+            </div>
           </div>
             
             {/* Right column: Content Stack (Description → Meta Pills → Actions) */}
-            <div className="md:w-2/3">
+            <div className={(image || edited?.image_url) ? "md:w-2/3" : "md:w-full"}>
               <div className="space-y-6">
                 {/* Description */}
                 <div className={`${isEditing && activeEditField === 'description' ? 'ring-2 ring-amber-300 rounded-lg p-1 relative' : ''}`}>
@@ -2532,18 +2695,70 @@ export default function RecipeView({
 
       {variant !== 'modal' && (
               <RecipeSection id="nutrition" title={
-                <span>
-                  <i className="fa-solid fa-fire mr-2"></i>
-                  Nutrition Information
-                </span>
+                <div className="flex items-center justify-between w-full">
+                  <span>
+                    <i className="fa-solid fa-fire mr-2"></i>
+                    Nutrition Information
+                  </span>
+                  {nutritionData && (
+                    <button
+                      onClick={() => {
+                        console.group('🔄 REGENERATE NUTRITION DATA');
+                        console.log('📊 Starting nutrition regeneration...');
+                        console.log('📋 Recipe ID:', recipeId);
+                        console.log('👥 Current servings:', currentServings);
+                        console.log('🥘 Ingredients count:', ingredients.length);
+                        console.log('📝 Ingredients:', ingredients);
+                        
+                        if (currentServings && ingredients.length > 0) {
+                          console.log('🔢 Using fetchNutritionData (calculate from scratch)');
+                          fetchNutritionData(currentServings);
+                        } else if (recipeId) {
+                          console.log('💾 Using fetchNutritionSnapshot (get from database)');
+                          fetchNutritionSnapshot(0);
+                        } else {
+                          console.warn('❌ No recipe ID or ingredients available for regeneration');
+                        }
+                      }}
+                      className="inline-flex items-center gap-2 px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors duration-200 text-sm"
+                      disabled={nutritionLoading}
+                    >
+                      <i className="fa-solid fa-rotate"></i>
+                      <span>{nutritionLoading ? 'Regenerating...' : 'Regenerate'}</span>
+                    </button>
+                  )}
+                </div>
               } className="bg-white">
+        {/* Calculate Details Button - shown when no nutrition data exists */}
+        {!nutritionData && !nutritionLoading && (
+          <div className="mb-4">
+            <button
+              onClick={() => {
+                if (currentServings && ingredients.length > 0) {
+                  fetchNutritionData(currentServings);
+                } else if (recipeId) {
+                  fetchNutritionSnapshot(0);
+                }
+              }}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+              disabled={nutritionLoading}
+            >
+              <i className="fa-solid fa-calculator"></i>
+              <span>{nutritionLoading ? 'Calculating...' : 'Calculate Details'}</span>
+            </button>
+            <p className="text-sm text-gray-500 mt-2">
+              Get detailed nutritional information for this recipe
+            </p>
+          </div>
+        )}
+
         {/* Safe Mode notice */}
         {nutritionData?.meta?.safe_mode && (
           <div className="text-sm text-gray-500 mb-2">
             Safe Mode: {skippedCount} ingredients skipped or defaulted.
           </div>
         )}
-        {/* Nutrition Chips */}
+        {/* Nutrition Chips - always show */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           {[
             {k:'calories', l:'Calories', icon:'fa-fire', bgColor:'bg-blue-50', borderColor:'border-blue-200', iconColor:'text-blue-600'},
@@ -2591,17 +2806,19 @@ export default function RecipeView({
           })}
         </div>
 
-        {/* Show Details Link */}
-        <button
-          onClick={() => setShowNutritionDetails(!showNutritionDetails)}
-          className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors duration-200 mb-4"
-          aria-expanded={showNutritionDetails}
-          disabled={nutritionLoading}
-        >
-          {nutritionLoading ? 'Laddar...' : (showNutritionDetails ? 'Dölj detaljer' : 'Visa detaljer')}
-        </button>
+        {/* Show Details Link - only show when nutrition data exists */}
+        {nutritionData && (
+          <button
+            onClick={() => setShowNutritionDetails(!showNutritionDetails)}
+            className="text-sm text-blue-600 hover:text-blue-700 hover:underline transition-colors duration-200 mb-4"
+            aria-expanded={showNutritionDetails}
+            disabled={nutritionLoading}
+          >
+            {nutritionLoading ? 'Laddar...' : (showNutritionDetails ? 'Dölj detaljer' : 'Visa detaljer')}
+          </button>
+        )}
 
-        {/* Error message */}
+        {/* Error message - only show when nutrition data exists or when there's an error */}
         {nutritionError && (
           <div className="flex items-center justify-between text-sm text-red-600 mb-4">
             <span>Nutrition calculation failed. {nutritionError}</span>
@@ -2621,8 +2838,8 @@ export default function RecipeView({
           </div>
         )}
 
-        {/* Nutrition Details Table */}
-        {showNutritionDetails && (
+        {/* Nutrition Details Table - only show when nutrition data exists */}
+        {nutritionData && showNutritionDetails && (
           <div ref={nutritionTableRef} className="mt-4">
             {/* Desktop Table */}
             <div className="hidden md:block overflow-x-auto">
@@ -3135,7 +3352,7 @@ export default function RecipeView({
                 if (!validateConversionSchema(result)) throw new Error('Invalid schema');
               }
               // Persist variant via backend
-              const res = await fetch(`http://localhost:8001/api/v1/recipes/${recipeId}/convert`, {
+              const res = await fetch(`${API_BASE}/recipes/${recipeId}/convert`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -3146,7 +3363,7 @@ export default function RecipeView({
               // Apply visually without reload
               setOverrideRecipe({
                 ...content,
-                title: result.title || content.title,
+                title: result.title || decodeHtmlEntities(content.title || ''),
                 ingredients: result.ingredients || ingredients,
                 instructions: result.instructions || instructions,
                 nutritionPerServing: result.nutritionPerServing || nutrition
